@@ -23,6 +23,11 @@ _OWNER_CHAT = todos_store._OWNER_NOTIFY_CHAT
 _NON_OWNER_MRI = "8:orgid:00000000-0000-0000-0000-000000000001"
 
 
+def _store_now() -> datetime:
+    """Wall-clock now in the store's own time zone; the machine's zone (UTC on CI) can differ."""
+    return datetime.now(todos_store._TZ).replace(tzinfo=None)
+
+
 @pytest.fixture(autouse=True)
 def _isolate_storage(tmp_path, monkeypatch):
     """Redirect todos.json to a per-test tmp path so tests can't see each other."""
@@ -130,8 +135,8 @@ def test_add_todo_without_notify_at_has_no_reminder(monkeypatch):
 
 def test_due_for_fire_picks_past_only():
     """Only todos with notify_at <= now AND notified_at is None come back."""
-    past = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
-    future = (datetime.now() + timedelta(hours=1)).isoformat(timespec="seconds")
+    past = (_store_now() - timedelta(hours=1)).isoformat(timespec="seconds")
+    future = (_store_now() + timedelta(hours=1)).isoformat(timespec="seconds")
     past_id = todos_store.add_reminder_todo(
         title="past", notify_at_iso=past, notify_chat="X",
         source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
@@ -146,7 +151,7 @@ def test_due_for_fire_picks_past_only():
 
 def test_due_for_fire_skips_already_notified():
     """Once notified_at is stamped, the same todo doesn't re-fire."""
-    past = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+    past = (_store_now() - timedelta(hours=1)).isoformat(timespec="seconds")
     tid = todos_store.add_reminder_todo(
         title="x", notify_at_iso=past, notify_chat="Y",
         source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
@@ -160,7 +165,7 @@ def test_due_for_fire_skips_already_notified():
 
 def test_due_for_fire_skips_done_tasks():
     """Completed todos don't ring even if their notify_at is in the past."""
-    past = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+    past = (_store_now() - timedelta(hours=1)).isoformat(timespec="seconds")
     tid = todos_store.add_reminder_todo(
         title="x", notify_at_iso=past, notify_chat="Y",
         source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
@@ -267,9 +272,9 @@ def test_format_todos_for_chat_empty_specific_chat_returns_brak():
 
 def test_format_todos_for_chat_groups_by_due_date():
     """Output groups todos into overdue / today / upcoming / no-date buckets."""
-    today = datetime.now().date().isoformat()
-    yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
-    tomorrow = (datetime.now().date() + timedelta(days=1)).isoformat()
+    today = _store_now().date().isoformat()
+    yesterday = (_store_now().date() - timedelta(days=1)).isoformat()
+    tomorrow = (_store_now().date() + timedelta(days=1)).isoformat()
     _seed_todo("Notatki", "stare zaległe", due_date=yesterday)
     _seed_todo("Notatki", "dzisiejsze", due_date=today)
     _seed_todo("Notatki", "jutrzejsze", due_date=tomorrow)
