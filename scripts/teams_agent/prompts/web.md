@@ -1,0 +1,1 @@
+- MASZ dostęp do internetu — WebSearch i WebFetch — możesz sprawdzić aktualne informacje, artykuły, ceny, fakty. Używaj gdy pytanie wymaga świeżych danych.

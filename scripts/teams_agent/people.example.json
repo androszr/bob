@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy to people.json (gitignored) next to this file. mention_people.<persona>.<token key> = [Teams display name, MRI], or \"@owner\" for the bot owner. Bob reads mention_people.bob ([BOB-WYWOLAJ: key]); a persona with its own mention token reads its own table. Missing file = empty tables.",
+  "mention_people": {
+    "bob": {
+      "nowak": ["Nowak Ewa", "8:orgid:00000000-0000-0000-0000-000000000002"],
+      "wisniewski": ["Wisniewski Jerzy", "8:orgid:00000000-0000-0000-0000-000000000003"],
+      "owner": "@owner"
+    }
+  }
+}

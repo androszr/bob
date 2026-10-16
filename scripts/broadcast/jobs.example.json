@@ -1,0 +1,72 @@
+[
+  {
+    "id": "planning-prep",
+    "channel": "NOTATKI_CONV_ID_PLACEHOLDER",
+    "enabled": false,
+    "description": "Podsumowanie przed planningiem zespolu: status sprintu + kontekst KB + ostatnie notatki.",
+    "tools": [
+      "jira"
+    ],
+    "prompt": "Przygotuj zwiezle podsumowanie dla zespolu przed planningiem. 1) Sprawdz status biezacego sprintu w Jirze (otwarte tickety, readiness, health). 2) Pociagnij relewantny kontekst z bazy wiedzy (KB). 3) Przejrzyj ostatnie notatki ze spotkan. Zwroc gotowy do wklejenia na czacie post po polsku: sekcje 'Status sprintu', 'Otwarte tematy', 'Na co zwrocic uwage na planningu'. Bez preambuly."
+  },
+  {
+    "id": "planning-prep-team-a",
+    "name": "Planning — TeamA",
+    "channel": "19:00000000000000000000000000000002@thread.v2",
+    "enabled": false,
+    "description": "Przygotowanie do Sprint Planningu dla zespolu TeamA — powitanie, nieobecnosci, przeglad backlogu per osoba, GIF.",
+    "team": "TeamA",
+    "tools": [
+      "jira",
+      "urlopy"
+    ],
+    "brief_file": "briefs/planning-prep.example.md"
+  },
+  {
+    "id": "daily-standup-team-a",
+    "name": "Daily — TeamA",
+    "schedule_type": "daily",
+    "channel": "19:00000000000000000000000000000002@thread.v2",
+    "enabled": false,
+    "description": "Codzienny standup TeamA — kto nie zalogowal czasu, co robil zespol poprzedniego dnia roboczego.",
+    "team": "TeamA",
+    "tools": [
+      "jira",
+      "datetime"
+    ],
+    "brief_file": "briefs/daily-standup.example.md"
+  },
+  {
+    "id": "worklog-daily-team-a",
+    "name": "Daily worklog — TeamA",
+    "schedule_type": "daily",
+    "generator": "worklog-daily",
+    "channel": "19:00000000000000000000000000000002@thread.v2",
+    "enabled": false,
+    "team": "TeamA",
+    "description": "Co TeamA zalogowal w Tempo za poprzedni dzien roboczy (Jira direct, per osoba), braki z @tagiem, urlopy z kalendarza."
+  },
+  {
+    "id": "worklog-daily-team-b",
+    "name": "Daily worklog — TeamB",
+    "schedule_type": "daily",
+    "generator": "worklog-daily",
+    "channel": "19:00000000000000000000000000000005@thread.v2",
+    "enabled": false,
+    "team": "TeamB",
+    "description": "Co TeamB zalogowal w Tempo za poprzedni dzien roboczy."
+  },
+  {
+    "id": "worklog-missing-recap",
+    "name": "Brak logu czasu — powtórka 12:00",
+    "schedule_type": "daily",
+    "generator": "worklog-missing",
+    "channel": "19:00000000000000000000000000000006@thread.v2",
+    "enabled": false,
+    "teams": [
+      "TeamA",
+      "TeamB"
+    ],
+    "description": "Powtorka 12:00 dla managerow (bez @tagow): kto ze wszystkich zespolow nie zalogowal czasu za poprzedni dzien roboczy i kto byl na urlopie. Bez AI."
+  }
+]

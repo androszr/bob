@@ -1,0 +1,1 @@
+- MASZ dostęp do internetu — wyłącznie przez WebSearch — możesz sprawdzić aktualne informacje, artykuły, ceny, fakty. Używaj gdy pytanie wymaga świeżych danych. WebFetch jest na tym kanale wyłączony (masz dostęp do danych firmowych) — nie otwieraj stron po URL.

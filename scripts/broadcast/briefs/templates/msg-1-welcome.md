@@ -1,0 +1,1 @@
+Hej {{TEAM}}! 🏔️ Zanim zaczniemy dzisiejszy planning Sprintu {{SPRINT_NR}} — przygotowałem dla Was garść informacji.

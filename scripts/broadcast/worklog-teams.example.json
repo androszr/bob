@@ -1,0 +1,43 @@
+{
+  "_comment": "Sklad zespolow dla daily worklog (scripts/broadcast/worklog_daily.py). Zrodlo prawdy dla Boba -- edytuj tutaj. Pola osoby: name, email (= login Jira), opcjonalnie mri (8:orgid:... do @tagowania), skip=true (pomijaj).",
+  "teams": {
+    "TeamA": {
+      "members": [
+        {
+          "name": "Osoba 01",
+          "email": "osoba01@example.com",
+          "role": "BE Developer",
+          "mri": "8:orgid:00000000-0000-0000-0000-000000000001"
+        },
+        {
+          "name": "Osoba 02",
+          "email": "osoba02@example.com",
+          "role": "FE Developer",
+          "mri": "8:orgid:00000000-0000-0000-0000-000000000002"
+        },
+        {
+          "name": "Osoba 03",
+          "email": "osoba03@example.com",
+          "role": "QA"
+        }
+      ]
+    },
+    "TeamB": {
+      "members": [
+        {
+          "name": "Osoba 04",
+          "email": "osoba04@example.com",
+          "role": "BE Developer",
+          "mri": "8:orgid:00000000-0000-0000-0000-000000000004"
+        },
+        {
+          "name": "Osoba 05",
+          "email": "osoba05@example.com",
+          "role": "Software Architect",
+          "mri": "8:orgid:00000000-0000-0000-0000-000000000005",
+          "skip": true
+        }
+      ]
+    }
+  }
+}

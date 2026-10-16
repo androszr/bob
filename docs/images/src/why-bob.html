@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Six questions, one of you</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css">
+<style>
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; height: 100%; }
+.stack { display: grid; gap: 10px; }
+.card-body { padding: 9px 14px 10px; font-size: 18px; }
+.reply { margin-top: 5px; font-size: 15px; color: var(--muted); font-family: var(--mono); }
+.status { margin-top: 16px; font-family: var(--mono); font-size: 17px; }
+.status-wait { color: var(--danger); }
+.status-ok { color: var(--accent); }
+.caption-low { position: absolute; left: 0; bottom: 0; width: 470px; }
+</style></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>grep -c "Bob," today.log</b></div>
+  <div class="headline">Six questions. <em>One of you.</em></div>
+  <p class="sub">People ask while you are in meetings. <b>The answers sit in Jira, a leave sheet or your to-do list.</b> Nobody should wait for you to look them up.</p>
+  <div class="stage">
+    <div class="cols">
+      <div>
+        <div class="col-head col-before"><b>BEFORE</b> · waiting on you</div>
+        <div class="stack">
+          <div class="card card-alert"><div class="card-body">Where's the sprint report?</div></div>
+          <div class="card"><div class="card-body">Is Tom off next week?</div></div>
+          <div class="card card-alert"><div class="card-body">What's the status of PRJ3-8?</div></div>
+          <div class="card"><div class="card-body">Can you add a todo for the retro?</div></div>
+          <div class="card"><div class="card-body">Which Thursday is the release?</div></div>
+          <div class="card card-alert"><div class="card-body">Can I get this spec as audio for the commute?</div></div>
+        </div>
+        <div class="status status-wait">Alex: in meetings until 15:00</div>
+        <p class="caption caption-low">Six people, six small questions, one calendar full of meetings. <b>Everybody waited.</b></p>
+      </div>
+      <div>
+        <div class="col-head col-after"><b>AFTER</b> · answered</div>
+        <div class="stack">
+          <div class="card card-done"><div class="card-body">Where's the sprint report?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+          <div class="card card-done"><div class="card-body">Is Tom off next week?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+          <div class="card card-done"><div class="card-body">What's the status of PRJ3-8?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+          <div class="card card-done"><div class="card-body">Can you add a todo for the retro?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+          <div class="card card-done"><div class="card-body">Which Thursday is the release?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+          <div class="card card-done"><div class="card-body">Can I get this spec as audio for the commute?<div class="reply"><span class="chip-bob">[Bob]</span>2 min later</div></div></div>
+        </div>
+        <div class="status status-ok">Alex reads them at 15:05. Nothing waited.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="foot-note">Jira · to-dos · leave sheet · MP3</span>
+  </div>
+</div></body></html>

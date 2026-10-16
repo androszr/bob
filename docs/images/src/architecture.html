@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>How the pieces connect</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css">
+<style>
+.flow { display: grid; grid-template-columns: 560px 1fr; column-gap: 36px; }
+.node { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 13px 18px; }
+.node-head { display: flex; align-items: center; gap: 12px; font-size: 23px; font-weight: 700; letter-spacing: -.02em; }
+.node-body { margin-top: 5px; font-family: var(--mono); font-size: 15px; color: var(--muted); line-height: 1.45; }
+.node-key { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.link { height: 44px; display: flex; align-items: center; gap: 12px; padding-left: 30px; font-family: var(--mono); font-size: 15px; color: var(--muted); }
+.link-line { color: var(--accent); font-size: 22px; }
+.aside { display: flex; flex-direction: column; justify-content: center; }
+.aside-row { display: grid; grid-template-columns: 32px 1fr; gap: 12px; font-size: 19px; line-height: 1.36; color: var(--muted); margin-bottom: 22px; }
+.aside-row b { color: var(--text); font-weight: 600; }
+.side { margin-top: 18px; border-style: dashed; }
+</style></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>cat docs/architecture.md</b></div>
+  <div class="headline">Five pieces. <em>One loop.</em></div>
+  <p class="sub">A new message comes in, the model writes a reply with the tools this chat is allowed, and <b>the reply goes back from your own account, labelled.</b></p>
+  <div class="stage">
+    <div class="flow">
+      <div>
+        <div class="node"><div class="node-head"><span class="n">1</span>Microsoft Teams</div>
+          <div class="node-body">web client's internal API,<br>called with the owner's session token</div></div>
+        <div class="link"><span class="link-line">⇅</span>new messages / reply</div>
+        <div class="node node-key"><div class="node-head"><span class="n">2</span>The agent</div>
+          <div class="node-body">watch loop · prompt builder<br>chat history · per-chat knowledge</div></div>
+        <div class="link"><span class="link-line">⇅</span>prompt / answer</div>
+        <div class="node"><div class="node-head"><span class="n">3</span>claude CLI</div>
+          <div class="node-body">no shell · no file-editing tools<br>allow-listed tools only</div></div>
+        <div class="link"><span class="link-line">⇅</span>tool calls</div>
+        <div class="node"><div class="node-head"><span class="n">4</span>MCP servers</div>
+          <div class="node-body">jira-read · jira · todos · leave<br>datetime · md-to-mp3</div></div>
+        <div class="link"><span class="link-line">↓</span>lookups / Jira writes</div>
+        <div class="node"><div class="node-head"><span class="n">5</span>Team data</div>
+          <div class="node-body">Jira · SharePoint leave sheet</div></div>
+      </div>
+      <div class="aside">
+        <div class="aside-row"><span class="n">1</span><span><b>Your own session.</b> No bot registration: replies are posted from your account and carry the [Bob] label.</span></div>
+        <div class="aside-row"><span class="n">2</span><span><b>One chat, one rule set.</b> Each chat names its persona, its tools and its knowledge.</span></div>
+        <div class="aside-row"><span class="n">3</span><span><b>A boxed-in model.</b> One CLI call per reply, with an explicit tool list.</span></div>
+        <div class="aside-row"><span class="n">4</span><span><b>Local tool servers.</b> As daemons they listen on 127.0.0.1 and need a bearer token.</span></div>
+        <div class="node side"><div class="node-head">Playwright Chromium</div>
+          <div class="node-body">sign-in · keepalive · file uploads<br>SharePoint leave sheet</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="foot-note">Teams → agent → claude → MCP → data</span>
+  </div>
+</div></body></html>

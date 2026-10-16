@@ -1,0 +1,24 @@
+/* The only place a colour literal lives for the README pictures.
+   A dark green canvas with a mint accent. */
+:root {
+  --canvas: #0B100F;
+  --surface: #141C19;
+  --raised: #1B2621;
+  --well: #0E1512;
+  --text: #EDF3EE;
+  --muted: #A2B2A7;
+  --accent: #9BE8A8;
+  --accent-ink: #0B2112;
+  --line: #3C5145;
+  --control: #6B8573;
+  --attention: #F2C078;
+  --danger: #FF9898;
+  --danger-glow: rgba(255, 152, 152, .14);
+  --accent-glow: rgba(155, 232, 168, .10);
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+}

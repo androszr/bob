@@ -1,0 +1,35 @@
+{
+  "_comment": "Copy to config/jira-fields.json (gitignored) and fill in your Jira's IDs. extra_custom_fields: {customfield_id: label} read by jira_issue. issue_type_ids: {project_key: {issue_type: issuetype_id}} used by jira_create; only projects listed here can be created in. write_fields: {name: customfield_id} written by jira_create / jira_update_ticket (a name left out is never sent). typ_pracy_options: {label: option_id}. rodzaj_zmiany_default: option id set on create, except in projects_without_work_type.",
+  "extra_custom_fields": {
+    "customfield_10100": "typ_pracy",
+    "customfield_10101": "dotyczy",
+    "customfield_10102": "rodzaj_zmiany",
+    "customfield_10103": "numer_zamowienia",
+    "customfield_10104": "numer_projektu"
+  },
+  "issue_type_ids": {
+    "PROJ": {
+      "user-story": "10001",
+      "task": "10002",
+      "bug": "10003",
+      "epic": "10000"
+    }
+  },
+  "write_fields": {
+    "typ_pracy": "customfield_10100",
+    "dotyczy": "customfield_10101",
+    "rodzaj_zmiany": "customfield_10102",
+    "numer_zamowienia": "customfield_10103",
+    "numer_projektu": "customfield_10104",
+    "stan_obecny": "customfield_10105",
+    "stan_docelowy": "customfield_10106"
+  },
+  "typ_pracy_options": {
+    "Analizy biznesowe": "90001",
+    "Przygotowanie środowisk": "90002",
+    "Prace programistyczne": "90003",
+    "Testy": "90004"
+  },
+  "rodzaj_zmiany_default": "90010",
+  "projects_without_work_type": []
+}

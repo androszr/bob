@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Bob answering in a chat</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css"></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>python3 scripts/teams_agent/cli.py</b></div>
+  <div class="headline">Your questions, answered. <em>In your chats, as you.</em></div>
+  <p class="sub">Bob watches the chats you choose. When someone writes <b>"Bob, …"</b> it answers with your own tools, Jira, to-dos, the leave sheet, <b>and every reply says [Bob].</b></p>
+  <div class="stage">
+    <div class="window">
+      <div class="rail"><div class="rail-dot rail-dot-on"></div><div class="rail-dot"></div><div class="rail-dot"></div><div class="rail-dot"></div></div>
+      <div class="chats">
+        <div class="chats-head">CHATS</div>
+        <div class="chat-item">Notes<span class="chat-item-sub">just you</span></div>
+        <div class="chat-item chat-item-on">Team A · project<span class="chat-item-sub">Bob is on</span></div>
+        <div class="chat-item">Product channel<span class="chat-item-sub">standup at 08:30</span></div>
+        <div class="chat-item">Release notes<span class="chat-item-sub">quiet</span></div>
+      </div>
+      <div class="thread">
+        <div class="thread-head">acme · <b>Team A · project</b></div>
+        <div class="thread-body">
+          <div class="msg"><div class="msg-who"><b>Priya Shah</b>09:12</div>
+            <div class="bubble">Bob, what's still open in PRJ2 for the Thursday release?</div></div>
+          <div class="msg"><div class="msg-who"><b>Alex Morgan</b>09:12</div>
+            <div class="bubble bubble-bob"><span class="chip-bob">🧑‍💻[Bob]</span>Three left: PRJ2-14 (in review), PRJ2-21 (blocked on design), PRJ2-23 (not started). Tom is off tomorrow, so PRJ2-21 moves to Friday unless someone picks it up.</div></div>
+          <div class="msg"><div class="msg-who"><b>Tom Becker</b>09:14</div>
+            <div class="bubble">Bob, are you a person?</div></div>
+          <div class="msg"><div class="msg-who"><b>Alex Morgan</b>09:14</div>
+            <div class="bubble bubble-bob"><span class="chip-bob">🧑‍💻[Bob]</span>No, I'm an AI assistant answering for Alex. Alex reads this channel too.</div></div>
+        </div>
+        <div class="thread-note">posted from the owner's account · every reply carries the [Bob] label</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="badges"><span class="badge">self-hosted</span><span class="badge">Claude Code</span><span class="badge">MCP tools</span></span>
+  </div>
+</div></body></html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>A day with Bob</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css">
+<style>
+.grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; row-gap: 26px; }
+.step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 11px; }
+.step-time { font-family: var(--mono); font-size: 18px; color: var(--accent); }
+.step-title { font-size: 25px; font-weight: 700; letter-spacing: -.02em; }
+.card-body { font-size: 17px; padding: 10px 14px 11px; }
+.ask { color: var(--text); }
+.ans { margin-top: 7px; color: var(--muted); }
+.step-note { margin-top: 9px; font-size: 18px; color: var(--muted); }
+.step-note b { color: var(--text); font-weight: 600; }
+</style></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>history | tail -6</b></div>
+  <div class="headline">One working day. <em>Bob takes the small stuff.</em></div>
+  <p class="sub">Scheduled notes go out on time, and the quick questions get answered from your own tools. <b>You come back to answers, not a queue.</b></p>
+  <div class="stage">
+    <div class="grid">
+      <div>
+        <div class="step-head"><span class="n">1</span><span class="step-time">08:30</span><span class="step-title">Standup</span></div>
+        <div class="card"><div class="card-bar"><i></i><i></i><i></i><span>Product channel</span></div>
+          <div class="card-body"><div class="ans"><span class="chip-bob">[Bob]</span>Standup: yesterday, today, blockers. Reply here.</div></div></div>
+        <div class="step-note">A <b>scheduled broadcast</b>, posted on time.</div>
+      </div>
+      <div>
+        <div class="step-head"><span class="n">2</span><span class="step-time">09:10</span><span class="step-title">Ticket status</span></div>
+        <div class="card"><div class="card-bar"><i></i><i></i><i></i><span>Team A · project</span></div>
+          <div class="card-body"><div class="ask">Bob, status PRJ3-8?</div><div class="ans"><span class="chip-bob">[Bob]</span>In review, assigned to Priya Shah.</div></div></div>
+        <div class="step-note">Looked up in <b>Jira</b>.</div>
+      </div>
+      <div>
+        <div class="step-head"><span class="n">3</span><span class="step-time">11:00</span><span class="step-title">A to-do</span></div>
+        <div class="card"><div class="card-bar"><i></i><i></i><i></i><span>Notes</span></div>
+          <div class="card-body"><div class="ask">Bob, add a todo: book the retro room</div><div class="ans"><span class="chip-bob">[Bob]</span>Added to your to-do list.</div></div></div>
+        <div class="step-note">Saved to your <b>to-do list</b>.</div>
+      </div>
+      <div>
+        <div class="step-head"><span class="n">4</span><span class="step-time">12:00</span><span class="step-title">Worklog check</span></div>
+        <div class="card card-alert"><div class="card-bar"><i></i><i></i><i></i><span>Managers</span></div>
+          <div class="card-body"><div class="ans"><span class="chip-bob">[Bob]</span>No worklog yesterday: Person 1, Person 2. On leave: Tom Becker.</div></div></div>
+        <div class="step-note">A <b>scheduled note</b> to the managers' chat.</div>
+      </div>
+      <div>
+        <div class="step-head"><span class="n">5</span><span class="step-time">13:00</span><span class="step-title">Who is off</span></div>
+        <div class="card"><div class="card-bar"><i></i><i></i><i></i><span>Team A · project</span></div>
+          <div class="card-body"><div class="ask">Bob, is Tom off on the 20th?</div><div class="ans"><span class="chip-bob">[Bob]</span>Yes, Tom Becker is off on 20 Oct.</div></div></div>
+        <div class="step-note">Checked in the <b>leave sheet</b> and calendar.</div>
+      </div>
+      <div>
+        <div class="step-head"><span class="n">6</span><span class="step-time">15:00</span><span class="step-title">Listen later</span></div>
+        <div class="card card-done"><div class="card-bar"><i></i><i></i><i></i><span>Release notes</span></div>
+          <div class="card-body"><div class="ask">Bob, read me the PRJ4 release notes</div><div class="ans"><span class="chip-bob">[Bob]</span>Here is the audio: release-notes-PRJ4.mp3</div></div></div>
+        <div class="step-note">Turned into an <b>MP3</b> by text-to-speech.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="foot-note">Broadcast → Jira → To-do → Leave → MP3</span>
+  </div>
+</div></body></html>

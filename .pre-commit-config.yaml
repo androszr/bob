@@ -1,0 +1,16 @@
+# pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      # Structural rules everywhere; the hashed name list too when
+      # ~/.bob-anon/private-denylist.sha256 (or $BOB_PRIVATE_DENYLIST) exists.
+      - id: no-private-data
+        name: no private data (tests/test_no_private_data.py)
+        entry: pytest -q tests/test_no_private_data.py
+        language: system
+        pass_filenames: false
+        always_run: true

@@ -1,0 +1,117 @@
+/* Shared frame for the README pictures, in a dark terminal slide style:
+   a terminal prompt, a two-tone headline, a muted subtitle, a stage, a mono
+   footer. Colours come from tokens.css. Class-only selectors on purpose. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--canvas); }
+body { font-family: var(--sans); color: var(--text); }
+
+#frame {
+  position: relative; width: 1200px; height: 1200px; overflow: hidden;
+  background: var(--canvas);
+  padding: 66px 72px 56px;
+  display: flex; flex-direction: column;
+}
+
+.kicker { font-family: var(--mono); font-size: 21px; color: var(--accent); letter-spacing: .01em; }
+.kicker b { color: var(--text); font-weight: 400; }
+
+.headline {
+  font-weight: 750; font-size: 68px; line-height: 1.04; letter-spacing: -.035em;
+  color: var(--text); margin-top: 18px;
+}
+.headline em { font-style: normal; color: var(--accent); }
+.sub { font-size: 25px; line-height: 1.38; color: var(--muted); margin-top: 18px; max-width: 1040px; }
+.sub b { color: var(--text); font-weight: 600; }
+
+.stage { position: relative; flex: 1; margin-top: 30px; min-height: 0; }
+
+.foot {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 18px; color: var(--muted); margin-top: 22px;
+}
+.brand { letter-spacing: .14em; font-size: 20px; }
+.brand b { color: var(--accent); font-weight: 650; }
+.foot-note { letter-spacing: .04em; }
+
+.badges { display: flex; gap: 10px; }
+.badge {
+  font-family: var(--mono); font-size: 16px; letter-spacing: .06em; color: var(--accent);
+  border: 1px solid var(--control); border-radius: var(--radius-control);
+  padding: 7px 13px; background: var(--surface);
+}
+
+/* Step number, as a mint chip. */
+.n {
+  display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px;
+  font-family: var(--mono); font-weight: 700; font-size: 17px;
+  background: var(--accent); color: var(--accent-ink);
+  border-radius: var(--radius-control);
+}
+
+/* The [Bob] label, as it is stamped on every reply. */
+.chip-bob {
+  display: inline-block; font-family: var(--mono); font-weight: 700; font-size: 14px;
+  color: var(--accent); border: 1px solid var(--control); background: var(--accent-ink);
+  border-radius: var(--radius-control); padding: 1px 7px; margin-right: 8px;
+  vertical-align: 2px;
+}
+
+/* A generic three-pane chat window, drawn in the palette: no product chrome. */
+.window {
+  display: flex; height: 100%;
+  background: var(--well); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.rail { width: 64px; background: var(--canvas); border-right: 1px solid var(--line); padding: 16px 0; }
+.rail-dot { width: 32px; height: 32px; margin: 0 auto 14px; border-radius: var(--radius-control); background: var(--raised); border: 1px solid var(--line); }
+.rail-dot-on { background: var(--accent); border-color: var(--accent); }
+.chats { width: 270px; border-right: 1px solid var(--line); background: var(--surface); }
+.chats-head { font-family: var(--mono); font-size: 14px; letter-spacing: .14em; color: var(--muted); padding: 18px 18px 12px; }
+.chat-item { padding: 13px 18px; font-size: 18px; color: var(--muted); border-left: 3px solid transparent; }
+.chat-item-on { color: var(--text); background: var(--raised); border-left-color: var(--accent); }
+.chat-item-sub { display: block; font-family: var(--mono); font-size: 13px; color: var(--control); margin-top: 3px; }
+.thread { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.thread-head {
+  font-family: var(--mono); font-size: 15px; color: var(--muted); padding: 14px 24px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.thread-head b { color: var(--text); font-weight: 600; }
+.thread-body { flex: 1; padding: 20px 24px 0; }
+.msg { margin-bottom: 18px; }
+.msg-who { font-size: 15px; color: var(--muted); margin-bottom: 6px; font-family: var(--mono); }
+.msg-who b { color: var(--text); font-family: var(--sans); font-size: 17px; font-weight: 600; margin-right: 6px; }
+.bubble {
+  display: inline-block; max-width: 100%;
+  background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius-card);
+  padding: 11px 15px; font-size: 19px; line-height: 1.38;
+}
+.bubble-bob { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-glow); }
+.thread-note {
+  margin-top: auto; font-family: var(--mono); font-size: 14px; color: var(--muted);
+  border-top: 1px solid var(--line); padding: 12px 24px; background: var(--surface);
+}
+
+/* Terminal-ish card, for the chat windows. */
+.card {
+  background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.card-bar {
+  height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 13px; color: var(--muted);
+}
+.card-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--control); opacity: .6; }
+.card-bar span { margin-left: 8px; }
+.card-body { padding: 11px 15px 13px; font-size: 18px; line-height: 1.4; }
+.card-alert { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-glow); }
+.card-done { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.dim { color: var(--muted); }
+.mono { font-family: var(--mono); }
+
+.col-head { font-family: var(--mono); font-size: 19px; letter-spacing: .14em; color: var(--muted); margin-bottom: 16px; }
+.col-head b { font-weight: 700; }
+.col-before b { color: var(--danger); }
+.col-after b { color: var(--accent); }
+
+.caption { font-size: 21px; line-height: 1.38; color: var(--muted); }
+.caption b { color: var(--text); font-weight: 600; }

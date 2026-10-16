@@ -1,0 +1,8 @@
+{
+  "mention_people": {
+    "bob": {
+      "nowak": ["Nowak Ewa", "8:orgid:00000000-0000-0000-0000-000000000002"],
+      "kowalski": "@owner"
+    }
+  }
+}

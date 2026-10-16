@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Bob app icon</title>
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#0B100F"/>
+  <path d="M232 232 H792 A72 72 0 0 1 864 304 V600 A72 72 0 0 1 792 672 H520 L372 808 V672 H232 A72 72 0 0 1 160 600 V304 A72 72 0 0 1 232 232 Z" fill="#9BE8A8"/>
+  <path d="M418 330 H552 A70 70 0 0 1 586 460 A78 78 0 0 1 560 574 H418 Z M494 392 V440 H540 A24 24 0 0 0 540 392 Z M494 498 V532 H548 A17 17 0 0 0 548 498 Z" fill="#0B2112" fill-rule="evenodd"/>
+</svg>

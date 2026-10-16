@@ -1,0 +1,18 @@
+{
+  "planning-prep-team-a": {
+    "generate": "07:25",
+    "send": "07:45"
+  },
+  "daily-standup-team-a": {
+    "generate_send": "08:50"
+  },
+  "worklog-daily-team-a": {
+    "generate_send": "09:15"
+  },
+  "worklog-daily-team-b": {
+    "generate_send": "09:00"
+  },
+  "worklog-missing-recap": {
+    "generate_send": "12:00"
+  }
+}

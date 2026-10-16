@@ -1,0 +1,30 @@
+[project]
+name = "teams-agent"
+version = "0.1.0"
+description = "Microsoft Teams agent that answers chat messages through the Claude CLI"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["__pycache__", ".claude", ".agents", ".codex", ".grok"]
+
+[tool.ruff.lint]
+# Match the upstream sf-test conventions
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = [
+  "S101",  # use of assert (fine in tests)
+  "S110",  # try-except-pass — intentional silent fallback (selector probes, close-after-close)
+  "S112",  # try-except-continue — intentional retry over selector lists
+  "S603",  # subprocess.run with non-literal — we control inputs
+  "S607",  # starting process with partial path (we want PATH lookup for `claude`)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S603", "S607"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]

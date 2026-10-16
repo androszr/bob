@@ -1,0 +1,55 @@
+{
+  "extra_custom_fields": {
+    "customfield_10100": "typ_pracy",
+    "customfield_10101": "dotyczy",
+    "customfield_10102": "rodzaj_zmiany",
+    "customfield_10103": "numer_zamowienia",
+    "customfield_10104": "numer_projektu"
+  },
+  "issue_type_ids": {
+    "PRJ3": {
+      "user-story": "10011",
+      "task": "10012"
+    },
+    "PRJ1": {
+      "user-story": "10001",
+      "task": "10012",
+      "bug": "10013",
+      "epic": "10000"
+    },
+    "PRJ2": {
+      "user-story": "10001",
+      "bug": "1",
+      "task": "3",
+      "epic": "10000"
+    },
+    "PRJ5": {
+      "task": "3",
+      "epic": "10000"
+    },
+    "PRJ4": {
+      "user-story": "10011",
+      "task": "10012",
+      "epic": "10000"
+    }
+  },
+  "write_fields": {
+    "typ_pracy": "customfield_10100",
+    "dotyczy": "customfield_10101",
+    "rodzaj_zmiany": "customfield_10102",
+    "numer_zamowienia": "customfield_10103",
+    "numer_projektu": "customfield_10104",
+    "stan_obecny": "customfield_10105",
+    "stan_docelowy": "customfield_10106"
+  },
+  "typ_pracy_options": {
+    "Analizy biznesowe": "90001",
+    "Przygotowanie środowisk": "90002",
+    "Prace programistyczne": "90003",
+    "Testy": "90004"
+  },
+  "rodzaj_zmiany_default": "90010",
+  "projects_without_work_type": [
+    "PRJ5"
+  ]
+}

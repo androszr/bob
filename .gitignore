@@ -1,0 +1,143 @@
+# Sensitive data — never commit
+.env
+knowledge/urlopy/urlopy.json
+scripts/teams_agent/session.json
+scripts/teams_agent/.auth-token
+scripts/teams_agent/.ic3-auth-token
+scripts/teams_agent/sp-cookies.json
+scripts/teams_agent/chat_history_*.md
+scripts/teams_agent/user-data/
+scripts/teams_agent/log.jsonl
+scripts/teams_agent/watch-state.json
+scripts/teams_agent/watch-state-*.json
+scripts/teams_agent/sharepoint_mtimes.json
+scripts/teams_agent/bob-control.json
+scripts/teams_agent/*-sniff.jsonl
+scripts/teams_agent/*.jsonl
+scripts/teams_agent/history/
+scripts/teams_agent/user-profiles/
+
+# OTEL receiver state
+scripts/otel/otel-spans.jsonl
+scripts/otel/*.jsonl
+
+# Broadcast runner state
+scripts/broadcast/*.jsonl
+scripts/broadcast/generated/
+scripts/broadcast/sprint-hygiene-state.json
+
+# Jira refresh state (runtime, not committed)
+scripts/jira/refresh_state.json
+
+# MCP runtime config — regenerated on every `import ai` based on BOB_MCP_TRANSPORT.
+# Committing it would just churn between stdio/http states.
+mcp-config.json
+
+# Debug artifacts (regenerable on miss)
+scripts/teams_agent/*.png
+scripts/teams_agent/*.html
+scripts/teams_agent/*-diag.txt
+scripts/teams_agent/downloads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Agent infrastructure
+audits/
+source_data/
+user-data/
+bob-private/
+
+# code-review-graph
+.code-review-graph/
+
+# Migration archive
+migration.tar.gz
+
+# Audit log komentarzy wysylanych przez jira_comment (runtime)
+scripts/jira/jira-comments.log.jsonl
+
+# Bob eval results (replies contain live Jira data)
+scripts/teams_agent/eval/results/
+
+# session.py writes cookies through session.tmp.json
+scripts/teams_agent/session.tmp.json
+scripts/broadcast/worklog-teams.json.lock
+
+# Public-repo hygiene: runtime state and personal data that must never come back
+.dark-army/
+.claude/settings.local.json
+.claude/settings.json
+scout/
+plans/
+scripts/todos/todos.json
+scripts/teams_agent/owner-schedule.json
+scripts/teams_agent/pending-builds.json
+scripts/teams_agent/stats-state.json
+scripts/broadcast/briefs/output/
+knowledge/risks/
+knowledge/urlopy/
+
+# Live config: copy from the *.example.* file next to it and fill in real values
+chat-config.json
+scripts/broadcast/jobs.json
+scripts/broadcast/worklog-teams.json
+scripts/broadcast/broadcast-schedule.json
+scripts/broadcast/briefs/*.md
+!scripts/broadcast/briefs/*.example.md
+
+# Phase 4 org config: real people / Jira IDs (copy from the *.example.json next to each)
+scripts/teams_agent/people.json
+config/jira-fields.json
+
+# Temp files written next to secrets (bearer token, cookies, chat config) during atomic writes
+*.tmp
+.*.tmp
+*.tmp.json
+
+# Personal daily recaps written by chat_recap.py (only the README is tracked)
+knowledge/daily-recap/*.md
+!knowledge/daily-recap/README.md
+
+# Anywhere in the tree: JSONL logs/sniffs (chat content) and browser session / cookie / token files
+*.jsonl
+session*.json
+*cookies*.json
+.*token*
+
+# Local virtualenv
+.venv/
+
+# Dark Army agent pack and local manual checks: owner tooling, never published
+manual-check/
+.github/workflows/deploy.yml
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+docs/context.md
+.agents/
+.codex/
+.grok/
+.claude/leads/
+.claude/review.md
+.claude/agents/bps-*.md
+.claude/skills/ship/
+.claude/skills/shunt/
+.claude/skills/scout/
+.claude/skills/probe/
+.claude/skills/review/
+.claude/skills/security-pass/
+.claude/skills/knowledge/
+.claude/skills/deploy-web/
