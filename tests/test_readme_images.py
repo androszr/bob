@@ -81,6 +81,27 @@ def html_problems(text: str) -> list[str]:
     return problems
 
 
+_BANNED_SVG_TAGS = {"script", "image", "foreignobject", "style"}
+
+
+def _local(name: str) -> str:
+    return name.split("}")[-1]
+
+
+def svg_problems(root: ET.Element) -> list[str]:
+    """Ways an SVG can carry active content: banned elements, links, event attributes."""
+    problems = []
+    for el in root.iter():
+        tag = _local(el.tag).lower()
+        if tag in _BANNED_SVG_TAGS:
+            problems.append(f"banned element <{tag}>")
+        for attr in el.attrib:
+            local = _local(attr).lower()
+            if local == "href" or local.startswith("on"):
+                problems.append(f"banned attribute {local} on <{tag}>")
+    return problems
+
+
 def test_the_folder_holds_exactly_the_five_pictures():
     assert sorted(p.name for p in IMAGES.glob("*.png")) == NAMES
 
@@ -158,11 +179,30 @@ def test_nothing_true_was_lost():
 
 def test_the_icon_is_a_plain_vector():
     root = ET.parse(IMAGES / "app-icon.svg").getroot()  # noqa: S314 - our own committed file, not untrusted input
-    tags = {el.tag.split("}")[-1] for el in root.iter()}
-    assert "title" in tags
-    assert not tags & {"script", "image"}
-    for el in root.iter():
-        assert not any(k.split("}")[-1] == "href" for k in el.attrib)
+    assert "title" in {_local(el.tag) for el in root.iter()}
+    assert svg_problems(root) == []
+
+
+_SVG = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">{}</svg>'
+
+
+@pytest.mark.parametrize(("body", "needle"), [
+    pytest.param("<foreignObject><div/></foreignObject>", "foreignobject", id="foreignObject"),
+    pytest.param("<style>rect{{fill:red}}</style>", "style", id="style"),
+    pytest.param('<rect onload="x()"/>', "onload", id="onload"),
+    pytest.param('<rect onClick="x()"/>', "onclick", id="onclick"),
+    pytest.param("<script>x()</script>", "script", id="script"),
+    pytest.param('<image href="x.png"/>', "image", id="image"),
+    pytest.param('<a xlink:href="http://e/"><rect/></a>', "href", id="xlink-href"),
+])
+def test_a_hostile_svg_is_caught(body, needle):
+    root = ET.fromstring(_SVG.format(body))  # noqa: S314 - literal test input
+    assert any(needle in p for p in svg_problems(root)), svg_problems(root)
+
+
+def test_a_clean_svg_has_no_problems():
+    root = ET.fromstring(_SVG.format("<title>t</title><rect width='1' height='1'/>"))  # noqa: S314 - literal test input
+    assert svg_problems(root) == []
 
 
 def test_the_check_tool_is_green():
