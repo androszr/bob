@@ -569,3 +569,59 @@ def test_send_one_passes_mentions_to_send_html_message(runner, monkeypatch):
     assert "mri=\"8:orgid:fake-mri\"" in html_arg
 
 
+
+
+# ---------------------------------------------------------------------------
+# generate-send: weekday gate and double-send protection
+# ---------------------------------------------------------------------------
+
+
+def _log_send(runner, job_id, channel, when, phase="send", chars=120, success=True):
+    entry = {"ts": when.isoformat(), "job_id": job_id, "channel": channel, "phase": phase,
+             "success": success, "chars_sent": chars}
+    with runner.LOG_FILE.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry) + "\n")
+
+
+def test_sent_before_finds_only_real_successful_sends(runner):
+    from datetime import datetime, timedelta  # noqa: PLC0415
+    now = datetime.now(runner._WARSAW)
+    assert runner._sent_before("j", "C") is False                         # no log yet
+    _log_send(runner, "j", "C", now, success=False)
+    _log_send(runner, "j", "C", now, chars=0)                             # nothing was sent
+    _log_send(runner, "j", "C", now, phase="generate")                    # not a send phase
+    _log_send(runner, "other", "C", now)
+    _log_send(runner, "j", "D", now)
+    assert runner._sent_before("j", "C") is False
+    _log_send(runner, "j", "C", now - timedelta(days=1), phase="generate-send")
+    assert runner._sent_before("j", "C") is True
+    assert runner._sent_before("j", "C", since=now - timedelta(hours=1)) is False      # yesterday's send
+    _log_send(runner, "j", "C", now)
+    assert runner._sent_before("j", "C", since=now - timedelta(hours=1)) is True
+
+
+def test_generate_send_skips_a_job_that_already_went_out_today(runner):
+    from datetime import datetime  # noqa: PLC0415
+    now = datetime.now(runner._WARSAW)
+    job = {"id": "j", "channel": "C", "schedule_type": "daily"}
+    assert runner._skip_generate_send("j", job, now) == ""
+    _log_send(runner, "j", "C", now)
+    assert "juz wyslane" in runner._skip_generate_send("j", job, now)
+
+
+def test_weekly_job_waits_for_its_weekday(runner):
+    from datetime import datetime  # noqa: PLC0415
+    monday = datetime(2026, 10, 26, 11, 0, tzinfo=runner._WARSAW)
+    job = {"id": "w", "channel": "C", "schedule_type": "weekly", "weekday": 0}
+    assert runner._skip_generate_send("w", job, monday) == ""
+    assert "nie dzien" in runner._skip_generate_send("w", {**job, "weekday": 3}, monday)
+    assert runner._skip_generate_send("w", {**job, "schedule_type": "daily", "weekday": 3}, monday) == ""
+
+
+def test_run_job_generate_send_does_nothing_twice_a_day(runner, monkeypatch):
+    from datetime import datetime  # noqa: PLC0415
+    _write_jobs(runner.JOBS_FILE, [{"id": "j", "channel": "C", "enabled": True, "tools": [], "prompt": "x"}])
+    _log_send(runner, "j", "C", datetime.now(runner._WARSAW))
+    monkeypatch.setattr(runner, "_run_phase_generate", lambda *a: pytest.fail("generated again"))
+    monkeypatch.setattr(runner, "_run_phase_send", lambda *a: pytest.fail("sent again"))
+    assert runner.run_job("j", "generate-send") is True

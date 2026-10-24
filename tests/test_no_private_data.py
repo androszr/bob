@@ -257,6 +257,12 @@ SENSITIVE_PATHS = """
 .env
 chat-config.json
 chat-config.tmp
+roles.json
+knowledge/role/pm/notes.md
+scripts/teams_agent/timers-state.json
+scripts/teams_agent/bob-control.json
+scripts/teams_agent/perf-metrics.jsonl
+user-data/bob-panel/approvals.json
 mcp-config.json
 .mcp-config.json.123.456.tmp
 scripts/broadcast/jobs.json

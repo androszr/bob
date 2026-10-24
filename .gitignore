@@ -86,12 +86,16 @@ scripts/todos/todos.json
 scripts/teams_agent/owner-schedule.json
 scripts/teams_agent/pending-builds.json
 scripts/teams_agent/stats-state.json
+scripts/teams_agent/timers-state.json
+scripts/teams_agent/timers-state.tmp
 scripts/broadcast/briefs/output/
 knowledge/risks/
+knowledge/role/
 knowledge/urlopy/
 
 # Live config: copy from the *.example.* file next to it and fill in real values
 chat-config.json
+roles.json
 scripts/broadcast/jobs.json
 scripts/broadcast/worklog-teams.json
 scripts/broadcast/broadcast-schedule.json

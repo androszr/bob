@@ -22,6 +22,7 @@ made-up data. Copy them and fill them in:
 ```bash
 cp .env.example .env
 cp chat-config.example.json chat-config.json
+cp roles.example.json roles.json
 cp scripts/teams_agent/people.example.json scripts/teams_agent/people.json
 cp config/jira-fields.example.json config/jira-fields.json
 cp scripts/broadcast/jobs.example.json scripts/broadcast/jobs.json
@@ -33,6 +34,7 @@ cp scripts/broadcast/broadcast-schedule.example.json scripts/broadcast/broadcast
 |---|---|
 | `.env` | the owner (`OWNER_TEAMS_USER_ID`, `OWNER_DISPLAY_NAME`, `OWNER_ALIAS`, `OWNER_JIRA_LOGIN`, `ORG_EMAIL_DOMAIN`), Jira (`ATLASSIAN_TOKEN`, `JIRA_URL`, `JIRA_BOARD_ID`, `JIRA_PROJECT`, `JIRA_TEAMS`), SharePoint (`SHAREPOINT_TENANT`, `URLOPY_SHAREPOINT_URL`, `SHAREPOINT_UPLOAD_FOLDER_URL`), optionally `GIPHY_API_KEY`, `BOB_MCP_TRANSPORT` |
 | `chat-config.json` | which chats to watch and how: MCP groups, internet access, trigger, persona, model, `hold_s` |
+| `roles.json` | the roles a chat can wear: tool groups, skills, knowledge (path: `BOB_ROLES_FILE`; see [running](running.md#roles)) |
 | `people.json` | people to @-mention with the `[BOB-WYWOLAJ: key]` token (path: `PEOPLE_FILE`) |
 | `config/jira-fields.json` | the fields and issue types of your Jira (path: `JIRA_FIELDS_FILE`) |
 
@@ -46,6 +48,8 @@ cp scripts/broadcast/broadcast-schedule.example.json scripts/broadcast/broadcast
   `SHAREPOINT_TENANT`, `URLOPY_SHAREPOINT_URL`, `SHAREPOINT_UPLOAD_FOLDER_URL`,
   `PEOPLE_FILE`, `NAME_NOISE_PREFIXES`
 - **The Teams daemon:** `GIPHY_API_KEY`, `BOB_MCP_TRANSPORT`, `TEAMS_ROBOT_DEBUG`
+- **The panel:** `BOB_PANEL_PORT` (default `3006`), `BOB_PANEL_SHELL` (login shell the panel starts Bob in,
+  default `/bin/zsh`), `BOB_ROLES_FILE`
 
 A variable exported in the shell wins over `.env`. An empty value means "use the default
 from the code".
@@ -76,6 +80,8 @@ session**, which is why the browser must be the visible one (Teams refuses headl
 Chromium, even with valid cookies). The session lives about seven days; then run
 `login.py` again.
 
+Prefer a browser? `./bob` opens the [panel](panel.md), which does the sign-in and the start for you.
+
 Bob answers messages containing the word "Bob" (or the channel trigger from
 `chat-config.json`). Its own messages are recognised by `sender_mri` and the label
 prefix, so there is no echo. Ctrl-C stops it.
@@ -88,6 +94,11 @@ prefix, so there is no echo. Ctrl-C stops it.
 | `scripts/teams_agent/.auth-token`, `.ic3-auth-token` | Teams bearer tokens (chatsvc, AMS) - they work like a password and stay local |
 | `scripts/teams_agent/watch-state.json` | cursor `{chat: {last_sequence_id}}` |
 | `scripts/teams_agent/log.jsonl` | audit of every daemon action |
+| `scripts/teams_agent/bob-control.json` | pause / off state and the switched-off chats |
+| `scripts/teams_agent/timers-state.json` | when the slow periodic jobs last ran |
+| `scripts/teams_agent/perf-metrics.jsonl` | time and cost of every Claude call |
+| `roles.json` | your roles |
+| `user-data/bob-panel/` | the panel's state: approvals, Bob's log, backups of edited configs |
 | `scripts/teams_agent/api-sniff.jsonl`, `ws-sniff.jsonl` | dumps of the sniff modes |
 | `user-data/` | history, profiles of the people who talk to Bob, persona ideas and learning |
 | `.env` | tokens and settings - **never** commit |

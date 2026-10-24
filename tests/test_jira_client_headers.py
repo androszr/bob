@@ -85,3 +85,18 @@ def test_extract_field_value_variants():
     assert _mod._extract_field_value({"value": "V", "id": "1"}) == "V"
     assert _mod._extract_field_value({"id": "1"}) == "1"
     assert _mod._extract_field_value(["a", {"value": "b"}]) == ["a", "b"]
+
+
+def test_get_issue_brief_returns_what_a_reply_to_the_reporter_needs():
+    created = "2026-10-20T08:00:00.000+0200"
+    raw = {"key": "PRJ1-7", "fields": {"summary": "Login fails", "description": "  " + "x" * 5000 + "  ",
+                                       "reporter": {"displayName": "Ewa Nowak"}, "created": created}}
+    with patch.object(_mod, "_get", return_value=raw) as get:
+        brief = _mod.get_issue_brief("PRJ1-7", max_desc=100)
+    assert get.call_args.args[1] == {"fields": "summary,description,reporter,created"}
+    assert brief == {"key": "PRJ1-7", "summary": "Login fails", "opis": "x" * 100, "zglaszajacy": "Ewa Nowak",
+                     "utworzono": created}
+    with patch.object(_mod, "_get", return_value=None):
+        assert _mod.get_issue_brief("PRJ1-8") is None
+    with patch.object(_mod, "_get", return_value={"key": "PRJ1-9", "fields": {}}):
+        assert _mod.get_issue_brief("PRJ1-9")["zglaszajacy"] == ""

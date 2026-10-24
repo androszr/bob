@@ -27,6 +27,7 @@ REACTION_MOODS: dict[str, str] = {
     "wizard": "bob-working-wizard.gif",
     "overheated": "bob-working-overheated.gif",
     "juggling": "bob-working-juggling.gif",
+    "waiting": "bob-fishing.gif",
 }
 
 # 2-3 short casual Polish reaction phrases per mood (caption next to the gif).
@@ -41,6 +42,7 @@ _REACTION_PHRASES: dict[str, list[str]] = {
     "wizard": ["trochę czarów i gotowe", "magia, nie inaczej", "i po problemie, jak czary"],
     "overheated": ["uf, ledwo zipię", "no i padłem", "trochę mnie to wykończyło"],
     "juggling": ["mam tego kupę naraz", "żonglerka, ale ogarniam", "sporo tego naraz"],
+    "waiting": ["no i dalej łowię, cierpliwości", "siedzę nad wodą i czekam", "ryba jeszcze nie brała"],
 }
 
 

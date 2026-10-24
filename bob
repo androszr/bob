@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Bob - the only terminal command: starts Bob's panel (http://localhost:3006) and opens it in the browser.
+# Everything else - Teams login, starting / restarting Bob, chats, roles, logs - is done in the panel.
+#
+#   ./bob            start the panel (if it is not running) and open it
+#   ./bob status     is the panel up, is Bob running
+#   ./bob restart    restart the panel (Bob keeps running)
+#   ./bob install    register the panel as a LaunchAgent: starts at login, comes back if it dies (recommended)
+#   ./bob logs       follow the panel's own log
+#
+# Without the LaunchAgent the panel runs in the background (nohup) until the Mac restarts.
+
+set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PORT="${BOB_PANEL_PORT:-3006}"
+URL="http://localhost:$PORT"
+LABEL="bob.panel"
+DOMAIN="gui/$(id -u)"
+LOGDIR="${BOB_MCP_LOGDIR:-$HOME/Library/Logs/bob}"
+LOG="$LOGDIR/bob-panel.log"
+
+up() { curl -s -o /dev/null --max-time 2 "$URL/api/status"; }
+agent() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
+
+start_panel() {
+  if up; then return 0; fi
+  if agent; then
+    launchctl kickstart "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
+  else
+    mkdir -p "$LOGDIR"
+    (cd "$REPO" && nohup python3 scripts/bob_panel/server.py >>"$LOG" 2>&1 &)
+  fi
+  for _ in $(seq 1 20); do up && return 0; sleep 0.5; done
+  echo "Panel nie wstał - zobacz log: $LOG" >&2
+  exit 1
+}
+
+case "${1:-open}" in
+  open|start)
+    start_panel
+    agent || echo "Wskazówka: ./bob install - panel będzie startował sam po zalogowaniu do Maca."
+    echo "Panel Boba: $URL"
+    open "$URL" 2>/dev/null || true
+    ;;
+  status)
+    if up; then
+      curl -s "$URL/api/status" | python3 -c 'import json,sys; s=json.load(sys.stdin); b=s["bob"]; t=s["teams_session"]
+print("Panel: działa (" + sys.argv[1] + ")")
+print("Bob:   " + ("działa, pid %s" % b.get("pid") if b.get("running") else "zatrzymany"))
+print("Teams: " + ("trzeba się zalogować (w panelu)" if t.get("login_needed") else "sesja ważna, %s h" % t.get("age_h")))' "$URL"
+    else
+      echo "Panel: nie działa - uruchom: ./bob"
+    fi
+    ;;
+  restart)
+    if agent; then
+      launchctl kickstart -k "$DOMAIN/$LABEL"
+    else
+      pkill -f "scripts/bob_panel/server.py" || true
+      sleep 1
+    fi
+    start_panel
+    echo "Panel zrestartowany: $URL (Bob działa dalej)"
+    ;;
+  install)
+    "$REPO/scripts/bob_panel/install_launchd.sh" --force
+    ;;
+  logs)
+    tail -f "$LOG"
+    ;;
+  *)
+    sed -n '2,11p' "$0"
+    exit 2
+    ;;
+esac

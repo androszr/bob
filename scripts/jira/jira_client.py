@@ -274,6 +274,21 @@ def get_issue(key: str) -> dict | None:
     return _simplify(data) if data else None
 
 
+def get_issue_brief(key: str, max_desc: int = 3000) -> dict | None:
+    """What a reply to the reporter needs: summary, a longer description, reporter, created."""
+    data = _get(f"/rest/api/2/issue/{key}", {"fields": "summary,description,reporter,created"})
+    if not data:
+        return None
+    f = data.get("fields") or {}
+    return {
+        "key": data.get("key", key),
+        "summary": f.get("summary") or "",
+        "opis": (f.get("description") or "").strip()[:max_desc],
+        "zglaszajacy": (f.get("reporter") or {}).get("displayName") or "",
+        "utworzono": f.get("created") or "",
+    }
+
+
 # Org custom fields read by jira-bob's jira_issue (scripts/jira/mcp_server.py) —
 # {customfield_id: label}, from config/jira-fields.json ("extra_custom_fields").
 JIRA_FIELDS = org_config.load_json_config(

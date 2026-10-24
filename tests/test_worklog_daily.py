@@ -184,3 +184,22 @@ def test_harvest_mris_matches_names_and_skips_ambiguous(tmp_path):
     mris = {m["name"]: m.get("mri") for m in json.loads(f.read_text())["teams"]["T"]["members"]}
     assert mris == {"Ida Mostek": "8:orgid:aaa", "Leszek Łyko": "8:orgid:rrr",
                     "Jan Nowak": None, "Ala Kot": "8:orgid:keep"}
+
+
+def test_inactive_email_account_is_replaced_by_the_one_active_account_of_the_same_name():
+    def jira_get(path, params):
+        if params["username"] == "old@example.com":
+            return [{"name": "old@example.com", "emailAddress": "old@example.com", "displayName": "EXT Ewa Lipa [X]",
+                     "active": False}]
+        return [{"name": "old@example.com", "displayName": "EXT Ewa Lipa [X]", "active": False},
+                {"name": "ewa.lipa@example.com", "displayName": "Ewa Lipa", "active": True}]
+
+    assert wd._jira_username(jira_get, "old@example.com", "Ewa Lipa") == "ewa.lipa@example.com"
+
+
+def test_inactive_account_without_an_active_twin_is_kept_and_an_active_one_wins_at_once():
+    only_old = lambda path, params: [{"name": "old@example.com", "displayName": "Ewa Lipa", "active": False}]  # noqa: E731
+    assert wd._jira_username(only_old, "old@example.com", "Ewa Lipa") == "old@example.com"
+    assert wd._jira_username(only_old, "old@example.com", "") == "old@example.com"
+    active = lambda path, params: [{"name": "a@example.com", "emailAddress": "a@example.com"}]  # noqa: E731
+    assert wd._jira_username(active, "a@example.com", "Ala") == "a@example.com"

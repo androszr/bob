@@ -1165,3 +1165,39 @@ def test_tool_prompt_reloaded_when_file_changes(tmp_path, monkeypatch):
 def test_bob_always_discloses_being_an_ai_when_asked():
     """README "Safety & ethics in brief": a direct question always gets an honest answer."""
     assert "zawsze przyznajesz, że jesteś asystentem AI" in ai._BOB_CORE_PROMPT
+
+
+def test_bob_prompt_has_reaction_and_lean_style():
+    prompt = ai._BOB_CORE_PROMPT
+    assert "[BOB-REAKCJA]" in prompt and "<silent/>" in prompt
+    assert "Zaczynaj od sedna" in prompt and "wniosku" in prompt           # conclusion first
+    assert "najwyżej 2 zdania" in prompt and "najwyżej raz" in prompt      # short "don't know", one mention per matter
+
+
+def test_system_prompt_carries_role_knowledge():
+    prompt = ai.build_system_prompt(None, ["todos"], role_knowledge="\n\nWIEDZA ROL X")
+    assert "WIEDZA ROL X" in prompt
+    assert "WIEDZA ROL X" not in ai.build_system_prompt(None, ["todos"])
+
+
+def test_role_knowledge_reaches_the_system_prompt_of_the_cli_call(monkeypatch):
+    captured = {}
+    fake = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
+
+    def run(cmd, **kw):
+        captured["cmd"] = cmd
+        return fake
+
+    monkeypatch.setattr(ai, "_run_claude_cli", run)
+    ai.freeform_reply("hej", allowed_mcp=["todos"], role_knowledge="\n\nWIEDZA ROL Y", timeout_s=7)
+    assert any("WIEDZA ROL Y" in str(part) for part in captured["cmd"])
+
+
+def test_attachment_cap_is_big_enough_for_a_ten_kilobyte_document():
+    assert ai._ATTACH_INLINE_MAX_CHARS == 40000
+
+
+def test_mcp_config_path_can_be_moved_by_the_environment():
+    import os  # noqa: PLC0415
+    assert ai._MCP_CONFIG == Path(os.environ["BOB_MCP_CONFIG"])         # conftest points tests at a temp file
+    assert ai._MCP_CONFIG != ai._PROJECT_ROOT / "mcp-config.json"       # a test run never rewrites the live config

@@ -964,3 +964,188 @@ def test_send_ams_gif_message_posts_img_with_amsreferences(tmp_path, monkeypatch
 def test_send_ams_gif_message_upload_failure_returns_none(tmp_path, monkeypatch):
     monkeypatch.setattr(api_client, "_ams_upload_gif", lambda f, c: None)
     assert api_client.send_ams_gif_message("<p>x</p>", tmp_path / "x.gif", "conv1") is None
+
+
+# ---------------------------------------------------------------------------
+# Receive-only conversations (chat-config "ingest_only") + paginated raw fetch
+# ---------------------------------------------------------------------------
+
+_LISTEN = "19:listen@thread.v2"
+
+
+def _no_network_session(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    sess = MagicMock()
+    monkeypatch.setattr(api_client, "_session", lambda: sess)
+    monkeypatch.setattr(api_client, "RECEIVE_ONLY_CONV_IDS", {_LISTEN})
+    return sess
+
+
+def test_receive_only_conv_refuses_every_write(monkeypatch, tmp_path):
+    sess = _no_network_session(monkeypatch)
+    monkeypatch.setattr(api_client, "_ams_upload_gif", lambda f, c: pytest.fail("upload must not run"))
+    img = tmp_path / "t.png"
+    img.write_bytes(b"x")
+    assert api_client.send_message("hej", _LISTEN) is False
+    assert api_client.send_html_message("<p>x</p>", _LISTEN) is None
+    assert api_client.reply_to_message("t", "1", "A", "tekst", _LISTEN) in (False, None)
+    assert api_client.edit_message("1", "<p>x</p>", _LISTEN) is False
+    assert api_client.delete_message("1", _LISTEN) is False
+    assert api_client.post_card({"type": "AdaptiveCard"}, _LISTEN) is None
+    assert api_client.send_ams_gif_message("<p>x</p>", img, _LISTEN) is None
+    assert api_client.send_ams_image_message("<p>x</p>", img, _LISTEN) is None
+    assert not (sess.post.called or sess.put.called or sess.delete.called)
+
+
+def test_send_ams_image_message_only_to_allowed_conv(monkeypatch, tmp_path):
+    monkeypatch.setattr(api_client, "RECEIVE_ONLY_CONV_IDS", set())
+    monkeypatch.setattr(api_client, "_ams_upload_gif", lambda f, c: pytest.fail("upload must not run"))
+    img = tmp_path / "t.png"
+    img.write_bytes(b"x")
+    assert api_client.send_ams_image_message("<p>x</p>", img, "other-conv", allowed_conv_id="qa-conv") is None
+
+
+def test_send_ams_image_message_posts_with_amsreference(monkeypatch, tmp_path):
+    monkeypatch.setattr(api_client, "RECEIVE_ONLY_CONV_IDS", set())
+    img = tmp_path / "t.png"
+    img.write_bytes(b"x")
+    monkeypatch.setattr(api_client, "_ams_upload_gif", lambda f, c: ("obj-1", 5))
+    got = {}
+    monkeypatch.setattr(api_client, "_post_returning_id",
+                        lambda conv, content, mentions=None, amsreferences=None: got.update(
+                            conv=conv, content=content, refs=amsreferences) or "m1")
+    assert api_client.send_ams_image_message("<p>c</p>", img, "qa", allowed_conv_id="qa") == "m1"
+    assert got["refs"] == ["obj-1"] and "views/imgo" in got["content"] and got["conv"] == "qa"
+
+
+def _page(msgs, back=None):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    r = MagicMock()
+    r.json.return_value = {"messages": msgs, "_metadata": {"backwardLink": back} if back else {}}
+    return r
+
+
+def test_fetch_raw_messages_since_paginates_and_stops_at_cursor(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+    sess = MagicMock()
+    sess.get.side_effect = [
+        _page([{"sequenceId": 30, "type": "Message"}, {"sequenceId": 29, "type": "Message"},
+               {"sequenceId": 28, "type": "ThreadActivity/x"}], back=api_client._BASE + "/next/page"),
+        _page([{"sequenceId": 27, "type": "Message"}, {"sequenceId": 20, "type": "Message"}],
+              back=api_client._BASE + "/more"),
+    ]
+    monkeypatch.setattr(api_client, "_session", lambda: sess)
+    out = api_client.fetch_raw_messages_since(_LISTEN, 26)
+    assert [m["sequenceId"] for m in out] == [27, 29, 30]
+    assert sess.get.call_count == 2  # stopped: second page reached the cursor
+
+
+def test_fetch_raw_messages_since_failure_returns_empty_and_flags_401(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+    sess = MagicMock()
+    err = _requests.HTTPError("401")
+    err.response = MagicMock(status_code=401)
+    sess.get.side_effect = err
+    monkeypatch.setattr(api_client, "_session", lambda: sess)
+    assert api_client.fetch_raw_messages_since(_LISTEN, 1) == []
+    assert api_client._needs_token_refresh is True
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+
+
+def test_receive_only_set_is_seeded_from_chat_config(monkeypatch, tmp_path):
+    monkeypatch.setattr(api_client, "RECEIVE_ONLY_CONV_IDS", set())
+    cfg = tmp_path / "chat-config.json"
+    cfg.write_text(
+        json.dumps(
+            {"_comment": "x",
+             "chats": {"A": {"conv_id": "19:ro@thread.v2", "ingest_only": True}, "B": {"conv_id": "19:rw@x"}}}
+        ),
+        encoding="utf-8",
+    )
+    api_client._seed_receive_only(cfg)
+    assert api_client.RECEIVE_ONLY_CONV_IDS == {"19:ro@thread.v2"}
+    # missing / broken file never raises
+    api_client._seed_receive_only(tmp_path / "nope.json")
+    cfg.write_text("{not json", encoding="utf-8")
+    api_client._seed_receive_only(cfg)
+    assert api_client.RECEIVE_ONLY_CONV_IDS == {"19:ro@thread.v2"}
+
+
+def test_md_to_html_link_url_cannot_break_out_of_href():
+    out = api_client.md_to_html('[kliknij](https://x.example.com/"onmouseover="alert(1)) i https://y.example.com/"onclick="x')
+    import re  # noqa: PLC0415
+    tags = re.findall(r"<a [^>]*>", out)
+    assert tags == ['<a href="https://x.example.com/">', '<a href="https://y.example.com/">']   # no extra attribute
+    assert '<a href="https://y.example.com/">' in out
+
+
+# ---------------------------------------------------------------------------
+# add_reaction — PUT .../messages/{id}/properties?name=emotions
+# ---------------------------------------------------------------------------
+
+def test_add_reaction_puts_emotion_json_string(monkeypatch):
+    from unittest.mock import MagicMock
+    session = MagicMock()
+    session.put.return_value = _FakeResponse(200, {})
+    monkeypatch.setattr(api_client, "_session", lambda: session)
+    assert api_client.add_reaction("123", "19:abc@thread.v2", "like") is True
+    url = session.put.call_args.args[0]
+    kw = session.put.call_args.kwargs
+    assert url.endswith("/conversations/19%3Aabc%40thread.v2/messages/123/properties")
+    assert kw["params"] == {"name": "emotions"}
+    emotion = json.loads(kw["json"]["emotions"])  # Teams expects a JSON *string*
+    assert emotion["key"] == "like" and isinstance(emotion["value"], int)
+
+
+def test_add_reaction_401_flags_token(monkeypatch):
+    session, _ = _make_send_session([_FakeResponse(401, {})], method="put")
+    monkeypatch.setattr(api_client, "_session", lambda: session)
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+    assert api_client.add_reaction("123", "conv1") is False
+    assert api_client._needs_token_refresh is True
+
+
+def test_add_reaction_refuses_receive_only_conv(monkeypatch):
+    from unittest.mock import MagicMock
+    session = MagicMock()
+    monkeypatch.setattr(api_client, "_session", lambda: session)
+    monkeypatch.setattr(api_client, "RECEIVE_ONLY_CONV_IDS", {"ro-conv"})
+    assert api_client.add_reaction("123", "ro-conv") is False
+    session.put.assert_not_called()
+
+
+def test_get_messages_page_size_follows_the_requested_count(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    seen = []
+    sess = MagicMock()
+
+    def get(url, params=None, timeout=None):
+        seen.append(params["pageSize"])
+        r = MagicMock()
+        r.json.return_value = {"messages": []}
+        return r
+
+    sess.get = get
+    monkeypatch.setattr(api_client, "_session", lambda: sess)
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+    api_client.get_messages("19:x@thread.v2", n=5)
+    api_client.get_messages("19:x@thread.v2", n=100)
+    api_client.get_messages("19:x@thread.v2", n=500)
+    assert seen == [30, 110, 200]                  # n + 10, at least 30, never above the API limit
+
+
+def test_fetch_raw_messages_since_never_follows_a_link_outside_teams(monkeypatch):
+    from unittest.mock import MagicMock  # noqa: PLC0415
+    monkeypatch.setattr(api_client, "_needs_token_refresh", False)
+    sess = MagicMock()
+    sess.get.side_effect = [_page([{"sequenceId": 30, "type": "Message"}], back="https://evil.example/steal")]
+    monkeypatch.setattr(api_client, "_session", lambda: sess)
+    out = api_client.fetch_raw_messages_since("19:x@thread.v2", 1)
+    assert [m["sequenceId"] for m in out] == [30] and sess.get.call_count == 1
+    sess.get.reset_mock()
+    sess.get.side_effect = [_page([{"sequenceId": 30, "type": "Message"}], back=api_client._BASE + "/next"),
+                            _page([{"sequenceId": 5, "type": "Message"}])]
+    api_client.fetch_raw_messages_since("19:x@thread.v2", 1)
+    assert sess.get.call_count == 2

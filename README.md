@@ -37,8 +37,8 @@ Full detail: [docs/setup.md](docs/setup.md).
    **You'll see:** a saved session file next to the script, and the browser closes.
 4. **Name one chat.** In `chat-config.json`, keep one chat you are happy to test in (a private notes chat with just you is a good first choice).
    **You'll see:** that chat's name under `chats` in the file.
-5. **Start the daemon.** `python3 scripts/teams_agent/cli.py`.
-   **You'll see:** log lines naming the chats it watches; Ctrl-C stops it.
+5. **Start the daemon.** `python3 scripts/teams_agent/cli.py` - or `./bob` to open the [panel](#the-panel) and start and stop Bob from the browser instead.
+   **You'll see:** log lines naming the chats it watches; Ctrl-C stops it. (With `./bob`: a browser tab with Bob's status.)
 6. **Talk to it.** In that chat, write "Bob, what is today's date?".
    **You'll see:** a reply a few seconds later, labelled `[Bob]`.
 
@@ -53,6 +53,32 @@ Full detail: [docs/setup.md](docs/setup.md).
 5. **13:00** - "Bob, is Tom off on the 20th?" Bob checks the team leave sheet.
 6. **15:00** - "Bob, read me the PRJ4 release notes." Bob replies with an MP3 attachment.
 
+## The panel
+
+`./bob` starts a small local web page and opens it in your browser (macOS; the Teams agent itself can still run anywhere). Nothing else needs a terminal: signing in to Teams, starting, stopping and restarting Bob all happen there.
+
+| Tab | What it shows |
+|---|---|
+| Dashboard (Pulpit) | Whether Bob and the Teams session are alive, what to do next, a live 24-hour view of the chats, cost and reply times |
+| Approvals (Zgody) | Yes-or-no requests from Bob, Claude Code or scripts; answer them here or in the control chat |
+| Conversations (Rozmowy) | The latest messages Bob reacted to and what he answered |
+| Logs (Logi i problemy) | Bob's log, parsed: problems of the last day first, routine noise hidden |
+| Chats (Kanały) | Add, change, switch on and off the chats Bob watches, with a diff before every save |
+| Roles (Role) | The roles, what they may use and know, and edits to their knowledge through an approval |
+| Schedule (Harmonogram) | Scheduled posts and the background loops |
+
+It listens on `127.0.0.1` only and every change must come from the page itself (an Origin and Host check), so another website in your browser cannot drive Bob. Starting Bob the old way (`python3 scripts/teams_agent/cli.py`) still works unchanged. To have the panel start at login, run `./bob install`. More: [docs/panel.md](docs/panel.md).
+
+## Roles
+
+A chat can wear one or more **roles** instead of a hand-written `mcp` list. A role is a named bundle: the tool groups it may use, what it can do, and the knowledge files it reads. Copy `roles.example.json` to `roles.json` (git ignores it), then in `chat-config.json`:
+
+```json
+"Project channel": { "role": ["project_manager"], "dodatkowo": ["todos"] }
+```
+
+`dodatkowo` adds groups for that chat, `bez` removes some. The role `asystent` means every default group, exactly what `"mcp": null` meant, and a chat without `role` keeps its own `mcp` list. Bob reads the file on every reply, so an edit applies from the next message. Details: [docs/running.md](docs/running.md#roles).
+
 ## What it can do
 
 - **Jira**, read and write: look up, search, create and comment on issues.
@@ -60,6 +86,11 @@ Full detail: [docs/setup.md](docs/setup.md).
 - **Markdown to MP3**, so a long text can be listened to.
 - **Scheduled broadcasts**: a standup, planning prep, a daily worklog note and a missing-worklog reminder for managers.
 - **Channel personas** with their own label, emoji and trigger word, and **per-chat knowledge** files.
+- **A browser panel** (`./bob`) that starts, stops and signs Bob in without a terminal, and shows chats, roles, approvals and logs.
+- **Roles**: give a chat a named bundle of tools, skills and knowledge instead of a hand-written tool list.
+- **Receive-only chats** where Bob never posts, not even a scheduled message, **a thumbs-up instead of a reply** when that is all a message needs, and a **"still working" note** on long jobs.
+- **A memory of the files Bob sent**, so "fix that file" works when someone quotes or links it.
+- **A self-healing Teams session**: when the sign-in token stops renewing, Bob reopens the browser by itself and alerts you if that fails.
 
 Which tools a chat may use is set per chat. See [docs/mcp-servers.md](docs/mcp-servers.md) and [docs/running.md](docs/running.md).
 
@@ -112,7 +143,9 @@ Found a vulnerability? Please use GitHub's private *Report a vulnerability* butt
 
 ## Troubleshooting
 
-**The session expired (after about seven days).** Run `python3 scripts/teams_agent/login.py` again.
+**The session expired (after about seven days).** Run `python3 scripts/teams_agent/login.py` again, or press "Log in to Teams" in the panel.
+
+**Bob went quiet and the token is not renewing.** Bob now handles this himself: after a couple of refreshes that return the same dead token he reopens Teams in a fresh browser window, and if that does not help either he shows a macOS notification. If you see it, sign in in the browser window or restart Bob from the panel.
 
 **Sign-in is refused or hangs.** It must be the visible browser; Teams rejects headless Chromium even with valid cookies.
 
@@ -122,9 +155,9 @@ Found a vulnerability? Please use GitHub's private *Report a vulnerability* butt
 
 ## Uninstall
 
-1. If you installed the daemons: `scripts/mcp_admin/uninstall_launchd.sh`.
+1. If you installed the daemons: `scripts/mcp_admin/uninstall_launchd.sh`. If you ran `./bob install`, also `launchctl bootout gui/$(id -u)/bob.panel` and delete `~/Library/LaunchAgents/bob.panel.plist`.
 2. Delete the clone of this repository.
-3. Remove `~/Library/Logs/bob/` (the daemon logs) and `~/.bob/` (the tool daemons' bearer token, generated MCP config files and pid files; these are created even in stdio mode).
+3. Remove `~/Library/Logs/bob/` (the daemon and panel logs), and `~/.bob/` (the tool daemons' bearer token, generated MCP config files and pid files; these are created even in stdio mode).
 4. Optionally remove `~/Library/Caches/ms-playwright` if nothing else uses Playwright, and, in your temp folder, `bob_img_*` / `bob_attach_*` (pictures from Teams messages; normally deleted after the reply, but left behind when a message with a picture starts a grill session or a build request), `bob-upload-after-drop.png` (a screenshot of the Teams window saved on every file upload) and any `sp_upload_*` folders (copies of files uploaded to SharePoint). Bob never deletes the last two.
 
 The LaunchAgents under `~/Library/LaunchAgents/` are removed by the script in step 1. Everything else Bob writes (your `.env`, the browser session, tokens, chat data) lives inside the clone (plus MP3s, if you pointed `MD_TO_MP3_DIR` outside it).
@@ -132,7 +165,8 @@ The LaunchAgents under `~/Library/LaunchAgents/` are removed by the script in st
 ## Everything else
 
 - [Setup and configuration](docs/setup.md)
-- [Ways to run it, personas and the sandbox](docs/running.md)
+- [Ways to run it, roles, personas and the sandbox](docs/running.md)
+- [The panel](docs/panel.md)
 - [MCP servers and ports](docs/mcp-servers.md)
 - [Architecture](docs/architecture.md)
 - [Product spec (PRD, in Polish)](PRD.md)

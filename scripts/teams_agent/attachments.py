@@ -185,6 +185,25 @@ def _attempt_fetch(
 
 
 def _refresh_via_playwright(file_url: str) -> dict[str, dict[str, str]]:
+    """One-shot Playwright session to grab fresh SP cookies.
+
+    The sync API refuses to start in a thread with a running asyncio loop -- which is
+    exactly where FastMCP runs sync tools. There the refresh failed instantly and every
+    expired-cookie download looked like "no access", so in that case the session runs in
+    a short-lived worker thread instead."""
+    import asyncio  # noqa: PLC0415
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _refresh_via_playwright_here(file_url)
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="sp-refresh") as pool:
+        return pool.submit(_refresh_via_playwright_here, file_url).result()
+
+
+def _refresh_via_playwright_here(file_url: str) -> dict[str, dict[str, str]]:
     """Run a one-shot Playwright session in this thread to grab fresh SP cookies."""
     from playwright.sync_api import sync_playwright
 

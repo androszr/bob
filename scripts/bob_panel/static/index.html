@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bob · panel</title>
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/panel.css">
+<script>
+try { const t = localStorage.getItem('bob-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="ds-nav">
+    <div class="ds-nav-header"><h1>Bob · panel</h1><p id="owner-sub">asystent na Teams</p>
+      <div class="state-pill"><span id="dot" class="dot"></span><span id="headline">…</span></div></div>
+    <div id="nav"></div>
+    <div class="nav-foot">
+      <a class="ds-link" id="theme" style="cursor:pointer">Tryb ciemny / jasny</a>
+      <span>Terminal: <code>./bob</code> otwiera ten panel</span>
+    </div>
+  </aside>
+  <main class="ds-main" id="main"></main>
+  <div id="modal"></div>
+  <div id="tip" role="tooltip"></div>
+</div>
+<script>
+// ---- shared --------------------------------------------------------------------------------------
+const PAGES = [
+  ['Na co dzień', [['pulpit','Pulpit','dashboard'],['zgody','Zgody','tick'],['aktywnosc','Rozmowy','chatbubbles'],['logi','Logi i problemy','shield']]],
+  ['Ustawienia Boba', [['czaty','Kanały','settings'],['role','Role','user'],['harmonogram','Harmonogram','schedule']]],
+];
+const ALL = PAGES.flatMap(g=>g[1]);
+let tab = (location.hash||'#pulpit').slice(1); if(!ALL.some(t=>t[0]===tab)) tab='pulpit';
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ic = n => `<span class="ic" style="--ic:url(/static/icons/${n}.svg)"></span>`;
+const ago = iso => { const s=(Date.now()-new Date(iso))/1000; return s<60?`${Math.round(s)} s`:s<3600?`${Math.round(s/60)} min`:s<86400?`${Math.round(s/3600)} h`:`${Math.round(s/86400)} dni`; };
+const when = iso => { if(!iso) return '-'; const d = new Date(iso); if(isNaN(d)) return esc(iso);
+  return `${d.toLocaleString('pl-PL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} <span class="muted">(${ago(iso)} temu)</span>`; };
+const api = (p, body) => fetch(p, body===undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}).then(r=>r.json());
+const btn = (label, attrs='', kind='secondary') => `<button class="ds-btn ds-btn--sm ds-btn--${kind}" ${attrs}>${label}</button>`;
+const badge = (t, c='gray', title='') => `<span class="ds-badge ds-badge--md ds-badge--${c}" ${title?`title="${esc(title)}"`:''}>${t}</span>`;
+const callout = (kind, html) => `<div class="ds-callout ds-callout--${kind}">${ic({success:'tick',warning:'warning',danger:'cross',info:'info',neutral:'info'}[kind])}<div>${html}</div></div>`;
+const head = (title, desc, help='') => `<div class="page-head"><h1>${title}</h1><p>${desc}</p>${help?`<details class="help"><summary>Jak to działa?</summary><div>${help}</div></details>`:''}</div>`;
+const table = (cols, rows) => `<div class="ds-table-wrap"><table class="ds-table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+const bobImg = (name, cls='', id='') => `<img ${id?`id="${id}"`:''} class="${cls}" src="/static/bob/${esc(name||'bob-static-base')}.svg" alt="Bob">`;
+// which mascot stands for which situation (static/bob/README.md lists the whole set)
+const MOOD = {'good-vibe':'bob-happy', 'lock':'bob-notification', 'no-connection':'bob-disconnected', 'thinking':'bob-working-thinking', 'chat':'bob-idle-living', 'files':'bob-fishing'};
+const empty = (mood, title, desc) => `<div class="ds-empty">${bobImg(MOOD[mood])}<div class="ds-empty-title">${title}</div><div class="ds-empty-desc">${desc}</div></div>`;
+let OWNER = '';
+let pendingCount = 0, PROBLEMS = 0;
+
+function nav(){
+  $('#nav').innerHTML = PAGES.map(([g, items]) => `<div class="ds-nav-section">${g}</div>` + items.map(([k,l,i]) =>
+    `<a class="${k===tab?'active':''}" data-t="${k}">${ic(i)}${l}${k==='zgody'&&pendingCount?`<span class="nav-count">${badge(pendingCount,'red')}</span>`:''}${k==='logi'&&PROBLEMS?`<span class="nav-count">${badge(PROBLEMS,'yellow')}</span>`:''}</a>`).join('')).join('');
+  document.querySelectorAll('#nav a').forEach(a=>a['onclick']=()=>go(a.dataset.t));
+}
+function go(t){ tab=t; location.hash=t; EDIT=null; RED=null; KN=null; window.scrollTo(0,0); return render(); }
+
+async function header(){
+  try { const [s, a] = await Promise.all([api('/api/status'), api('/api/approvals')]); pendingCount = a.pending.length;
+    const ts = s.teams_session||{};
+    $('#dot').className = 'dot ' + (!s.bob.running ? 'bad' : ts.login_needed||ts.warn ? 'warn' : 'ok');
+    $('#headline').innerHTML = s.bob.running ? `Bob działa · aktywność ${s.last_activity?ago(s.last_activity)+' temu':'-'}` : '<b>Bob nie działa</b>';
+    OWNER = s?.owner || ''; $('#owner-sub').textContent = OWNER ? `asystent: ${OWNER}` : 'asystent na Teams';
+    nav(); return {s, a};
+  } catch(e){ $('#headline').textContent = 'panel nie odpowiada'; }
+}
+
+async function bobAction(kind, b){
+  const q = {restart:'Zrestartować Boba? Przez ~30 s nie będzie odpowiadał (wiadomości z tego czasu obsłuży po starcie).', stop:'Zatrzymać Boba? Nie będzie odpowiadał na żadnym kanale, dopóki go nie uruchomisz.'}[kind];
+  if(q && !confirm(q)) return;
+  // after the re-render the clicked button is gone: show the result next to the first Bob control on the page
+  const msg = () => document.querySelector('[data-bob]')?.parentElement.querySelector('.msg');
+  b['disabled'] = true; b.parentElement.querySelector('.msg').textContent = kind==='restart'?'Restartuję… (do 30 s)':'Chwila…';
+  try { const r = await api(`/api/bob/${kind}`, {by:'panel'}); await render(); const m = msg(); if(m) m.textContent = r?.message || ''; }
+  finally { b['disabled'] = false; }
+}
+
+// ---- Pulpit: what to do now -----------------------------------------------------------------------
+function nextStep(s, lg){
+  const ts = s.teams_session||{};
+  if(lg.running) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Dokończ logowanie do Teams</h2>
+      <p>Na tym Macu otworzyło się okno przeglądarki.</p>
+      <ol class="steps"><li>Zaloguj się kontem swojej organizacji (SSO, potem MFA na telefonie).</li><li>Przy pytaniu „Czy pozostać zalogowanym?” wybierz <b>Tak</b> - sesja wytrzyma 7 dni.</li><li>Gdy zobaczysz Teams z listą czatów po lewej, kliknij poniżej.</li></ol>
+      <div class="row">${btn('Jestem zalogowany','id="b-login-ok"','primary')}<span class="msg" id="lmsg"></span></div>
+      ${(lg.log||[]).length?`<details class="help"><summary>Szczegóły logowania</summary><pre>${esc(lg.log.join('\n'))}</pre></details>`:''}</div></div>`;
+  if(ts.login_needed) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Zaloguj Boba do Teams</h2>
+      <p>Sesja Teams ${ts.exists?'wygasła':'nie istnieje'} (wystarcza na 7 dni). Bez niej Bob nie wstanie. Logowanie otworzy przeglądarkę na tym Macu i potrwa około minuty.</p>
+      ${lg.exit_code?callout('danger',`Ostatnie logowanie się nie udało (${when(lg.finished)}). Spróbuj jeszcze raz i kliknij „Jestem zalogowany” dopiero, gdy widać Teams.`):''}
+      <div class="row">${s.bob.running?'':btn('Zaloguj i uruchom Boba','id="b-login-start"','primary')}${btn('Tylko zaloguj','id="b-login"',s.bob.running?'primary':'secondary')}<span class="msg" id="lmsg"></span></div></div></div>`;
+  if(!s.bob.running) return `<div class="box hero">${bobImg('bob-disconnected')}<div><h2>Bob jest zatrzymany</h2>
+      <p>Nie odpowiada teraz na żadnym kanale i nie wysyła zaplanowanych wiadomości. Sesja Teams jest ważna, więc wystarczy go uruchomić.</p>
+      <div class="row">${btn('Uruchom Boba','data-bob="start"','primary')}<span class="msg"></span></div></div></div>`;
+  if(pendingCount) return `<div class="box hero">${bobImg('bob-working-thinking')}<div><h2>${pendingCount===1?'Jedna decyzja czeka':`Decyzje czekające na Ciebie: ${pendingCount}`}</h2>
+      <p>Bob, Claude Code albo automat pyta o zgodę - np. na wdrożenie zmiany albo zapisanie wiedzy. Dopóki nie zdecydujesz, sprawa stoi.</p>
+      <div class="row">${btn('Przejdź do zgód','data-go="zgody"','primary')}</div></div></div>`;
+  return `<div class="box hero">${bobImg('bob-happy')}<div><h2>Wszystko działa</h2>
+      <p>Bob odpowiada na kanałach, sesja Teams jest ważna jeszcze ${Math.max(0, Math.floor((ts.max_age_h-ts.age_h)/24))} dni, nic nie czeka na Twoją decyzję.${PROBLEMS?` W logach z ostatniej doby są błędy (${PROBLEMS} rodzajów) - <a class="ds-link" data-go="logi">zobacz</a>.`:''}</p></div></div>`;
+}
+const VIEWS = {
+  async pulpit(){
+    const {s} = await header() || {}; if(!s) return '';
+    const lg = s?.login||{}, ts = s.teams_session||{}, sup = s?.supervisor||{};
+    let D = null;
+    try { const [l, d] = await Promise.all([api('/api/bob/logs?hours=24&level=warn'), api('/api/dashboard?hours=24')]); D = d;
+      PROBLEMS = (l?.problems||[]).filter(p=>p?.level==='error').length; nav(); } catch(e){}
+    const daysLeft = ts.exists ? Math.max(0,(ts.max_age_h-ts.age_h)/24) : 0;
+    return head('Pulpit', 'Stan Boba i to, co warto teraz zrobić. Jeśli coś wymaga Twojej uwagi, zobaczysz to na górze z instrukcją krok po kroku.',
+        'Bob to program na tym Macu, który czyta czaty Teams jako Ty i odpowiada na nich. Panel go uruchamia, zatrzymuje i loguje do Teams - terminal nie jest już potrzebny (<code>./bob</code> tylko otwiera panel). Panel startuje sam po zalogowaniu do Maca i podnosi Boba, jeśli przed restartem działał.')
+      + nextStep(s, lg)
+      + `<div class="grid">
+        <div class="ds-card ds-stat ${s.bob.running?'ds-stat--highlight':''}"><span class="ds-stat-label">Bob</span><span class="ds-stat-value ${s.bob.running?'ds-stat-value--success':'ds-stat-value--danger'}">${s.bob.running?'działa':'zatrzymany'}</span><span class="muted">${s.bob.running?`od ${esc(s.bob.started)}`:''}</span></div>
+        <div class="ds-card ds-stat"><span class="ds-stat-label">Sesja Teams</span><span class="ds-stat-value ${ts.login_needed?'ds-stat-value--danger':ts.warn?'ds-stat-value--warning':''}">${ts.login_needed?'wygasła':`jeszcze ${daysLeft.toFixed(1)} dni`}</span>
+          <div class="ds-progress-track"><div class="ds-progress-fill ds-progress-fill--${ts.login_needed?'red':ts.warn?'yellow':'green'}" style="width:${Math.min(100,daysLeft/7*100)}%"></div></div></div>
+        <div class="ds-card ds-stat"><span class="ds-stat-label">Ostatnia aktywność na czatach</span><span class="ds-stat-value">${s.last_activity?ago(s.last_activity)+' temu':'-'}</span></div>
+      </div>
+      ${D?liveDashboard(D):''}
+      <div class="box"><h2>Sterowanie</h2><p class="sub">Restart pomaga, gdy Bob przestał odpowiadać albo po zmianie jego kodu. Zatrzymaj go, jeśli ma milczeć dłużej (na krótko wystarczy „Bob pause 30 min” w Notatkach). Restart jest wstrzymany, gdy sesja Teams wygasła - najpierw logowanie.</p>
+        <div class="row">${s.bob.running?btn('Restartuj Boba','data-bob="restart"','primary')+btn('Zatrzymaj','data-bob="stop"'):btn('Uruchom Boba','data-bob="start"','primary')}${lg.running||ts.login_needed?'':btn('Zaloguj ponownie do Teams','id="b-login"','tertiary')}<span class="msg"></span></div>
+        <p class="muted" style="margin-top:var(--space-12)">Ostatni restart z panelu: ${when(sup.last_restart)} ${esc(sup.last_restart_by||'')}${s.bob.running?` · ${s.bob.managed?'uruchomiony z panelu':'uruchomiony w terminalu'} · pid ${esc(s.bob.pid)}`:''}</p></div>`;
+  },
+
+  // ---- Zgody --------------------------------------------------------------------------------------
+  async zgody(){
+    const a = await api('/api/approvals'); pendingCount = a.pending.length; nav();
+    const card = r => `<div class="apr" data-id="${esc(r.id)}"><h3>${esc(r?.title)}</h3>
+      <div class="muted">${esc(r?.source||'')} · ${when(r.created_at)} · <code>${esc(r.id)}</code></div>
+      ${r.details?`<details ${r.details.length<400?'open':''}><summary>Szczegóły i różnice</summary><pre>${esc(r?.details)}</pre></details>`:''}
+      <label class="lbl">Notatka do decyzji (opcjonalnie)<textarea class="ds-input"></textarea></label>
+      <div class="row">${btn('Zatwierdź','data-a="1"','primary')}${btn('Odrzuć','data-a="0"','danger')}<span class="msg"></span></div></div>`;
+    const done = a.done.map(r=>`<tr><td>${when(r.decided_at)}</td><td>${esc(r?.title)}</td><td>${r.status==='approved'?badge('zatwierdzone','green'):badge('odrzucone','red')}</td><td>${esc(r?.note||'')}</td></tr>`).join('');
+    return head('Zgody', 'Tu Bob, Claude Code i automaty pytają Cię o zgodę, zanim zrobią coś ważnego: wdrożą zmianę skryptu, zapiszą nową wiedzę, opublikują zmianę. Nic się nie dzieje, dopóki nie zdecydujesz.',
+        'Każda nowa prośba trafia też do Notatek na Teams. Gdy nie siedzisz przy komputerze, odpisz tam „Bob, zatwierdzam apr-…” albo „Bob, odrzucam apr-…” (po dwukropku możesz dodać notatkę). Gdy czeka tylko jedna decyzja, wystarczy „Bob, zatwierdzam”.')
+      + `<div class="box"><h2>Czeka na Twoją decyzję (${a.pending.length})</h2>${a.pending.map(card).join('')||empty('good-vibe','Nic nie czeka','Gdy coś będzie potrzebowało Twojej zgody, pojawi się tutaj i w Notatkach.')}</div>
+      <div class="box"><h2>Ostatnie decyzje</h2>${done?table(['Kiedy','Co','Decyzja','Notatka'], done):'<span class="muted">Brak.</span>'}</div>`;
+  },
+
+  // ---- Rozmowy (log.jsonl) --------------------------------------------------------------------------
+  async aktywnosc(){
+    const t = await api('/api/tasks?limit=150');
+    const chats = [...new Set(t.map(e=>e?.chat).filter(Boolean))].sort();
+    const shown = t.filter(e=>(e?.text||e?.reply) && (!ACHAT || e?.chat===ACHAT));
+    return head('Rozmowy', 'Ostatnie wiadomości, na które Bob zareagował: kto pisał, na jakim kanale i co Bob odpowiedział. Techniczne zdarzenia (odpytywanie, pominięte puste wiadomości) są ukryte - pełny zapis jest w „Logach”.')
+      + `<div class="box"><div class="row between"><h2>Ostatnie rozmowy</h2><label class="row" style="flex-wrap:nowrap">Kanał <select class="ds-input" id="achat" style="height:32px;width:260px"><option value="">wszystkie</option>${chats.map(c=>`<option ${c===ACHAT?'selected':''}>${esc(c)}</option>`).join('')}</select></label></div>
+      ${shown.length?table(['Kiedy','Kanał','Kto','Wiadomość','Odpowiedź Boba'], shown.map(e=>`<tr><td style="white-space:nowrap">${when(e.ts)}</td><td>${badge(esc(e?.chat||'-'))}</td><td>${esc(e?.sender||'')}</td><td>${esc(e?.text)}</td><td class="muted">${e.reply==='<silent/>'||!e?.reply?badge('bez odpowiedzi'):esc(e?.reply)}</td></tr>`).join('')):empty('chat','Brak rozmów','Na wybranym kanale nie było ostatnio wiadomości do Boba.')}</div>`;
+  },
+
+  // ---- Logi -----------------------------------------------------------------------------------------
+  async logi(){
+    const l = await api('/api/bob/logs?'+new URLSearchParams(LOGF).toString());
+    PROBLEMS = (l?.problems||[]).filter(p=>p?.level==='error').length; nav();
+    const lvl = {error:['błąd','red'], warn:['uwaga','yellow'], info:['info','gray'], debug:['rutyna','gray']};
+    const seg = (key, opts) => `<div class="ds-segmented">${opts.map(([v,lab])=>`<button class="ds-segment ${String(LOGF[key])===String(v)?'active':''}" data-lf="${key}" data-v="${v}">${lab}</button>`).join('')}</div>`;
+    const lab = s => esc((l?.labels||{})[s]||s);
+    const probs = (l?.problems||[]).map(p=>callout(p?.level==='error'?'danger':'warning',
+      `<b>${lab(p?.source)}</b>: ${esc(p.text.slice(0,220))}<br><span class="muted">${p.count>1?`${p.count} razy, ostatnio `:''}${when(p?.last)}</span>`)).join('');
+    const lines = (l?.entries||[]).slice().reverse().map(e=>`<div class="logline"><span class="t">${esc(e.ts.slice(11,19))}</span><span>${badge(lvl[e?.level][0], lvl[e?.level][1])}</span><span>${badge(lab(e?.source),'blue')}</span>
+      <span class="x">${esc(e?.text)}${e.count>1?' '+badge('×'+e?.count,'violet',`do ${e.last.slice(11,19)}`):''}${e.extra.length?`<details><summary class="muted">szczegóły (${e.extra.length})</summary><pre>${esc(e.extra.join('\n'))}</pre></details>`:''}</span></div>`).join('');
+    return head('Logi i problemy', 'Co Bob robił i co poszło nie tak. Na górze problemy z ostatniej doby (zgrupowane), niżej przebieg - powtarzające się wpisy są zwinięte (×N), a rutynowe (odpytywanie czatów, odświeżanie tokenu, kontrole zdrowia) ukryte.',
+        'Pojedyncze „get_messages blad” (timeout Teams) są normalne - Bob ponawia sam. Niepokojące są: powtarzające się błędy wysyłki, „claude CLI timeout”, wygasła sesja, a także brak aktywności, gdy na czatach coś się dzieje. Wtedy pomaga restart na Pulpicie.')
+      + `<div class="box"><h2>Problemy z ostatniej doby</h2>${probs||callout('success','Brak błędów i ostrzeżeń w ostatniej dobie.')}</div>
+      <div class="box"><div class="row" style="margin-bottom:var(--space-12)">
+        ${seg('level',[['warn','Tylko problemy'],['info','Ważne'],['debug','Wszystko']])}${seg('hours',[[1,'1 h'],[6,'6 h'],[24,'24 h']])}
+        <select class="ds-input" id="lsrc" style="height:32px;width:auto"><option value="">wszystkie źródła</option>${Object.entries(l?.sources||{}).map(([k,n])=>`<option value="${esc(k)}" ${k===LOGF.source?'selected':''}>${lab(k)} (${n})</option>`).join('')}</select>
+        <input class="ds-input" id="lq" placeholder="Szukaj w logu (Enter)…" value="${esc(LOGF.q)}" style="height:32px;width:220px"></div>
+        <p class="muted">W oknie: ${l.total||0} wpisów - błędy ${l.counts?.error||0}, uwagi ${l.counts?.warn||0}, ważne ${l.counts?.info||0}, rutyna ${l.counts?.debug||0}. Najnowsze na górze.</p>
+        ${lines||'<span class="muted">Brak wpisów dla tych filtrów.</span>'}
+        <details class="help"><summary>Surowy log (ostatnie 300 linii, jak w terminalu)</summary><pre id="rawlog">…</pre></details></div>`;
+  },
+
+  // ---- Harmonogram ----------------------------------------------------------------------------------
+  async harmonogram(){
+    const s = await api('/api/schedule');
+    const fmtT = t => Object.entries(t||{}).map(([k,v])=>badge(`${esc(k.replace('generate_send','wysyłka').replace('generate','przygotowanie').replace('send','wysyłka'))} ${esc(v)}`,'brand')).join('');
+    const every = s => s>=3600?`co ${s/3600} h`:s>=60?`co ${s/60} min`:`co ${s} s`;
+    return head('Harmonogram', 'Wiadomości, które Bob wysyła sam o stałych porach (np. poranne wpisy czasu pracy zespołu), i pętle, którymi co chwilę sprawdza kolejki i źródła danych.')
+      + `<div class="box"><h2>Zaplanowane wiadomości</h2>${table(['Zadanie','Kiedy','Włączone','Ostatnio wysłane'], s.broadcasts.map(b=>`<tr><td><b>${esc(b?.name)}</b><br><span class="muted">${esc(b?.description)}</span></td><td>${fmtT(b?.times)}</td><td>${b.enabled===null?badge('?'):b?.enabled?badge('tak','green'):badge('nie')}${b.disabled_reason?`<br><span class="muted">${esc(b.disabled_reason)}</span>`:''}</td><td>${when(b.last_fired)}</td></tr>`).join(''))}</div>
+      <div class="box"><h2>Pętle w tle</h2><p class="sub">Co Bob sprawdza sam, bez pytania. Zmiana częstotliwości wymaga zmiany w kodzie (<code>scripts/teams_agent/cli.py</code>).</p>${table(['Pętla','Jak często','Co robi'], s.loops.map(l=>`<tr><td><code>${esc(l?.name)}</code></td><td>${every(l.every_s)}</td><td class="muted">${esc(l?.what)}</td></tr>`).join(''))}</div>`;
+  },
+
+  // ---- Kanały ---------------------------------------------------------------------------------------
+  async czaty(){
+    const [c, cfg, rl] = await Promise.all([api('/api/chats'), api('/api/chat-config'), api('/api/roles')]); CFG = cfg; ROLES = rl;
+    const rname = Object.fromEntries(rl.role.map(r=>[r.id, `${r.emoji||''} ${r.nazwa}`]));
+    const off = Object.fromEntries(cfg.chats.map(x=>[x?.name, x?.disabled]));
+    return head('Kanały', 'Czaty Teams, na których działa Bob. Każdy kanał ma role (co Bob tam robi i do jakich narzędzi ma dostęp), nazwę, pod którą Bob występuje, i to, kto może go wołać.',
+        'Dostęp kanału = narzędzia jego ról + korekty „dodatkowo / bez”. Na kanałach z użytkownikami zewnętrznymi (kanał „zewnętrzny”) Bob nigdy nie dostaje narzędzi oznaczonych 🔒 („tylko zespół”) - nawet jeśli rola je ma. Zmiana działa w kilka sekund; nowy kanał zaczyna być obserwowany po restarcie Boba. Wyłączenie kanału działa od razu i da się je cofnąć.')
+      + editor() + `<div class="box"><div class="row between"><h2>Kanały (${c.length})</h2>${btn('+ Dodaj kanał','data-edit=""','primary')}</div>
+      ${table(['Kanał','Role','Kto woła','Dostęp','Aktywność',''], c.map(x=>`<tr class="${off[x?.name]?'off':''}"><td><b>${esc(x?.name)}</b>${off[x?.name]?' '+badge('wyłączony','red'):''}<br><span class="muted">Bob występuje jako ${esc(x?.label||'Bob')}</span><br>${x.flags.map(f=>badge(esc(f))).join('')}</td>
+        <td>${x.roles?x.roles.map(r=>badge(esc(rname[r]||r),'brand')).join('')||'<span class="muted">brak</span>':'<span class="muted">ręczna lista</span>'}</td>
+        <td>${esc({all:'wszyscy',owner:'tylko właściciel',auto:'Bob decyduje'}[x?.caller]||x?.caller||'-')}</td>
+        <td>${x.all_groups?badge('wszystkie domyślne','green'):''}${x.groups.filter(g=>!x.all_groups||!(rl.domyslne||[]).includes(g)).map(g=>badge(grpLabel(g))).join('')}</td>
+        <td style="white-space:nowrap">${when(x.last_activity)}</td>
+        <td style="white-space:nowrap">${btn('Edytuj',`data-edit="${esc(x?.name)}"`)} ${x.name===cfg.control_chat?'':btn(off[x?.name]?'Włącz':'Wyłącz',`data-onoff="${esc(x?.name)}" data-on="${off[x?.name]?1:0}"`,'tertiary')}</td></tr>`).join(''))}</div>`;
+  },
+
+  // ---- Role -----------------------------------------------------------------------------------------
+  async role(){
+    ROLES = await api('/api/roles');
+    if(ROLETAB!=='_grupy' && !ROLES.role.some(r=>r.id===ROLETAB)) ROLETAB = ROLES.role[0]?.id || '_grupy';
+    const rt = ROLETAB;
+    const jobs = (ROLES.zadania||[]).map(j=>`<tr><td>${when(j?.start)}</td><td>${esc(j?.nazwa)} <span class="muted">(${esc(j?.rola)})</span></td><td>${badge(esc(jobSt[j?.status]||j?.status), {applied:'green',failed:'red',awaiting:'yellow',rejected:'gray',running:'blue'}[j?.status]||'gray')}${j.error?`<br><span class="muted">${esc(j?.error)}</span>`:''}</td></tr>`).join('');
+    return head('Role Boba', 'Bob zakłada różne „kapelusze”: jest Asystentem, Project Managerem albo kimkolwiek, kogo opiszesz w pliku ról. Rola to dostęp do narzędzi, umiejętności i wiedza; na każdym kanale może nazywać się inaczej.',
+        'Wiedzę roli możesz przeglądać („Pokaż”) i zmieniać bez edytowania plików: „Edytuj z Claude” - opisz, co poprawić; „Dodaj wiedzę” - opisz, co ma się znaleźć. Claude przygotuje plik, a propozycja z różnicami trafi do „Zgód” - zapis następuje dopiero po Twoim zatwierdzeniu (poprzednia wersja zostaje w archiwum). Wiedza „w promptcie” trafia do Boba przy każdej wiadomości na kanałach z tą rolą, od razu.')
+      + (ROLES.brak_pliku ? callout('warning','Nie ma jeszcze pliku ról. Skopiuj <code>roles.example.json</code> do <code>roles.json</code> (w katalogu repozytorium) i odśwież stronę - albo ustaw ścieżkę w <code>BOB_ROLES_FILE</code>.') : '')
+      + `<div class="personas" role="tablist">${ROLES.role.map(r=>`<div class="persona ${r.id===rt?'active':''}" role="tab" aria-selected="${r.id===rt}" data-rtab="${esc(r.id)}">${bobImg(r?.obraz)}<b>${esc(r?.nazwa)}</b><span>${(r?.kanaly||[]).length} kanałów</span></div>`).join('')}
+          <div class="persona ${rt==='_grupy'?'active':''}" role="tab" data-rtab="_grupy"><div class="persona-ic">${ic('settings')}</div><b>Grupy narzędzi</b><span>opisy, 🔒, zmiany wiedzy</span></div></div>`
+      + `<div class="row" style="margin-bottom:var(--space-16)">${btn('+ Nowa rola','id="r-new"','primary')}${ROLES.bez_roli.length?`<span class="muted">Kanały bez ról (ręczna lista narzędzi): ${ROLES.bez_roli.map(esc).join(', ')}</span>`:''}</div>`
+      + roleEditor() + knBox()
+      + (rt==='_grupy'
+        ? (jobs?`<div class="box"><h2>Ostatnie zmiany wiedzy z Claude</h2>${table(['Kiedy','Wiedza','Stan'], jobs)}</div>`:'')
+          + `<div class="box"><h2>Grupy narzędzi</h2><p class="sub">Opis grup widać przy rolach i kanałach. 🔒 = tylko dla zespołu: nigdy na kanale z użytkownikami zewnętrznymi.</p>
+      ${table(['Grupa','Opis','🔒',''], ROLES.znane_grupy.map(g=>`<tr><td><code>${esc(g)}</code>${ROLES.domyslne.includes(g)?'':' '+badge('na życzenie')}</td><td><textarea class="ds-input g-opis" rows="2" style="min-height:48px;resize:vertical">${esc((ROLES.grupy[g]||{}).opis||'')}</textarea><div class="muted" style="font-size:var(--text-xs);margin-top:var(--space-4)">narzędzia: ${(ROLES.narzedzia[g]||[]).map(t=>`<code>${esc(t)}</code>`).join(', ')}</div></td><td><input type="checkbox" class="g-team" ${(ROLES.grupy[g]||{}).tylko_zespol?'checked':''}></td><td>${btn('Zapisz',`data-gsave="${esc(g)}"`,'tertiary')}</td></tr>`).join(''))}</div>`
+        : roleCard(ROLES.role.find(r=>r.id===rt)));
+  },
+
+};
+let ACHAT = '', LOGF = {level:'info', hours:6, source:'', q:''};
+
+// ---- Kanał: editor --------------------------------------------------------------------------------
+let CFG = null, EDIT = null, ROLES = null;   // EDIT: {name: '' (new) | chat name, diff, msg} while the chat editor is open
+const KNOWN = ['conv_id','caller','persona','internet','ingest_only','role','bez','dodatkowo','kanal_fr','trigger','mcp','mcp_extra'];
+const box = (cls, val, on, label) => `<label><input type="checkbox" class="${cls}" value="${esc(val)}" ${on?'checked':''}> ${label??esc(val)}</label>`;
+const sel = (id, opts, v) => `<select class="ds-input" id="${id}">${opts.map(([val,l])=>`<option value="${esc(val)}" ${String(v??'')===val?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+const grpLabel = g => `${esc(g)}${(ROLES?.zespol||[]).includes(g)?' 🔒':''}`;
+function editor(){
+  if(!EDIT || !CFG || !ROLES) return '';
+  const isNew = EDIT.name === '';
+  const cur = isNew ? {...CFG.new_chat} : (CFG.chats.find(x=>x?.name===EDIT.name)||{}).config || {};
+  const rest = Object.fromEntries(Object.entries(cur).filter(([k])=>!KNOWN.includes(k)));
+  const legacy = !isNew && !('role' in cur);
+  const trig = Array.isArray(cur.trigger) ? cur.trigger.join(', ') : (cur.trigger||'');
+  const label = p => (ROLES.etykiety||{})[p] || 'Bob';
+  return `<div class="box" id="ed"><h2>${isNew?'Nowy kanał':'Edycja: '+esc(EDIT.name)}</h2>
+    <p class="sub">Krok 1: ustaw pola. Krok 2: „Sprawdź zmiany” pokaże różnice i wynikowy dostęp Boba. Krok 3: „Zapisz”.</p>
+    ${legacy?callout('info',`Ten kanał ma jeszcze ręczną listę narzędzi (${esc(JSON.stringify(cur.mcp??'wszystkie'))}${cur.mcp_extra?' + '+esc(cur.mcp_extra.join(', ')):''}). Zapis przełączy go na role - sprawdź wynikowy dostęp.`):''}
+    <div class="form">
+      <label>Nazwa czatu (dokładnie jak w Teams)<input class="ds-input" id="e-name" value="${esc(EDIT.name)}" ${EDIT.name===CFG.control_chat?'disabled':''}></label>
+      <label>Identyfikator czatu (opcjonalnie, 19:…@thread.v2)<input class="ds-input" id="e-conv" value="${esc(cur.conv_id||'')}"></label>
+      <label>Kto może wołać Boba${sel('e-caller', [['','(ustawienie globalne)'],['all','wszyscy'],['owner','tylko właściciel'],['auto','Bob sam decyduje, kiedy się odezwać']], cur.caller)}</label>
+      <label>Jak Bob nazywa się na tym kanale${sel('e-persona', [['','Bob'], ...CFG.personas.map(p=>[p,label(p)])], cur.persona)}</label>
+      <label>Słowa, na które reaguje (po przecinku)<input class="ds-input" id="e-trig" value="${esc(trig)}" placeholder="domyślnie: bob"></label>
+      <label>Wyszukiwanie w internecie${sel('e-net', [['','wyłączone'],['only_me','tylko dla właściciela'],['all','dla wszystkich']], cur.internet)}</label>
+    </div>
+    <div class="checks"><label><input type="checkbox" id="e-fr" ${cur.kanal_fr?'checked':''}> kanał z użytkownikami zewnętrznymi (bez narzędzi 🔒)</label><label><input type="checkbox" id="e-ingest" ${cur.ingest_only?'checked':''}> tylko czytaj ten kanał (Bob nigdy w nim nie pisze) - po restarcie Boba</label></div>
+    <div class="lbl">Role - co Bob robi na tym kanale (szczegóły w zakładce „Role”)</div>
+    <div class="checks">${ROLES.role.map(r=>box('e-r', r.id, (cur.role||[]).includes(r.id), `${esc(r?.emoji||'')} ${esc(r?.nazwa)}`)).join('')}</div>
+    <details class="help" ${(cur.dodatkowo||cur.bez)?'open':''}><summary>Korekty dostępu tylko dla tego kanału</summary>
+      <div class="lbl">Dodatkowo (ponad role)</div><div class="checks">${CFG.groups.map(g=>box('e-x', g, (cur.dodatkowo||[]).includes(g), grpLabel(g))).join('')}</div>
+      <div class="lbl">Bez (mimo ról)</div><div class="checks">${CFG.groups.map(g=>box('e-b', g, (cur.bez||[]).includes(g), grpLabel(g))).join('')}</div></details>
+    <details class="help"><summary>Pozostałe ustawienia (JSON) - dla zaawansowanych</summary>
+      <textarea class="ds-input" id="e-rest" style="font-family:ui-monospace,monospace;font-size:var(--text-xs)">${esc(JSON.stringify(rest, null, 2))}</textarea></details>
+    <div class="row" style="margin-top:var(--space-16)">${btn('Sprawdź zmiany','id="e-prev"','primary')}${btn('Zapisz',`id="e-save" ${EDIT.diff?'':'disabled'}`,'primary')}
+      ${!isNew && EDIT.name!==CFG.control_chat?btn('Usuń kanał','id="e-del"','danger'):''}${btn('Zamknij','id="e-cancel"','tertiary')}<span class="msg" id="e-msg">${esc(EDIT.msg||'')}</span></div>
+    ${EDIT.restart?callout('warning',`Zmiana zadziała po restarcie Boba. ${btn('Restartuj Boba teraz','id="e-restart"','primary')}`):''}
+    ${EDIT.eff!==undefined?callout('info',`<b>Bob będzie miał tu dostęp do:</b> ${esc(EDIT.eff)}`):''}
+    ${EDIT.diff?`<details open><summary>Różnice w konfiguracji</summary><pre>${esc(EDIT.diff)}</pre></details>`:''}</div>`;
+}
+function formCfg(){
+  let rest; try { rest = JSON.parse($('#e-rest').value || '{}'); } catch(e){ throw new Error('Pozostałe ustawienia: niepoprawny JSON'); }
+  const cfg = {...rest}, v = id => $(id).value, checked = cls => [...document.querySelectorAll(cls+':checked')].map(x=>x?.value);
+  if(v('#e-conv').trim()) cfg.conv_id = v('#e-conv').trim();
+  if(v('#e-caller')) cfg.caller = v('#e-caller');
+  if(v('#e-persona')) cfg.persona = v('#e-persona');
+  if(v('#e-net')) cfg.internet = v('#e-net');
+  const t = v('#e-trig').split(',').map(x=>x.trim()).filter(Boolean); if(t?.length) cfg.trigger = t?.length===1 ? t[0] : t;
+  cfg.role = checked('.e-r');
+  const add = checked('.e-x'), cut = checked('.e-b'); if(add.length) cfg.dodatkowo = add; if(cut.length) cfg.bez = cut;
+  if($('#e-fr').checked) cfg.kanal_fr = true;
+  if($('#e-ingest').checked) cfg.ingest_only = true;
+  return cfg;
+}
+function edBody(op){
+  const name = EDIT.name === '' ? $('#e-name').value.trim() : EDIT.name;
+  const b = {op, name, by:'panel'};
+  if(op!=='remove'){ b['config'] = formCfg(); if(EDIT.name!=='' && $('#e-name').value.trim() !== EDIT.name) b.new_name = $('#e-name').value.trim(); }
+  return b;
+}
+function openChat(name){ tab='czaty'; location.hash='czaty'; RED=null; KN=null; EDIT={name}; render().then(()=>$('#ed')?.scrollIntoView()); }
+function wireEditor(){
+  document.querySelectorAll('[data-edit]').forEach(b=>b['onclick']=()=>openChat(b.dataset.edit));
+  document.querySelectorAll('[data-onoff]').forEach(b=>b['onclick']=async()=>{ const on=b.dataset.on==='1';
+    if(!on && !confirm(`Wyłączyć „${b.dataset.onoff}”? Bob przestanie odpowiadać na tym kanale (da się włączyć z powrotem).`)) return;
+    const r = await api('/api/chat-config/enable', {name:b.dataset.onoff, on, by:'panel'}); alert(r?.message||''); render(); });
+  if(!$('#ed')) return;
+  $('#ed').querySelectorAll('input,select,textarea').forEach(el=>el.oninput=el.onchange=()=>{ if(EDIT.diff){ EDIT.diff=null; $('#e-save').disabled=true; $('#e-msg').textContent='Zmieniono - sprawdź zmiany jeszcze raz.'; } });
+  $('#e-cancel').onclick=()=>{ EDIT=null; render(); };
+  $('#e-prev').onclick=async()=>{ try { const op = EDIT.name===''?'add':'save', body = edBody(op); const r = await api('/api/chat-config/preview', body);
+      EDIT = {...EDIT, diff: r.ok ? r?.diff : null, eff: r.ok ? r.effective_text : undefined, msg: r.ok ? 'Sprawdź różnice i dostęp, potem zapisz.' : r?.message, op, body}; }
+    catch(e){ EDIT.msg = e?.message; } render(); };
+  $('#e-save').onclick=async()=>{ const r = await api('/api/chat-config/apply', EDIT.body);
+    const nm = EDIT.body.new_name || EDIT.body.name;
+    EDIT = r.ok ? {name: nm, msg: r?.message, restart: r.restart_needed} : {...EDIT, msg: r.message}; render(); };
+  const del=$('#e-del'); if(del) del.onclick=async()=>{ if(!confirm(`Usunąć „${EDIT.name}” z konfiguracji Boba? Kopia zostaje w archiwum.`)) return;
+    const r = await api('/api/chat-config/apply', {op:'remove', name:EDIT.name, by:'panel'});
+    if(r.ok){ alert(r?.message); EDIT=null; } else EDIT = {...EDIT, msg:r.message}; render(); };
+  const rs=$('#e-restart'); if(rs) rs.onclick=async()=>{ await go('pulpit'); const b=document.querySelector('[data-bob="restart"]'); if(b) bobAction('restart', b); };
+}
+
+// ---- Role: editors --------------------------------------------------------------------------------
+let RED = null, KN = null, MODAL = null, ROLETAB = (()=>{ try { return localStorage.getItem('bob-roletab')||''; } catch(e){ return ''; } })();   // RED: role editor {id ('' = new)}; KN: knowledge request {rola, wpis|null}
+const WPIECIE = {kod:'wpięta w kodzie Boba', prompt:'w promptcie kanałów z rolą', narzedzie:'czytana na żądanie'};
+const jobSt = {running:'Claude pracuje…', awaiting:'czeka w „Zgodach”', applied:'zapisane', rejected:'odrzucone', failed:'błąd'};
+function roleEditor(){
+  if(!RED || !ROLES) return '';
+  const isNew = RED.id === '';
+  const r = isNew ? {nazwa:'', emoji:'', opis:'', dostep:[], umiejetnosci:[], wiedza:[]} : ROLES.role.find(x=>x.id===RED.id) || {};
+  const skills = (r?.umiejetnosci||[]).map(u=>[u?.nazwa,u?.opis,u?.gdzie].join(' | ')).join('\n');
+  const kRow = (k,i) => `<tr data-k="${i}"><td><input class="ds-input k-nazwa" value="${esc(k?.nazwa||'')}" style="height:32px"></td><td><input class="ds-input k-plik" value="${esc(k?.plik||'')}" style="height:32px" placeholder="knowledge/…"></td>
+    <td><select class="ds-input k-wp" style="height:32px">${ROLES.wpiecia.map(w=>`<option value="${w}" ${k.wpiecie===w?'selected':''}>${esc(WPIECIE[w]||w)}</option>`).join('')}</select></td>
+    <td><input type="checkbox" class="k-team" ${k.tylko_zespol?'checked':''}></td><td><input class="ds-input k-opis" value="${esc(k?.opis||'')}" style="height:32px"><input type="hidden" class="k-id" value="${esc(k.id||'')}"></td>
+    <td><label class="row"><input type="checkbox" class="k-del"> usuń</label></td></tr>`;
+  return `<div class="box" id="red"><h2>${isNew?'Nowa rola':'Edycja roli: '+esc(r?.nazwa)}</h2>
+    <div class="form">
+      ${isNew?'<label>Identyfikator (małe litery, _)<input class="ds-input" id="r-id" placeholder="np. analityk"></label>':''}
+      <label>Nazwa<input class="ds-input" id="r-nazwa" value="${esc(r?.nazwa||'')}"></label>
+      <label>Emoji<input class="ds-input" id="r-emoji" value="${esc(r?.emoji||'')}"></label>
+    </div>
+    <div class="lbl">Bob tej roli - obrazek Boba</div>
+    <div class="bob-pick">${bobImg(r?.obraz,'','r-bob-prev')}<select class="ds-input" id="r-obraz" style="height:32px;width:280px"><option value="">(bez obrazka)</option>${(ROLES.obrazy||[]).map(o=>`<option ${o===r?.obraz?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
+    <label class="lbl">Opis - co Bob robi w tej roli<textarea class="ds-input" id="r-opis">${esc(r?.opis||'')}</textarea></label>
+    <div class="lbl">Dostęp do narzędzi${RED.id==='asystent'?' - Asystent ma zawsze wszystkie domyślne grupy':''}</div>
+    <div class="checks">${ROLES.znane_grupy.map(g=>box('r-g', g, (r?.dostep||[]).includes(g), `${grpLabel(g)} <span class="muted">${esc((ROLES.grupy[g]||{}).opis||'')}</span>`)).join('')}</div>
+    <label class="lbl">Umiejętności - jedna w linii: nazwa | opis | gdzie (plik albo katalog)<textarea class="ds-input" id="r-skills" style="min-height:90px">${esc(skills)}</textarea></label>
+    <div class="lbl">Wiedza - pliki z knowledge/ albo z promptów (nową treść łatwiej dodać przyciskiem „Dodaj wiedzę” na karcie roli)</div>
+    ${table(['Nazwa','Plik','Jak wpięta','🔒','Opis',''], (r?.wiedza||[]).map(kRow).join('')+kRow({wpiecie:'prompt'},'new')).replace('<table class="ds-table">','<table class="ds-table" id="r-k">')}
+    <div class="row" style="margin-top:var(--space-12)">${btn('Zapisz rolę','id="r-save"','primary')}${!isNew && RED.id!=='asystent'?btn('Usuń rolę','id="r-del"','danger'):''}${btn('Zamknij','id="r-cancel"','tertiary')}<span class="msg" id="r-msg">${esc(RED.msg||'')}</span></div></div>`;
+}
+function roleForm(){
+  const skills = $('#r-skills').value.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(x=>x[0]).map(([nazwa,opis,gdzie])=>({nazwa,opis:opis||'',gdzie:gdzie||''}));
+  const wiedza = [...document.querySelectorAll('#r-k tr[data-k]')].filter(tr=>!tr.querySelector('.k-del').checked && tr.querySelector('.k-plik').value.trim())
+    .map(tr=>{ const nazwa = tr.querySelector('.k-nazwa').value.trim(), plik = tr.querySelector('.k-plik').value.trim();
+      return {id: tr.querySelector('.k-id').value || (plik.split('/').pop().replace(/\.[a-z]+$/,'')), nazwa: nazwa||plik, plik,
+        wpiecie: tr.querySelector('.k-wp').value, tylko_zespol: tr.querySelector('.k-team').checked, opis: tr.querySelector('.k-opis').value}; });
+  return {nazwa:$('#r-nazwa').value, emoji:$('#r-emoji').value, opis:$('#r-opis').value, obraz:$('#r-obraz').value,
+          dostep:[...document.querySelectorAll('.r-g:checked')].map(x=>x?.value), umiejetnosci:skills, wiedza};
+}
+function knBox(){
+  if(!KN || !ROLES) return '';
+  const r = ROLES.role.find(x=>x.id===KN.rola)||{}, k = KN.wpis ? (r?.wiedza||[]).find(x=>x.id===KN.wpis) : null;
+  return `<div class="box" id="kn"><h2>${k?'Edycja wiedzy z Claude: '+esc(k?.nazwa):'Nowa wiedza dla roli '+esc(r?.nazwa)}</h2>
+    <p class="sub">${k?`Plik <code>${esc(k?.plik)}</code> (${esc(WPIECIE[k?.wpiecie]||k?.wpiecie)}). Opisz, co zmienić - Claude przepisze plik, a propozycja z różnicami trafi do „Zgód”.`:'Opisz, co ma się znaleźć w nowej wiedzy - Claude napisze plik, a propozycja trafi do „Zgód”. Po zatwierdzeniu wiedza dołączy do roli.'}</p>
+    ${k?'':`<div class="form">
+      <label>Nazwa<input class="ds-input" id="kn-nazwa" placeholder="np. Zasady odpowiedzi na kolejce"></label>
+      <label>Jak Bob ma z niej korzystać<select class="ds-input" id="kn-wp">${['prompt','narzedzie'].map(w=>`<option value="${w}">${esc(WPIECIE[w])}</option>`).join('')}</select></label>
+      <label>Krótki opis<input class="ds-input" id="kn-opis"></label></div>
+      <div class="checks"><label><input type="checkbox" id="kn-team"> tylko dla zespołu - nie na kanały z użytkownikami zewnętrznymi 🔒</label></div>`}
+    <label class="lbl">${k?'Co zmienić':'Co ma być w tej wiedzy'}<textarea class="ds-input" id="kn-txt" style="min-height:90px"></textarea></label>
+    <div class="row">${btn('Wyślij do Claude','id="kn-go"','primary')}${btn('Zamknij','id="kn-cancel"','tertiary')}<span class="msg" id="kn-msg">${esc(KN.msg||'')}</span></div></div>`;
+}
+function roleCard(r){
+  const kan = r?.kanaly||[];
+  return `<div class="box" id="rola-${esc(r.id)}"><div class="role-head">${bobImg(r?.obraz,'role-bob')}<div style="flex:1"><div class="row between"><h2>${esc(r?.emoji||'')} ${esc(r?.nazwa)}</h2>
+    <div class="row">${btn('Edytuj rolę',`data-redit="${esc(r.id)}"`)}${btn('Dodaj wiedzę (Claude)',`data-knew="${esc(r.id)}"`)}</div></div>
+    <p class="sub">${esc(r?.opis||'')}</p></div></div>
+    <div class="lbl">Dostęp do narzędzi</div><div>${(r.dostep_pelny||[]).map(g=>`<span data-tip="${esc(`${g}${(ROLES.grupy[g]||{}).tylko_zespol?' 🔒 tylko zespół':''}
+${(ROLES.grupy[g]||{}).opis||''}
+narzędzia: ${(ROLES.narzedzia[g]||[]).join(', ')}`)}">${badge(grpLabel(g))}</span>`).join('')||'<span class="muted">brak</span>'}</div>
+    <div class="lbl">Umiejętności</div><ul style="margin:0;padding-left:var(--space-20);line-height:1.6">${(r?.umiejetnosci||[]).map(u=>`<li><b>${esc(u?.nazwa)}</b> - ${esc(u?.opis||'')} <span class="muted"><code>${esc(u?.gdzie||'')}</code></span></li>`).join('')||'<li class="muted">brak</li>'}</ul>
+    <div class="lbl">Wiedza</div>
+    ${table(['Wiedza','Jak wpięta','Rozmiar',''], (r?.wiedza||[]).map(k=>`<tr><td><b>${esc(k?.nazwa)}</b>${k.tylko_zespol?' 🔒':''}<br><span class="muted"><code>${esc(k?.plik)}</code> ${esc(k?.opis||'')}</span>
+</td><td>${esc(WPIECIE[k?.wpiecie]||k?.wpiecie)}</td><td>${k.istnieje?`${k.znaki} zn.<br><span class="muted">${when(k?.zmieniony)}</span>`:badge('brak pliku','red')}</td>
+      <td style="white-space:nowrap">${k.istnieje?btn('Pokaż',`data-kshow="${esc(r.id)}|${esc(k.id)}"`)+' '+btn('Edytuj z Claude',`data-kedit="${esc(r.id)}|${esc(k.id)}"`,'tertiary'):''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">Brak wiedzy - dodaj ją przyciskiem „Dodaj wiedzę”.</td></tr>')}
+    <div class="lbl">Kanały i nazwa Boba na nich</div>
+    ${kan.length?table(['Kanał','Bob występuje jako','Reaguje na',''], kan.map(c=>`<tr><td>${esc(c?.chat)}${c.kanal_fr?' '+badge('kanał zewnętrzny','yellow'):''}</td><td><b>${esc(c?.nazwa)}</b></td><td>${(c?.trigger||[]).map(t=>badge(esc(t))).join('')||'<span class="muted">bob</span>'}</td><td>${btn('Edytuj kanał',`data-goedit="${esc(c?.chat)}"`,'tertiary')}</td></tr>`).join('')):'<span class="muted">Żaden kanał nie ma tej roli - dodaj ją w zakładce „Kanały”.</span>'}</div>`;
+}
+function wireRoles(){
+  document.querySelectorAll('[data-redit]').forEach(b=>b['onclick']=()=>{ RED={id:b.dataset.redit}; KN=null; render().then(()=>$('#red')?.scrollIntoView()); });
+  document.querySelectorAll('[data-knew]').forEach(b=>b['onclick']=()=>{ KN={rola:b.dataset.knew, wpis:null}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
+  document.querySelectorAll('[data-kedit]').forEach(b=>b['onclick']=()=>{ const [rola,wpis]=b.dataset.kedit.split('|'); KN={rola,wpis}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
+  document.querySelectorAll('[data-goedit]').forEach(b=>b['onclick']=()=>openChat(b.dataset.goedit));
+  document.querySelectorAll('[data-kshow]').forEach(b=>b['onclick']=()=>{ const [rola,wpis]=b.dataset.kshow.split('|'); openKnowledge(rola, wpis); });
+  document.querySelectorAll('[data-rtab]').forEach(d=>d['onclick']=()=>{ ROLETAB=d.dataset.rtab; RED=null; KN=null; try { localStorage.setItem('bob-roletab', ROLETAB); } catch(e){} render(); });
+  const ro=$('#r-obraz'); if(ro) ro.onchange=()=>{ $('#r-bob-prev').src=`/static/bob/${ro.value||'bob-static-base'}.svg`; };
+  const nr=$('#r-new'); if(nr) nr.onclick=()=>{ RED={id:''}; KN=null; render().then(()=>$('#red')?.scrollIntoView()); };
+  document.querySelectorAll('[data-gsave]').forEach(b=>b['onclick']=async()=>{ const g=b.dataset.gsave, tr=b.closest('tr');
+    const r=await api('/api/roles/group',{group:g, opis:tr.querySelector('.g-opis').value, tylko_zespol:tr.querySelector('.g-team').checked, by:'panel'}); b.textContent=r.ok?'Zapisano':'Błąd'; if(!r.ok) alert(r?.message); });
+  if($('#red')){
+    $('#r-cancel').onclick=()=>{ RED=null; render(); };
+    $('#r-save').onclick=async()=>{ const isNew = RED.id===''; const id = isNew ? $('#r-id').value.trim() : RED.id;
+      const r = await api('/api/roles/save', {id, role: roleForm(), new: isNew, by:'panel'});
+      if(r.ok) ROLETAB = id;
+      RED = r.ok ? null : {...RED, msg:r.message}; if(r.ok) alert(r?.message); render(); };
+    const d=$('#r-del'); if(d) d['onclick']=async()=>{ if(!confirm('Usunąć tę rolę? Kopia zostaje w archiwum.')) return;
+      const r = await api('/api/roles/delete', {id:RED.id, by:'panel'}); RED = r.ok ? null : {...RED, msg:r.message}; render(); };
+  }
+  if($('#kn')){
+    $('#kn-cancel').onclick=()=>{ KN=null; render(); };
+    $('#kn-go').onclick=async()=>{ const b=$('#kn-go'); b['disabled'] = true;
+      try { const body = {rola:KN.rola, polecenie:$('#kn-txt').value, by:'panel'};
+        if(KN.wpis) body.wpis = KN.wpis; else body.nowy = {nazwa:$('#kn-nazwa').value, opis:$('#kn-opis').value, wpiecie:$('#kn-wp').value, tylko_zespol:$('#kn-team').checked};
+        const r = await api('/api/roles/knowledge', body); KN = r.ok ? null : {...KN, msg:r.message}; if(r.ok) alert(r?.message); render(); }
+      finally { b['disabled'] = false; } };
+  }
+}
+
+
+
+// ---- live dashboard (Pulpit) ---------------------------------------------------------------------
+const KIND = {odpowiedz:['odpowiedź','green'], milczenie:['milczenie','gray'], juz_odpowiedziane:['ktoś już odpowiedział','blue']};
+const hh = iso => new Date(iso).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+const heatBg = (v, max) => v ? `color-mix(in oklab, var(--brand-35) ${Math.round(18+82*v/max)}%, var(--body-quaternary-bg))` : '';
+function barChart(vals, hours, fmt, title, unit){
+  const max = Math.max(...vals.map(v=>v||0), 0) || 1;
+  const nice = (()=>{ const p = Math.pow(10, Math.floor(Math.log10(max))); return Math.ceil(max/p)*p; })();
+  return `<div class="box"><h2>${title}</h2><p class="sub" style="margin-bottom:0">razem ${fmt(vals.reduce((a,b)=>a+(b||0),0))}${unit} w 24 h · najaktywniej ${hh(hours[vals.indexOf(Math.max(...vals))])}</p>
+    <div class="bars"><div class="gl" style="bottom:100%"><span>${fmt(nice)}</span></div><div class="gl" style="bottom:50%"><span>${fmt(nice/2)}</span></div>
+      ${vals.map((v,i)=>`<div class="b" data-tip="${esc(`${hh(hours[i])}–${hh(new Date(new Date(hours[i]).getTime()+3600e3).toISOString())}\n${fmt(v||0)}${unit}`)}"><i style="height:${(v||0)/nice*100}%"></i></div>`).join('')}</div>
+    <div class="xlab">${hours.map((h,i)=>`<span>${i%3===0?hh(h).slice(0,2):''}</span>`).join('')}</div></div>`;
+}
+function liveDashboard(D){
+  const k = D.kpi, max = Math.max(1, ...D.chats.flatMap(c=>c.cells.map(x=>x[0]+x[1]+x[2])));
+  const kpi = (v,l,tip='') => `<div class="ds-card" ${tip?`data-tip="${esc(tip)}"`:''}><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const cols = D.hours.length;
+  const heat = D.chats.length ? `<div class="heat" style="grid-template-columns:minmax(140px,220px) repeat(${cols},minmax(10px,1fr)) auto">
+      <span></span>${D.hours.map((h,i)=>`<span class="hx">${i%3===0?hh(h).slice(0,2):''}</span>`).join('')}<span></span>
+      ${D.chats.map(c=>`<span class="hn" data-chatedit="${esc(c?.name)}" title="Ustawienia kanału">${esc(c?.name)}</span>`
+        + c.cells.map((x,i)=>{ const v=x[0]+x[1]+x[2];
+            return `<span class="c" style="${v?`background:${heatBg(v,max)}`:''}" data-chatgo="${esc(c?.name)}" data-tip="${esc(`${c.name}\n${hh(D.hours[i])}: ${v} wiadomości do Boba\nodpowiedział ${x[0]} · milczał ${x[1]} · ktoś już odpowiedział ${x[2]}`)}"></span>`; }).join('')
+        + `<span class="tot" data-tip="${esc(`${c.name}: ${c.total} wiadomości, odpowiedzi ${c.odpowiedzi}, koszt Claude ${c.koszt.toFixed(2)} $`)}">${c.total} · ${c.koszt.toFixed(2)} $</span>`).join('')}</div>
+      <div class="scale">0 <i></i> ${max} wiadomości / h · kliknij komórkę, żeby zobaczyć rozmowy z kanału; nazwę - żeby otworzyć ustawienia kanału</div>`
+    : empty('chat','Cisza na kanałach','W ostatniej dobie nikt nie pisał do Boba.');
+  const feed = D.feed.length ? `<div class="feed">${D.feed.map(f=>`<a data-chatgo="${esc(f?.chat)}"><span class="t">${hh(f.ts)}</span><span>${badge(esc(f?.chat))}</span><span>${badge(...KIND[f?.kind])}</span><span class="x">${esc(f?.sender?f?.sender+': ':'')}${esc(f?.text||'')}${f.kind==='odpowiedz'&&f?.reply?' → '+esc(f?.reply):''}</span></a>`).join('')}</div>` : '<span class="muted">Brak akcji w ostatniej dobie.</span>';
+  return `<div class="row between" style="margin:var(--space-24) 0 var(--space-12)"><h2 style="margin:0;font-size:var(--text-xl)">Na żywo - ostatnie 24 h</h2><span class="muted">odświeża się co 15 s · najedź, żeby zobaczyć szczegóły; kliknij, żeby wejść głębiej</span></div>
+    <div class="kpis">${kpi(k?.obsluzone,'wiadomości do Boba','wszystkie wiadomości, na które Bob musiał zareagować (odpowiedział, zamilkł albo ktoś już odpowiedział)')}${kpi(k?.odpowiedzi,'odpowiedzi wysłane',k?.obsluzone?`${Math.round(k.odpowiedzi/k.obsluzone*100)}% wiadomości`:'')}${kpi(k?.wywolania,'wywołań Claude','każda odpowiedź, decyzja o milczeniu i analiza to wywołanie modelu')}
+      ${kpi(k.koszt.toFixed(2)+' $','koszt Claude','suma total_cost_usd z perf-metrics')}${kpi(k.czas_mediana!=null?k.czas_mediana+' s':'-','mediana czasu odpowiedzi')}${kpi(k?.kanaly,'aktywnych kanałów')}</div>
+    <div class="box"><h2>Gdzie i kiedy Bob działał</h2><p class="sub">Kanał × godzina - im ciemniej, tym więcej wiadomości do Boba. Po prawej: razem i koszt Claude na kanale.</p>${heat}</div>
+    <div class="charts">${barChart(D.load.calls, D.hours, v=>String(Math.round(v)), 'Obciążenie: wywołania Claude na godzinę', '')}${barChart(D.load.cost, D.hours, v=>v.toFixed(2), 'Koszt Claude na godzinę', ' $')}</div>
+    <div class="box"><div class="row between"><h2>Co się ostatnio działo</h2>${btn('Wszystkie rozmowy','data-go="aktywnosc"','tertiary')}</div>${feed}</div>`;
+}
+function wireTips(){
+  const tip = $('#tip');
+  document.querySelectorAll('[data-tip]').forEach(el=>{
+    el.onpointermove = e => { tip.textContent=''; el.dataset.tip.split('\n').filter(Boolean).forEach((line,i)=>{ const d=document.createElement(i?'div':'b'); d.textContent=line; tip.appendChild(d); });
+      tip.style.display='block'; const w=tip.offsetWidth, h=tip.offsetHeight;
+      tip.style.left=Math.max(8, Math.min(e.clientX+14, innerWidth-w-8))+'px'; tip.style.top=(e.clientY+14+h > innerHeight ? e.clientY-h-10 : e.clientY+14)+'px'; };
+    el.onpointerleave = () => { tip.style.display='none'; };
+  });
+  // the 15 s refresh replaces the hovered element without a pointerleave - never leave a stale tooltip behind
+  window.onscroll = () => { tip.style.display='none'; };
+  document.querySelectorAll('[data-chatgo]').forEach(el=>el.onclick=()=>{ $('#tip').style.display='none'; ACHAT=el.dataset.chatgo; go('aktywnosc'); });
+  document.querySelectorAll('[data-chatedit]').forEach(el=>el.onclick=()=>{ $('#tip').style.display='none'; openChat(el.dataset.chatedit); });
+}
+// ---- reader: a knowledge file in a modal, rendered markdown ------------------------------------
+function mdRender(src){
+  // own small renderer: everything is escaped first, then only these constructs become HTML
+  const inline = t => esc(t)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(„"])\*([^*\s][^*]*?)\*(?=[\s).,:;!?”"]|$)/g, '$1<i>$2</i>')
+    .replace(/(^|[\s(])_([^_\s][^_]*?)_(?=[\s).,:;!?]|$)/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // <!-- ... --> = notes for whoever edits the file (e.g. where it is wired in) - not shown to the reader
+  const L = String(src||'').replace(/\r/g,'').replace(/<!--[\s\S]*?-->/g,'').split('\n'), out = [], toc = []; let i = 0, n = 0;
+  const isBlock = l => /^(#{1,6}\s|```|>|\s*([-*+]|\d+[.)])\s|\|)/.test(l) || /^(-{3,}|\*{3,}|_{3,})\s*$/.test(l);
+  while(i < L.length){
+    const l = L[i];
+    if(!l.trim()){ i++; continue; }
+    if(/^```/.test(l)){ const buf=[]; i++; while(i<L.length && !/^```/.test(L[i])) buf.push(L[i++]); i++; out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`); continue; }
+    let m = l.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if(m){ const lv=m[1].length, id='h'+(n++); if(lv<=3) toc.push({lv, id, t:m[2].replace(/[`*_]/g,'')}); out.push(`<h${lv} id="${id}">${inline(m[2])}</h${lv}>`); i++; continue; }
+    if(/^(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ out.push('<hr>'); i++; continue; }
+    if(/^\|/.test(l) && i+1<L.length && /^\|?\s*:?-{2,}/.test(L[i+1])){
+      const cells = r => r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      const h = cells(l); i += 2; const rows=[]; while(i<L.length && /^\|/.test(L[i])) rows.push(cells(L[i++]));
+      out.push(`<table><thead><tr>${h.map(c=>`<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`); continue; }
+    if(/^>/.test(l)){ const buf=[]; while(i<L.length && /^>/.test(L[i])) buf.push(L[i++].replace(/^>\s?/,'')); out.push(`<blockquote>${mdRender(buf.join('\n')).html}</blockquote>`); continue; }
+    if(/^\s*([-*+]|\d+[.)])\s/.test(l)){
+      const ordered = /^\s*\d/.test(l), items=[];
+      while(i<L.length && (/^\s*([-*+]|\d+[.)])\s/.test(L[i]) || (/^\s{2,}\S/.test(L[i]) && items.length))){
+        const mm = L[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        if(mm) items.push({lv:Math.min(2, Math.floor(mm[1].replace(/\t/g,'  ').length/2)), t:mm[3]}); else items[items.length-1].t += ' ' + L[i].trim();
+        i++; }
+      out.push(`<${ordered?'ol':'ul'}>${items.map(it=>`<li class="n${it.lv}">${inline(it.t)}</li>`).join('')}</${ordered?'ol':'ul'}>`); continue; }
+    const buf=[]; while(i<L.length && L[i].trim() && !(buf.length && isBlock(L[i]))) buf.push(L[i++]);
+    out.push(`<p>${buf.map(inline).join('<br>')}</p>`);
+  }
+  return {html: out.join('\n'), toc};
+}
+function renderModal(){
+  const el = $('#modal');
+  if(!MODAL){ el.innerHTML=''; document.body.style.overflow=''; return; }
+  const M = MODAL, isJson = /\.json$/.test(M.path||'');
+  let body, toc = [];
+  if(isJson){ let pretty = M.text; try { pretty = JSON.stringify(JSON.parse(M.text), null, 2); } catch(e){} body = `<pre>${esc(pretty)}</pre>`; }
+  else { const r = mdRender(M.text); body = `<div class="md">${r.html}</div>`; toc = r?.toc; }
+  const words = (M.text||'').split(/\s+/).filter(Boolean).length;
+  el.innerHTML = `<div class="reader-overlay" id="reader-ov"><div class="reader" role="dialog" aria-modal="true" aria-label="${esc(M.title)}">
+    <div class="reader-head"><div><h2>${esc(M.title)}</h2><div class="meta">${M.meta||''}${badge(`${words} słów · ok. ${Math.max(1,Math.round(words/200))} min czytania`)}${M.path?`<code>${esc(M.path)}</code>`:''}</div></div>
+      <div class="row" style="flex-wrap:nowrap"><input class="ds-input" id="reader-q" placeholder="Szukaj w tekście…" style="height:32px;width:200px"><button class="ds-modal-close" id="reader-x" aria-label="Zamknij">${ic('cross')}</button></div></div>
+    <div class="reader-main"><nav class="reader-toc">${toc.length?`<div class="lbl">Spis treści</div>${toc.map(h=>`<a class="l${h.lv}" data-to="${h.id}">${esc(h.t)}</a>`).join('')}`:'<span class="muted" style="padding:0 var(--space-8)">Brak nagłówków</span>'}</nav>
+      <div class="reader-body" id="reader-body">${body}</div></div>
+    <div class="reader-foot"><span class="msg" id="reader-msg"></span>${(M.actions||[]).map((a,k)=>btn(a?.label,`data-ract="${k}"`,a?.kind||'secondary')).join('')}${M.path?btn('Kopiuj ścieżkę','id="reader-copy"','tertiary'):''}${btn('Zamknij','id="reader-close"')}</div></div></div>`;
+  document.body.style.overflow='hidden';
+  const close = () => { MODAL=null; renderModal(); };
+  $('#reader-x').onclick = close; $('#reader-close').onclick = close;
+  $('#reader-ov').onclick = e => { if(e.target.id==='reader-ov') close(); };
+  el.querySelectorAll('[data-to]').forEach(a=>a['onclick']=()=>document.getElementById(a.dataset.to)?.scrollIntoView({behavior:'smooth'}));
+  el.querySelectorAll('[data-ract]').forEach(b=>b['onclick']=()=>M.actions[+b.dataset.ract].run());
+  const cp=$('#reader-copy'); if(cp) cp.onclick=async()=>{ try { await navigator.clipboard.writeText(M.path); $('#reader-msg').textContent='Ścieżka skopiowana.'; } catch(e){ $('#reader-msg').textContent=M.path; } };
+  const q=$('#reader-q'), original = $('#reader-body').innerHTML;
+  q['oninput'] = () => { const v=q.value.trim(); const b=$('#reader-body'); b.innerHTML = original; if(v?.length<2){ $('#reader-msg').textContent=''; return; }
+    const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT), hits=[], re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+    let nd; while((nd=walker.nextNode())) if(re.test(nd.nodeValue)) hits.push(nd);
+    const reg = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'); let count = 0;
+    hits.forEach(t=>{ const frag=document.createDocumentFragment(), txt=t.nodeValue; let last=0, m;
+      reg.lastIndex=0; while((m=reg.exec(txt))){ frag.append(txt.slice(last, m?.index)); const mk=document.createElement('mark'); mk.textContent=m[0]; frag.append(mk); last=m?.index+m[0].length; count++; }
+      frag.append(txt.slice(last)); t.replaceWith(frag); });
+    const first=b.querySelector('mark'); if(first) first.scrollIntoView({block:'center'}); $('#reader-msg').textContent = count?`Znaleziono: ${count}.`:'Brak wyników.'; };
+  q.focus();
+}
+document.addEventListener('keydown', e=>{ if(e?.key==='Escape' && MODAL){ MODAL=null; renderModal(); } });
+async function openKnowledge(rola, wpis){
+  const r = (ROLES?.role||[]).find(x=>x.id===rola) || {}, k = (r?.wiedza||[]).find(x=>x.id===wpis);
+  if(!k) return;
+  const res = await api('/api/roles/knowledge?plik='+encodeURIComponent(k?.plik));
+  if(res.error){ alert(res.message||'Nie udało się otworzyć pliku.'); return; }
+  MODAL = {title:k?.nazwa, path:k?.plik, text:res.tekst||'',
+    meta: badge(esc(`${r.emoji||''} ${r.nazwa}`),'brand') + badge(esc(WPIECIE[k?.wpiecie]||k?.wpiecie)) + (k.tylko_zespol?badge('tylko zespół 🔒','yellow'):'') + (k?.zmieniony?badge('zmieniony '+ago(k?.zmieniony)+' temu'):''),
+    actions:[{label:'Edytuj z Claude', kind:'primary', run:()=>{ MODAL=null; renderModal(); KN={rola, wpis}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); }}]};
+  renderModal();
+}
+// ---- wiring ---------------------------------------------------------------------------------------
+function wireCommon(){
+  document.querySelectorAll('[data-go]').forEach(a=>a['onclick']=()=>go(a.dataset.go));
+  document.querySelectorAll('[data-bob]').forEach(b=>b['onclick']=()=>bobAction(b.dataset.bob, b));
+  const loginGo = async then_start => { const r = await api('/api/bob/login', {then_start, by:'panel'}); if($('#lmsg')) $('#lmsg').textContent = r?.message||''; setTimeout(render, 2500); };
+  document.querySelectorAll('#b-login').forEach(b=>b['onclick']=()=>loginGo(false));
+  const ls=$('#b-login-start'); if(ls) ls.onclick=()=>loginGo(true);
+  const lo=$('#b-login-ok'); if(lo) lo.onclick=async()=>{ lo.disabled=true; try { const r = await api('/api/bob/login/confirm', {by:'panel'}); $('#lmsg').textContent=r?.message||''; setTimeout(render, 6000); } finally { lo.disabled=false; } };
+  document.querySelectorAll('.apr').forEach(el=>el.querySelectorAll('button[data-a]').forEach(b=>b['onclick']=async()=>{
+    const approve = b.dataset.a==='1'; b['disabled']=true;
+    try { const res = await api(`/api/approvals/${el.dataset.id}/decide`, {approve, note: el.querySelector('textarea').value});
+      el.querySelector('.msg').textContent = res.message || (res.ok?'Zapisane.':'Błąd'); setTimeout(render, 900); } finally { b['disabled']=false; }
+  }));
+  const ac=$('#achat'); if(ac) ac.onchange=()=>{ ACHAT=ac.value; render(); };
+  document.querySelectorAll('[data-lf]').forEach(b=>b['onclick']=()=>{ LOGF[b.dataset.lf]=b.dataset.v; render(); });
+  const lsrc=$('#lsrc'); if(lsrc) lsrc.onchange=()=>{ LOGF.source=lsrc.value; render(); };
+  const lq=$('#lq'); if(lq) lq.onkeydown=e=>{ if(e?.key==='Enter'){ LOGF.q=lq.value; render(); } };
+  const raw=$('#rawlog'); if(raw) raw.closest('details').ontoggle=async e=>{ if(e.target.open){ const l=await api('/api/bob/log?lines=300'); raw.textContent=l.log||'(pusty - Bob nie był jeszcze uruchomiony z panelu)'; } };
+}
+let rendering = null, again = false;
+function render(){
+  // one render at a time; a call during a render queues one more and gets a promise for the end of it
+  if(rendering){ again = true; return rendering; }
+  rendering = (async () => { try { do { again = false; await renderOnce(); } while(again); } finally { rendering = null; } })();
+  return rendering;
+}
+async function renderOnce(){
+  {
+    nav();
+    const tipEl = $('#tip'); if(tipEl) tipEl.style.display = 'none';
+    try { $('#main').innerHTML = await VIEWS[tab](); } catch(e){ $('#main').innerHTML = `<div class="box">${callout('danger','Błąd panelu: '+esc(e))}</div>`; }
+    if(tab!=='pulpit') header();
+    wireCommon();
+    wireTips();
+    if(tab==='czaty') wireEditor();
+    if(tab==='role') wireRoles();
+  }
+}
+$('#theme').onclick=()=>{ const t = document.documentElement.dataset.theme==='dark'?'light':'dark'; document.documentElement.dataset.theme=t; try { localStorage.setItem('bob-theme', t); } catch(e){} };
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (ALL.some(x => x[0] === t) && t !== tab) go(t); });
+render();
+// refresh every 15 s - not while you are editing, reading a file or typing
+setInterval(()=>{ if(!EDIT && !RED && !KN && !MODAL && !document.querySelector('details[open] #rawlog')
+  && !document.activeElement?.matches('input,textarea,select') && !document.querySelector('button:disabled:not(#e-save)')) render(); }, 15000);
+</script>
+</body>
+</html>

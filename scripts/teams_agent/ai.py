@@ -46,7 +46,9 @@ _MAX_INPUT_CHARS = 4000
 _MAX_HISTORY_ENTRY_CHARS = 4000  # trim individual history entries to this length
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_MCP_CONFIG = _PROJECT_ROOT / "mcp-config.json"
+# BOB_MCP_CONFIG: tests point it at a temp file -- a test run must never rewrite the live
+# config (it would embed the test rundir token and the daemons would answer 401).
+_MCP_CONFIG = Path(os.environ.get("BOB_MCP_CONFIG") or _PROJECT_ROOT / "mcp-config.json")
 _PERF_LOG = Path(__file__).resolve().parent / "perf-metrics.jsonl"
 
 _MCP_SERVERS = {
@@ -562,15 +564,18 @@ def build_system_prompt(
     allowed_mcp: list[str] | None = None,
     allow_web: bool = False,
     epithets: list[str] | None = None,
+    role_knowledge: str = "",
 ) -> str:
-    """The full system prompt for one reply (persona base + channel suffixes)."""
+    """The full system prompt for one reply (persona base + channel suffixes).
+
+    role_knowledge: roles.knowledge_text() of the chat's roles ("prompt" knowledge added from the panel)."""
     base = _PERSONA_PROMPTS.get(persona or "") or _bob_prompt(allowed_mcp)
     knowledge = _PERSONA_KNOWLEDGE.get(persona or "")
     if knowledge:
         base += knowledge()
     private_data = bool(_mcp_tools_for(allowed_mcp))
     return (
-        base + _web_suffix(allow_web, private_data)
+        base + role_knowledge + _web_suffix(allow_web, private_data)
         + _build_epithets_suffix(epithets) + _date_suffix()
     )
 
@@ -626,6 +631,7 @@ def _invoke_claude(
     image_paths: list[str] | None = None,
     persona: str | None = None,
     effort: str | None = None,
+    role_knowledge: str = "",
 ) -> str:
     if image_paths:
         with _read_sandbox(image_paths) as (read_dir, copies):
@@ -634,7 +640,7 @@ def _invoke_claude(
                     user_message, model=model, timeout_s=timeout_s, allow_web=allow_web,
                     allowed_mcp=allowed_mcp, epithets=epithets, extra_env=extra_env,
                     timeout_reply=timeout_reply, metrics_ctx=metrics_ctx, image_paths=None,
-                    persona=persona, effort=effort, read_dir=None,
+                    persona=persona, effort=effort, role_knowledge=role_knowledge, read_dir=None,
                 )
             # Prepend image-path instruction to user_message (Read is in the --tools list).
             image_header = (
@@ -644,13 +650,13 @@ def _invoke_claude(
                 image_header + user_message, model=model, timeout_s=timeout_s, allow_web=allow_web,
                 allowed_mcp=allowed_mcp, epithets=epithets, extra_env=extra_env,
                 timeout_reply=timeout_reply, metrics_ctx=metrics_ctx, image_paths=copies,
-                persona=persona, effort=effort, read_dir=read_dir,
+                persona=persona, effort=effort, role_knowledge=role_knowledge, read_dir=read_dir,
             )
     return _invoke_claude_cmd(
         user_message, model=model, timeout_s=timeout_s, allow_web=allow_web,
         allowed_mcp=allowed_mcp, epithets=epithets, extra_env=extra_env,
         timeout_reply=timeout_reply, metrics_ctx=metrics_ctx, image_paths=None,
-        persona=persona, effort=effort, read_dir=None,
+        persona=persona, effort=effort, role_knowledge=role_knowledge, read_dir=None,
     )
 
 
@@ -669,8 +675,10 @@ def _invoke_claude_cmd(
     persona: str | None,
     effort: str | None,
     read_dir: str | None,
+    role_knowledge: str = "",
 ) -> str:
-    system = build_system_prompt(persona, allowed_mcp, allow_web=allow_web, epithets=epithets)
+    system = build_system_prompt(persona, allowed_mcp, allow_web=allow_web, epithets=epithets,
+                                 role_knowledge=role_knowledge)
     cmd = build_reply_cmd(
         model, system, allowed_mcp, allow_web=allow_web, image_paths=image_paths, effort=effort,
         read_dir=read_dir,
@@ -873,7 +881,8 @@ _ATTACH_TEXT_EXTS = (
     ".log", ".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".htm", ".xml",
     ".ini", ".toml", ".cfg", ".conf", ".sh", ".bash", ".sql",
 )
-_ATTACH_INLINE_MAX_CHARS = 8000
+# 8000 cut a 10 kB document Bob had written in half; same cap as bob_files.MAX_NOTE_CHARS
+_ATTACH_INLINE_MAX_CHARS = 40000
 
 # Unicode codepoints commonly used to smuggle hidden prompt-injection payloads
 # past humans (invisible in any viewer) but visible to the model. We strip them
@@ -1073,6 +1082,7 @@ def freeform_reply(
     user_memory_context: str | None = None,
     persona: str | None = None,
     effort: str | None = None,
+    role_knowledge: str = "",
 ) -> str:
     """Reply to a Teams message. Claude uses MCP tools (Jira/Tempo) natively.
 
@@ -1085,6 +1095,8 @@ def freeform_reply(
     image_paths  -> absolute paths to temp image files; model reads them via built-in Read
     user_memory_context -> rolling summary of previous sessions with this user
     effort       -> claude CLI --effort (chat-config "effort"); None = CLI default
+    timeout_s    -> hard stop for the CLI call (cli passes _CHAT_REPLY_TIMEOUT_S for chat replies)
+    role_knowledge -> roles.knowledge_text() of the chat's roles, appended to the system prompt
     """
     if not prompt or not prompt.strip():
         return ""
@@ -1102,6 +1114,7 @@ def freeform_reply(
         image_paths=image_paths,
         persona=persona,
         effort=effort,
+        role_knowledge=role_knowledge,
         timeout_reply=(
             "Oj, tym razem za dużo mnie poprosiłeś/aś — nie zdążyłem w czasie."
             " Możesz spróbować z prostszym pytaniem albo rozbić je na części? 🙏"

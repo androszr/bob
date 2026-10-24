@@ -8,6 +8,7 @@ turns to real chat histories that Bob later feeds back to the model as context.
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,11 @@ os.environ.update({
     "SHAREPOINT_TENANT": "contoso",
     "NAME_NOISE_PREFIXES": "EXT",
 })
+# ai's import-time _refresh_mcp_config() writes mcp-config.json and the daemon token: point both at a
+# session temp dir, or a test run overwrites the live config (and ~/.bob token) with test values.
+_MCP_TMP = tempfile.mkdtemp(prefix="bob-test-mcp-")
+os.environ["BOB_MCP_RUNDIR"] = _MCP_TMP
+os.environ["BOB_MCP_CONFIG"] = str(Path(_MCP_TMP) / "mcp-config.json")
 for _unset in ("JIRA_BOARD_ID", "JIRA_PROJECT", "JIRA_TEAMS", "URLOPY_SHAREPOINT_URL",
                "SHAREPOINT_UPLOAD_FOLDER_URL"):
     os.environ[_unset] = ""
@@ -39,6 +45,12 @@ for _unset in ("JIRA_BOARD_ID", "JIRA_PROJECT", "JIRA_TEAMS", "URLOPY_SHAREPOINT
 def _isolate_teams_runtime_files(tmp_path, monkeypatch):
     # mcp_admin/auth.py: daemon token + per-call MCP config files.
     monkeypatch.setenv("BOB_MCP_RUNDIR", str(tmp_path / "bob-mcp"))
+    # bob_files is imported lazily by cli._remember_bob_file: load it now so its archive never points at the real one
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "teams_agent"))
+    import bob_files  # noqa: PLC0415
+    monkeypatch.setattr(bob_files, "ARCHIVE_DIR", tmp_path / "bob-files")
+    monkeypatch.setattr(bob_files, "REGISTRY", tmp_path / "bob-files" / "registry.json")
+    monkeypatch.setattr(bob_files, "HISTORY_DIR", tmp_path / "history")
     targets = {
         "cli": {"_HISTORY_DIR": tmp_path / "history", "DEFAULT_LOG_FILE": str(tmp_path / "log.jsonl")},
         "ai": {"_PERF_LOG": tmp_path / "perf-metrics.jsonl"},

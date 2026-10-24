@@ -1,5 +1,5 @@
 {
-  "_comment": "mcp: null=wszystkie, ['jira','jira_write','todos']=wybrane (jira = odczyt, jira_write = zapisy w Jirze z tokenem ownera, jira_hypercare = tylko create/attach/comment/link dla kanalow z uzytkownikami zewnetrznymi). control_chat: tylko z tego chatu komendy Bob pause/off/on. epithets: lista cech charakteru agenta dla tego kanału, np. ['zwięzły','formalny','analityczny'] — Bob trzyma się ich w każdej odpowiedzi. notes: 'owner' (domyślnie) = tylko owner może zapisywać prywatne notatki komendą 'Bob, zapamietaj:'; 'all' = każdy uczestnik chatu może. internet: brak/null/false = brak dostepu; 'all' = wszyscy; 'only_me' = tylko owner. caller: 'all' = kazdy moze wolac Boba; 'owner' = tylko owner. persona: 'example' = przykladowa persona kanalowa (prompts/example_persona.md; zmienia bazowy system prompt; lista w ai._PERSONA_PROMPTS); brak/null = Bob (domyslnie). trigger: slowo LUB lista slow wywolujacych agenta na tym kanale zamiast 'bob' (np. 'asystent' albo ['asystent','asystencie']); przy caller='auto' gatuje tylko wiadomosci wlasciciela. hold_s: ile sekund odczekac przed wyslaniem odpowiedzi NIEPROSZONEJ (takiej, w ktorej nikt nie zawolal agenta triggerem) — w tym czasie moze odpisac czlowiek i wtedy agent milczy; odpowiedzi na jawne wywolanie ida od razu. brak/0 = bez czekania. model: model dla tego kanalu zamiast globalnego (alias haiku/sonnet/opus albo pelne id, np. 'opus'); brak = globalny (--model / 'Bob, model X'). effort: wysilek rozumowania claude CLI dla tego kanalu: low|medium|high|xhigh|max; brak = domyslny CLI (grill bez ustawienia: high). mcp_extra: lista grup opt-in dokładana do 'mcp' (także do null = wszystkie domyślne).",
+  "_comment": "mcp: null=wszystkie, ['jira','jira_write','todos']=wybrane (jira = odczyt, jira_write = zapisy w Jirze z tokenem ownera, jira_hypercare = tylko create/attach/comment/link dla kanalow z uzytkownikami zewnetrznymi). control_chat: tylko z tego chatu komendy Bob pause/off/on. epithets: lista cech charakteru agenta dla tego kanału, np. ['zwięzły','formalny','analityczny'] — Bob trzyma się ich w każdej odpowiedzi. notes: 'owner' (domyślnie) = tylko owner może zapisywać prywatne notatki komendą 'Bob, zapamietaj:'; 'all' = każdy uczestnik chatu może. internet: brak/null/false = brak dostepu; 'all' = wszyscy; 'only_me' = tylko owner. caller: 'all' = kazdy moze wolac Boba; 'owner' = tylko owner. persona: 'example' = przykladowa persona kanalowa (prompts/example_persona.md; zmienia bazowy system prompt; lista w ai._PERSONA_PROMPTS); brak/null = Bob (domyslnie). trigger: slowo LUB lista slow wywolujacych agenta na tym kanale zamiast 'bob' (np. 'asystent' albo ['asystent','asystencie']); przy caller='auto' gatuje tylko wiadomosci wlasciciela. hold_s: ile sekund odczekac przed wyslaniem odpowiedzi NIEPROSZONEJ (takiej, w ktorej nikt nie zawolal agenta triggerem) — w tym czasie moze odpisac czlowiek i wtedy agent milczy; odpowiedzi na jawne wywolanie ida od razu. brak/0 = bez czekania. model: model dla tego kanalu zamiast globalnego (alias haiku/sonnet/opus albo pelne id, np. 'opus'); brak = globalny (--model / 'Bob, model X'). effort: wysilek rozumowania claude CLI dla tego kanalu: low|medium|high|xhigh|max; brak = domyslny CLI (grill bez ustawienia: high). mcp_extra: lista grup opt-in dokładana do 'mcp' (także do null = wszystkie domyślne). role: lista nazw rol z roles.json zamiast recznej listy 'mcp' (czat z 'role' ignoruje 'mcp'); dodatkowo: grupy dokladane do rol; bez: grupy odejmowane od rol; kanal_fr: true = kanal z uzytkownikami zewnetrznymi, bez grup 'tylko_zespol'. ingest_only: true = kanal tylko do odbioru: Bob nie odpowiada w tym czacie, nie reaguje i nic tam nie wysle (kazda sciezka zapisu w api_client odmawia), nawet zaplanowana wiadomosc.",
   "chats": {
     "Notatki": {
       "conv_id": "48:notes",
@@ -22,11 +22,11 @@
     "Zespol A - kanal projektu": {
       "conv_id": "19:00000000000000000000000000000002@thread.v2",
       "caller": "all",
-      "mcp": [
-        "jira",
-        "jira_write",
-        "todos",
-        "datetime"
+      "role": [
+        "project_manager"
+      ],
+      "dodatkowo": [
+        "todos"
       ],
       "internet": "only_me"
     },
@@ -51,6 +51,10 @@
         "datetime"
       ],
       "internet": "only_me"
+    },
+    "Kanal tylko do czytania": {
+      "conv_id": "19:00000000000000000000000000000006@thread.v2",
+      "ingest_only": true
     }
   }
 }
