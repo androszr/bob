@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- mirrors scripts/bob_panel/static/index.html as of 24 Oct: header "Bob · panel" + owner line + state pill;
+     nav groups "Every day" (Dashboard, Approvals, Conversations, Logs) and "Bob's settings" (Chats, Roles, Schedule);
+     Dashboard = next-step box, three stat cards, live 24 h figures, chat x hour map, recent feed.
+     The page itself speaks Polish; the words here are the English names from the README's panel table. -->
+<html lang="en"><head><meta charset="utf-8"><title>The Bob panel</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css">
+<style>
+.pnav { width: 250px; background: var(--surface); border-right: 1px solid var(--line); padding: 20px 0; display: flex; flex-direction: column; }
+.pnav-title { font-size: 24px; font-weight: 700; letter-spacing: -.02em; padding: 0 20px; }
+.pnav-sub { font-size: 15px; color: var(--muted); padding: 4px 20px 0; }
+.pill { margin: 14px 20px 6px; font-size: 13px; color: var(--muted); background: var(--well); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; display: flex; gap: 8px; align-items: center; }
+.pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+.psec { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; color: var(--control); padding: 18px 20px 6px; text-transform: uppercase; }
+.ptab { display: flex; align-items: center; gap: 11px; padding: 10px 20px; font-size: 17px; color: var(--muted); border-left: 3px solid transparent; }
+.ptab::before { content: ""; width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--control); }
+.ptab-on { color: var(--text); background: var(--raised); border-left-color: var(--accent); }
+.ptab-on::before { border-color: var(--accent); }
+.cnt { margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent-ink); background: var(--danger); border-radius: 999px; padding: 1px 7px; }
+.pfoot { margin-top: auto; padding: 0 20px; font-size: 13px; color: var(--control); line-height: 1.6; }
+.pmain { flex: 1; padding: 22px 26px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.ph { font-size: 27px; font-weight: 700; letter-spacing: -.02em; }
+.ph-sub { font-size: 15px; color: var(--muted); margin-top: 3px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 18px; }
+.box h3 { font-size: 17px; font-weight: 650; margin-bottom: 8px; }
+.hero { display: flex; gap: 18px; align-items: center; border-color: var(--attention); }
+.frog { width: 64px; height: 64px; flex: none; border-radius: 50% 50% 44% 44%; background: var(--accent); box-shadow: inset 0 -10px 0 var(--accent-ink); }
+.hero p { font-size: 15px; color: var(--muted); line-height: 1.4; }
+.btn { display: inline-block; margin-top: 9px; font-size: 14px; font-weight: 600; color: var(--accent-ink); background: var(--accent); border-radius: var(--radius-control); padding: 6px 13px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.stat { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 11px 14px; }
+.stat-l { font-size: 13px; color: var(--muted); }
+.stat-v { font-size: 22px; font-weight: 700; margin-top: 3px; }
+.ok { color: var(--accent); }
+.bar { height: 6px; border-radius: 3px; background: var(--raised); margin-top: 8px; }
+.bar i { display: block; height: 100%; width: 88%; border-radius: 3px; background: var(--accent); }
+.heat { display: grid; grid-template-columns: 170px repeat(24, 1fr); gap: 3px; font-size: 13px; color: var(--muted); align-items: center; }
+.heat s { height: 17px; border-radius: 3px; background: var(--raised); text-decoration: none; }
+.heat .h1 { background: var(--line); } .heat .h2 { background: var(--control); } .heat .h3 { background: var(--accent); }
+.feed div { display: grid; grid-template-columns: 54px 150px 1fr; gap: 10px; font-size: 14px; padding: 5px 0; border-top: 1px solid var(--line); }
+.feed span:first-child { font-family: var(--mono); color: var(--muted); }
+.tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 1px 7px; justify-self: start; }
+</style></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>./bob</b></div>
+  <div class="headline">No terminal. <em>One local page.</em></div>
+  <p class="sub">Start, stop and sign Bob in from the browser, answer his yes-or-no requests, and <b>see what he did in every chat today.</b></p>
+  <div class="stage"><div class="window">
+    <div class="pnav">
+      <div class="pnav-title">Bob · panel</div><div class="pnav-sub">assistant: Alex Morgan</div>
+      <div class="pill"><i></i>Bob is running · 2 min ago</div>
+      <div class="psec">Every day</div>
+      <div class="ptab ptab-on">Dashboard</div><div class="ptab">Approvals<span class="cnt">1</span></div>
+      <div class="ptab">Conversations</div><div class="ptab">Logs</div>
+      <div class="psec">Bob's settings</div>
+      <div class="ptab">Chats</div><div class="ptab">Roles</div><div class="ptab">Schedule</div>
+      <div class="pfoot">Dark / light mode<br>Terminal: <span class="mono">./bob</span> opens this panel</div>
+    </div>
+    <div class="pmain">
+      <div><div class="ph">Dashboard</div><div class="ph-sub">Bob's state and what is worth doing now.</div></div>
+      <div class="box hero"><div class="frog"></div><div><h3>One decision is waiting</h3>
+        <p>Priya Shah asked Bob to save Acme's release rules to the Project manager role's knowledge. Nothing happens until you decide.</p><span class="btn">Go to approvals</span></div></div>
+      <div class="grid">
+        <div class="stat"><div class="stat-l">Bob</div><div class="stat-v ok">running</div><div class="stat-l">since 08:02</div></div>
+        <div class="stat"><div class="stat-l">Teams session</div><div class="stat-v">6.2 days left</div><div class="bar"><i></i></div></div>
+        <div class="stat"><div class="stat-l">Last activity in chats</div><div class="stat-v">2 min ago</div></div>
+      </div>
+      <div class="grid5">
+        <div class="stat"><div class="stat-v">23</div><div class="stat-l">messages to Bob</div></div>
+        <div class="stat"><div class="stat-v">19</div><div class="stat-l">replies sent</div></div>
+        <div class="stat"><div class="stat-v">1.84 $</div><div class="stat-l">Claude cost</div></div>
+        <div class="stat"><div class="stat-v">14 s</div><div class="stat-l">median reply time</div></div>
+        <div class="stat"><div class="stat-v">4</div><div class="stat-l">active chats</div></div>
+      </div>
+      <div class="box"><h3>Where and when Bob worked</h3><div class="heat">
+        <span>Notes</span><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="h2"></s><s class="h3"></s><s class="h1"></s><s></s><s></s><s></s><s class="h2"></s><s class="h1"></s><s></s><s></s><s class="h1"></s><s class="h2"></s><s></s><s></s><s></s><s></s>
+        <span>Team A · project</span><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="h1"></s><s class="h3"></s><s class="h2"></s><s></s><s class="h1"></s><s class="h1"></s><s class="h2"></s><s class="h3"></s><s class="h1"></s><s class="h1"></s><s></s><s></s><s></s><s></s><s></s>
+        <span>Product channel</span><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="h1"></s><s class="h1"></s><s class="h2"></s><s></s><s></s><s class="h1"></s><s class="h1"></s><s></s><s></s><s class="h1"></s><s></s><s></s><s></s><s></s>
+        <span>Release notes</span><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="h2"></s><s class="h1"></s><s></s><s class="h3"></s><s></s><s></s><s></s><s></s><s></s></div></div>
+      <div class="box feed"><h3>What happened lately</h3>
+        <div><span>15:00</span><span class="tag">Release notes</span><span>Priya Shah: Bob, read me the PRJ4 release notes.</span></div>
+        <div><span>13:00</span><span class="tag">Notes</span><span>Alex Morgan: Bob, is Tom off on the 20th?</span></div>
+        <div><span>09:10</span><span class="tag">Team A · project</span><span>Tom Becker: Bob, status PRJ3-8?</span></div>
+      </div>
+    </div>
+  </div></div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="badges"><span class="badge">LOCAL ONLY</span><span class="badge">PAGE IN POLISH</span></span>
+  </div>
+</div></body></html>

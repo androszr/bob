@@ -1,6 +1,6 @@
 """Render and check the README pictures.
 
-    python3 tools/readme_images.py            # redraw all four from docs/images/src/
+    python3 tools/readme_images.py            # redraw all five from docs/images/src/
     python3 tools/readme_images.py --only why-bob
     python3 tools/readme_images.py --check    # verify the committed pictures; no browser needed
 
@@ -20,7 +20,7 @@ SRC = REPO / "docs" / "images" / "src"
 OUT = REPO / "docs" / "images"
 README = REPO / "README.md"
 
-SOURCES = ("hero-bob-in-teams", "why-bob", "a-day-with-bob", "architecture")
+SOURCES = ("hero-bob-in-teams", "why-bob", "a-day-with-bob", "architecture", "bob-panel")
 CSS_WIDTH = 1200
 WIDTH = 2400
 MAX_BYTES = 600 * 1024

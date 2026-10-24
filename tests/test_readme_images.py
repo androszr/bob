@@ -81,8 +81,24 @@ def html_problems(text: str) -> list[str]:
     return problems
 
 
-def test_the_folder_holds_exactly_the_four_pictures():
+def test_the_folder_holds_exactly_the_five_pictures():
     assert sorted(p.name for p in IMAGES.glob("*.png")) == NAMES
+
+
+PANEL = ROOT / "scripts" / "bob_panel" / "static" / "index.html"
+
+
+@pytest.mark.skipif(not PANEL.is_file(), reason="panel not in tree")
+def test_the_panel_picture_shows_the_real_tabs():
+    # The page speaks Polish, the picture English: the README's panel table pairs the two names.
+    pages = re.search(r"const PAGES = \[(.*?)\n\];", PANEL.read_text(encoding="utf-8"), flags=re.S).group(1)
+    real = re.findall(r"\['[a-z]+','([^']+)','[a-z]+'\]", pages)
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    english = {pl: en for en, pl in re.findall(r"^\| (\w+) \(([^)]+)\) \|", readme, flags=re.M)}
+    source = (IMAGES / "src" / "bob-panel.html").read_text(encoding="utf-8")
+    drawn = re.findall(r'<div class="ptab[^"]*">([^<]+)<', source)
+    assert len(real) == 7
+    assert drawn == [english[label] for label in real]
 
 
 def test_strip_chunks_drops_metadata():

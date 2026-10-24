@@ -36,6 +36,7 @@ REVIEWED_BINARIES: frozenset[str] = frozenset({
     "docs/images/why-bob.png",
     "docs/images/a-day-with-bob.png",
     "docs/images/architecture.png",
+    "docs/images/bob-panel.png",
 })
 
 _ZERO_GUID_PREFIX = "00000000-0000-0000-0000-"

@@ -9,7 +9,8 @@ Jira projects `PRJ1` to `PRJ5`, and an English cast - Alex Morgan (the owner, wh
 replies carry the `[Bob]` label), Priya Shah and Tom Becker - in four made-up chats
 ("Notes", "Team A · project", "Product channel", "Release notes"). Anyone beyond those
 three is a "Person NN" placeholder, and the 12:00 scheduled note goes to a made-up
-"Managers" chat. Every word in a picture is English. Times are `HH:MM`, dates are written as "20 Oct". No real Teams
+"Managers" chat. The panel picture (`bob-panel.png`) shows the owner Alex Morgan signed in, with the panel's tabs under the
+English names the README's panel table gives them (the page itself speaks Polish). Every word in a picture is English. Times are `HH:MM`, dates are written as "20 Oct". No real Teams
 screenshot is ever used, and no product logos are drawn.
 
 | Picture | Source | Shows |
@@ -18,6 +19,7 @@ screenshot is ever used, and no product logos are drawn.
 | `why-bob.png` | `src/why-bob.html` | six questions waiting vs. answered |
 | `a-day-with-bob.png` | `src/a-day-with-bob.html` | six moments of one working day |
 | `architecture.png` | `src/architecture.html` | how the pieces connect |
+| `bob-panel.png` | `src/bob-panel.html` | the panel: tabs, status and recent conversations |
 | `app-icon.svg` | itself (hand-written vector) | the icon at the top of the README |
 
 The pictures share one dark terminal slide style - a 1200 x 1200 frame with a terminal
@@ -27,7 +29,7 @@ lives in `src/tokens.css` only; the shared frame is `src/base.css`.
 ## Redraw and check
 
 ```bash
-python3 tools/readme_images.py            # redraw all four (needs Playwright's Chromium, on a Mac)
+python3 tools/readme_images.py            # redraw all five (needs Playwright's Chromium, on a Mac)
 python3 tools/readme_images.py --only why-bob
 python3 tools/readme_images.py --check    # verify the committed pictures; no browser needed
 ```
@@ -49,7 +51,7 @@ tests pin shape, size and chunks, never a digest.
 1. Open `README.md` in a Markdown preview.
 2. Check the top: icon, title, three badges, a one-line pitch, then a chat picture.
 3. Say out loud what Bob is, why it exists, what a day looks like and how to start it.
-4. Open each of the four pictures at 200%.
+4. Open each of the five pictures at 200%.
 5. Read every name, chat title, project key and number; expect only the made-up company and cast.
 6. Check nothing is cut off and every reply shows the `[Bob]` label.
 7. If anything is off, change the source and redraw.

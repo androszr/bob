@@ -55,6 +55,8 @@ Full detail: [docs/setup.md](docs/setup.md).
 
 ## The panel
 
+<p align="center"><img src="docs/images/bob-panel.png" alt="The Bob panel in a browser: a column of tabs on the left and a dashboard showing Bob running, the Teams session alive, a decision waiting and the day's chats." width="880"></p>
+
 `./bob` starts a small local web page and opens it in your browser (macOS; the Teams agent itself can still run anywhere). Nothing else needs a terminal: signing in to Teams, starting, stopping and restarting Bob all happen there.
 
 | Tab | What it shows |
