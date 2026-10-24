@@ -2318,7 +2318,9 @@ def test_hold_applies_only_to_uninvited_replies():
     src = inspect.getsource(cli._process_chat_messages)
     call = "_skip, _skip_reason = _check_skip_answered("
     hold = src[src.index("_hold_s = _hold_s_for("):src.index(call)]
-    assert "not trigger_re.search(text)" in hold
+    # an explicit call by name, a quote of the bot or a continuation make the reply "invited": no hold
+    assert "trigger_re.search(text)" in hold and "is_quote_of_bob" in hold and "is_continuation" in hold
+    assert "_hold_wait_s(" in hold
     assert "_time_mod.sleep(_wait)" in hold
 
 

@@ -161,22 +161,29 @@ def _jira_username(jira_get: Callable, email: str, name: str = "") -> str | None
 
     E-mail first (exact login/e-mail match); then the full name, accepted only when
     exactly one active user's display name has the same tokens (e.g. a person whose
-    Jira account is not on the roster e-mail)."""
+    Jira account is not on the roster e-mail). An INACTIVE e-mail account is replaced by
+    the one active same-name account: people moving vendors get a new login and log
+    there (the old, inactive account is skipped for the new one)."""
     users = jira_get("/rest/api/2/user/search", {"username": email, "includeInactive": "true"})
     if users is None:
         return None
     want = email.lower()
-    for u in users:
-        if want in (str(u.get("name", "")).lower(), str(u.get("emailAddress", "")).lower()):
-            return u["name"]
+    by_email = next((u for u in users
+                     if want in (str(u.get("name", "")).lower(), str(u.get("emailAddress", "")).lower())),
+                    None)
+    if by_email and by_email.get("active", True):
+        return by_email["name"]
     if not name:
-        return ""
+        return by_email["name"] if by_email else ""
     last = name.split()[-1]
     users = jira_get("/rest/api/2/user/search",
                      {"username": last, "maxResults": 50, "includeInactive": "true"})
     if users is None:
         return None
     hits = [u for u in users if _name_tokens(str(u.get("displayName", ""))) == _name_tokens(name)]
+    if by_email:
+        active = [u for u in hits if u.get("active", True) and u["name"] != by_email["name"]]
+        return active[0]["name"] if len(active) == 1 else by_email["name"]
     return hits[0]["name"] if len(hits) == 1 else ""
 
 

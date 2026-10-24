@@ -1,0 +1,86 @@
+{
+  "_comment": "Roles for Bob. Copy to roles.json (gitignored, or point BOB_ROLES_FILE at another path) and edit. A chat in chat-config.json gets \"role\": [...] instead of a hand-written \"mcp\" list; its access is the union of the roles' \"dostep\" plus the chat's \"dodatkowo\" minus its \"bez\". A chat with \"kanal_fr\": true never gets a group flagged \"tylko_zespol\" (team-only). The role \"asystent\" is required: it means every default group (the old \"mcp\": null). \"wiedza\" entries: \"wpiecie\" is \"prompt\" (appended to the system prompt of chats with the role), \"narzedzie\" (read by a tool on request) or \"kod\" (wired in the code, described here only). \"obraz\" is a file name from scripts/bob_panel/static/bob/ (without .svg) - the role's picture in the panel. The file is read on every reply, so a change applies immediately.",
+  "grupy": {
+    "jira": {
+      "opis": "Jira - odczyt zgloszen i wyszukiwanie"
+    },
+    "jira_write": {
+      "opis": "Jira - zakladanie i zmiany zgloszen (token wlasciciela)"
+    },
+    "jira_hypercare": {
+      "opis": "Jira - tylko zakladanie, zalaczniki, komentarze i powiazania (kanaly z uzytkownikami zewnetrznymi)"
+    },
+    "todos": {
+      "opis": "Lista zadan wlasciciela"
+    },
+    "datetime": {
+      "opis": "Data i kalendarz"
+    },
+    "urlopy": {
+      "opis": "Urlopy zespolu (SharePoint)"
+    },
+    "md_to_mp3": {
+      "opis": "Zamiana notatek na audio"
+    }
+  },
+  "role": {
+    "asystent": {
+      "nazwa": "Asystent",
+      "emoji": "🧑‍💻",
+      "opis": "Bob jako ogolny asystent: Jira, zadania, urlopy, data, notatki audio.",
+      "dostep": ["jira", "jira_write", "jira_hypercare", "todos", "datetime", "urlopy", "md_to_mp3"],
+      "umiejetnosci": [
+        {
+          "nazwa": "Odpowiedzi na czatach",
+          "opis": "Rozmowa z narzedziami grup z dostepu",
+          "gdzie": "scripts/teams_agent/prompts/bob.md"
+        },
+        {
+          "nazwa": "Notatki prywatne",
+          "opis": "„Bob, zapamietaj: ...” na kazdym czacie",
+          "gdzie": "scripts/teams_agent/cli.py"
+        }
+      ],
+      "wiedza": [
+        {
+          "id": "mapa-wiedzy",
+          "nazwa": "Mapa wiedzy",
+          "plik": "knowledge/general/knowledge-map.context.md",
+          "wpiecie": "prompt",
+          "opis": "Co gdzie lezy w folderze knowledge/"
+        }
+      ],
+      "obraz": "bob-working-thinking"
+    },
+    "project_manager": {
+      "nazwa": "Project manager",
+      "emoji": "📋",
+      "opis": "Prowadzenie zgloszen projektu: czytanie i zapisy w Jirze, daty.",
+      "dostep": ["jira", "jira_write", "datetime"],
+      "umiejetnosci": [
+        {
+          "nazwa": "Zgloszenia w Jirze",
+          "opis": "Zakladanie, komentowanie i zmiana statusu zgloszen",
+          "gdzie": "scripts/jira"
+        }
+      ],
+      "wiedza": [],
+      "obraz": "bob-working-debugger"
+    },
+    "notatki": {
+      "nazwa": "Notatki",
+      "emoji": "📝",
+      "opis": "Zadania i notatki: lista zadan, audio z notatek, daty.",
+      "dostep": ["todos", "md_to_mp3", "datetime"],
+      "umiejetnosci": [
+        {
+          "nazwa": "Lista zadan",
+          "opis": "Dodawanie i przeglad zadan wlasciciela",
+          "gdzie": "scripts/todos"
+        }
+      ],
+      "wiedza": [],
+      "obraz": "bob-eureka"
+    }
+  }
+}

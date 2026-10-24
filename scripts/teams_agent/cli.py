@@ -41,6 +41,7 @@ import attachments as _attachments  # noqa: E402
 import polls  # noqa: E402
 import owner_schedule  # noqa: E402
 import scraper  # noqa: E402
+import token_health  # noqa: E402
 import user_memory  # noqa: E402
 from session import (  # noqa: E402
     SESSION_FILE,
@@ -104,10 +105,39 @@ _CET = ZoneInfo("Europe/Warsaw")
 # Per-chat in-memory conversation history (persisted to disk across restarts).
 # Dict: chat_name → list of {"sender": str, "text": str}
 _CHAT_HISTORY: dict[str, list[dict]] = {}
-_HISTORY_COMPACT_CHARS = 60000  # compact when accumulated history exceeds this (~15k tokens)
+# compact when accumulated history exceeds this (~5k tokens). Was 60000: the 200-entry disk cap kept busy channels
+# just under it, so every call re-sent ~53k chars of history uncached (most of the cost).
+_HISTORY_COMPACT_CHARS = 20000
 _HISTORY_KEEP_LAST = 8          # keep last N user+Bob exchange pairs after compaction
 _HISTORY_DIR = Path(__file__).parent / "history"
 _HISTORY_DISK_MAX_ENTRIES = 200  # hard cap on disk entries per chat (trim oldest on write)
+# Last run of the slow periodic jobs, kept across restarts: a restart must not re-run a headless Chromium SharePoint
+# warm-up and the urlopy poll every time.
+_TIMERS_FILE = Path(__file__).parent / "timers-state.json"
+
+
+def _timer_last(name: str) -> float:
+    try:
+        return float(json.loads(_TIMERS_FILE.read_text(encoding="utf-8")).get(name) or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0.0
+
+
+def _timer_mark(name: str, ts: float) -> None:
+    try:
+        state = json.loads(_TIMERS_FILE.read_text(encoding="utf-8")) if _TIMERS_FILE.exists() else {}
+    except (OSError, ValueError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    state[name] = ts
+    try:
+        tmp = _TIMERS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, _TIMERS_FILE)
+    except OSError:
+        pass
+
 
 # Per-user memory tracking for rolling profile summaries (written by sweeper thread).
 # _USER_LAST_ACTIVITY: mri -> (last_activity_ts, display_name, session_exchanges)
@@ -118,6 +148,77 @@ _USER_SESSION_START: dict[str, float] = {}
 _USER_HISTORY: dict[str, list[dict]] = {}
 _USER_SESSION_TIMEOUT_S = 1800  # 30 minutes silence -> trigger summary
 _USER_SWEEP_INTERVAL_S = 60     # sweeper wakes every 60 s
+
+# A chat reply may run long tools (several lookups in one question): 25 min before the CLI is cut, and
+# meanwhile one "still working" message in the chat, edited every few minutes (a 10-minute silence followed by the
+# 600 s timeout used to drop the answer without any sign of life).
+_CHAT_REPLY_TIMEOUT_S = 25 * 60
+_STILL_WORKING_FIRST_S = 120
+_STILL_WORKING_EVERY_S = 180
+
+
+class _StillWorking:
+    """Context manager: while a reply is being generated, post "⏳ nadal pracuję" after FIRST_S seconds and edit
+    it every EVERY_S with the elapsed minutes. Leaving the block only stops the timer: the caller then calls
+    finish(sent) - "done" when a reply really went out, otherwise the note is deleted (or edited when Teams
+    refuses). enabled=False makes the whole thing a no-op (uninvited replies get no note). Never raises."""
+
+    def __init__(self, conv_id: str, first_s: float = _STILL_WORKING_FIRST_S,
+                 every_s: float = _STILL_WORKING_EVERY_S, enabled: bool = True) -> None:
+        self.conv_id, self.first_s, self.every_s = (conv_id if enabled else ""), first_s, every_s
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self.msg_id: str | None = None
+        self._t0 = 0.0
+
+    def _say(self, text: str) -> None:
+        try:
+            html = api_client.bob_html(text)
+            if self.msg_id:
+                api_client.edit_message(self.msg_id, html, self.conv_id)
+            else:
+                self.msg_id = api_client.send_html_message(html, self.conv_id)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[watch] still-working: {exc}", file=sys.stderr, flush=True)
+
+    def _run(self) -> None:
+        wait = self.first_s
+        while not self._stop.wait(wait):
+            mins = max(1, round((_time_mod.time() - self._t0) / 60))
+            self._say(f"⏳ Nadal pracuję nad odpowiedzią ({mins} min) - długie zapytania, odpiszę tutaj.")
+            wait = self.every_s
+
+    def __enter__(self) -> "_StillWorking":
+        if self.conv_id:
+            self._t0 = _time_mod.time()
+            self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=5)
+        if exc[0] is not None:                          # the reply failed: no "answer below"
+            self.finish(False)
+
+    def finish(self, sent: bool) -> None:
+        """The reply is sent (True) or dropped (False): close the note accordingly."""
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=60)               # a note still being posted must be seen (and closed) here
+        msg_id, self.msg_id = self.msg_id, None
+        if not msg_id:
+            return
+        try:
+            if sent:
+                mins = max(1, round((_time_mod.time() - self._t0) / 60))
+                api_client.edit_message(msg_id, api_client.bob_html(f"✅ Gotowe po {mins} min - odpowiedź poniżej."),
+                                        self.conv_id)
+            elif not api_client.delete_message(msg_id, self.conv_id):
+                api_client.edit_message(msg_id, api_client.bob_html("Sprawdziłem - tym razem bez odpowiedzi."),
+                                        self.conv_id)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[watch] still-working: {exc}", file=sys.stderr, flush=True)
 
 # Directories from which [WYSLIJ_PLIK_Z_DYSKU] uploads are permitted.
 # Prevents prompt-injection from exfiltrating arbitrary files (e.g. ~/.ssh/id_rsa).
@@ -176,6 +277,18 @@ def _append_history_to_disk(chat_name: str, entries: list[dict]) -> None:
             path.write_text("".join(lines[-_HISTORY_DISK_MAX_ENTRIES:]), encoding="utf-8")
     except Exception as exc:
         print(f"[watch] BLAD zapisu historii {chat_name!r}: {exc}", file=sys.stderr)
+
+
+def _note_bot_post(chat_name: str, inner_html: str, extra: str = "", kind: str = "", file: str = "") -> None:
+    """A message a background job posted as Bob (a file link, a deploy note) -> the chat's history, so Bob
+    knows what "this file" / "ta zmiana" refers to when someone answers it."""
+    text = (api_client._strip_html(inner_html) + (f" {extra}" if extra else "")).strip()
+    if not chat_name or not text:
+        return
+    entry = {"sender": "Bob", "text": text, **({"kind": kind} if kind else {}),
+             **({"file": file} if file else {})}
+    _CHAT_HISTORY.setdefault(chat_name, []).append(entry)
+    _append_history_to_disk(chat_name, [entry])
 
 
 def _rewrite_history_on_disk(chat_name: str, entries: list[dict]) -> None:
@@ -291,6 +404,7 @@ _BOB_MENTION_RE = re.compile(r'\[BOB-WYWOLAJ:\s*(?P<who>[a-zA-Ząćęłńóśź�
 
 def _resolve_mentions(
     reply: str, regex: re.Pattern, people: dict[str, tuple[str, str]],
+    profile_fallback: bool = True,
 ) -> tuple[str, str, list[dict]]:
     """Extract escalation token(s) matched by `regex`, resolve to a real Teams @mention chip.
 
@@ -308,7 +422,7 @@ def _resolve_mentions(
         for key in m.group("who").lower().split(","):
             key = key.strip()
             person = people.get(key)
-            if not person:
+            if not person and profile_fallback:
                 person = user_memory.find_profile_by_name(key)
             if person and person not in resolved:
                 resolved.append(person)
@@ -402,6 +516,21 @@ def _handle_example_learning(reply: str, sender_mri: str) -> str:
     return _handle_learning_token(
         reply, _EXAMPLE_LEARN_RE, _EXAMPLE_LEARN_DIR, "example-learn",
     )
+
+
+# 👍 on the incoming message instead of (or next to) a reply: [BOB-REAKCJA].
+# A reply that is only the token sends nothing - the reaction is the whole answer.
+_REACTION_RE = re.compile(r'\[BOB-REAKCJA\]', re.IGNORECASE)
+
+
+def _handle_reaction(reply: str, msg_id: str, conv_id: str) -> str:
+    """[BOB-REAKCJA] - put 👍 on the message being answered, strip the token."""
+    if not _REACTION_RE.search(reply):
+        return reply
+    if msg_id:
+        ok = api_client.add_reaction(msg_id, conv_id, "like")
+        print(f"[reakcja] 👍 na {msg_id}: {'ok' if ok else 'BLAD'}", flush=True)
+    return _collapse_blank_lines(_REACTION_RE.sub("", reply))
 
 
 def _is_silent_reply(reply: str) -> bool:
@@ -567,7 +696,20 @@ def _safe_relative(path: Path, root: Path) -> bool:
         return False
 
 
-def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:  # noqa: ARG001
+def _remember_bob_file(name: str, url: str, chat_name: str, content: bytes) -> None:
+    """Keep the file Bob sent (bob_files) and note the post in the chat history, so a later "popraw ten plik" -
+    quoted or by link - reaches its content."""
+    try:
+        import bob_files  # noqa: PLC0415
+        bob_files.record(name, url, chat_name, content)
+        # "kind": only this code path writes it - chat text and model replies never carry it
+        # "file" is the stored SharePoint name (it carries the upload-time prefix); the display name is model-chosen
+        _note_bot_post(chat_name, f"📎 {name} {url}", kind="upload", file=bob_files.sp_name(url) or name)
+    except Exception as exc:  # noqa: BLE001 -- the file is already sent
+        print(f"[watch] -> bob_files: {exc}", file=sys.stderr, flush=True)
+
+
+def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:
     """Find file attachment tags in reply, upload each to SharePoint, send a link.
 
     Handles two tag forms:
@@ -629,6 +771,7 @@ def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:  #
             else:
                 api_client.send_message(f"📎 **{fname}**\n{url}", conv_id)
                 print(f"[watch] -> wyslij_plik: OK {url}", flush=True)
+                _remember_bob_file(fname, url, chat_name, content.encode("utf-8"))
         except Exception as exc:
             print(f"[watch] -> wyslij_plik: blad {exc}", flush=True)
         finally:
@@ -660,6 +803,8 @@ def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:  #
             else:
                 api_client.send_message(f"📎 **{src.name}**\n{url}", conv_id)
                 print(f"[watch] -> wyslij_plik_z_dysku: OK {url}", flush=True)
+                _remember_bob_file(src.name, url, chat_name,
+                                   src.read_bytes() if src.stat().st_size <= 2 * 1024 * 1024 else b"")
         except Exception as exc:
             print(f"[watch] -> wyslij_plik_z_dysku: blad {exc}", flush=True)
 
@@ -738,6 +883,8 @@ _CATCHUP_THRESHOLD_S = 300   # 5 minutes
 _CATCHUP_MIN_MSGS = 4        # minimum triggered messages to activate catch-up
 _STATS_POST_INTERVAL_S = 10 * 60  # post/edit stats to Notatki every 10 min
 _NOTIF_CHECK_INTERVAL_S = 60     # check due notifications every 60 s
+_PANEL_APPROVALS_INTERVAL_S = 60  # new yes/no requests from Bob's panel -> Notatki (scripts/bob_panel/approvals.py)
+_PANEL_APPROVALS_LOCK = threading.Lock()
 # The SharePoint poller checks TimeLastModified (one cheap REST call) before doing
 # any real download/import work -- see sharepoint_meta.py -- so a short interval here
 # just controls change-detection latency, not download frequency.
@@ -811,6 +958,18 @@ _CHAT_DISABLE_RE = re.compile(
 _CHAT_ENABLE_RE = re.compile(
     r'\bbob\s+(?:włącz|wlacz|enable|on)\s+chat\s+(.+)',
     re.IGNORECASE,
+)
+# "Bob, zatwierdzam apr-1a2b3c4d5e: notatka" / "Bob, odrzucam apr-..." — a yes/no request from Bob's panel
+# (scripts/bob_panel/approvals.py), announced in the control chat; owner + control chat only
+_APR_DECIDE_RE = re.compile(
+    r'\bbob\W+(zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)\s+'
+    r'(apr-[0-9a-f]{10})\b\s*[:\-–]?\s*(.*)',
+    re.IGNORECASE | re.DOTALL,
+)
+# the same without the id ("Bob zatwierdzam", optionally ": notatka") - only when exactly one decision waits
+_APR_DECIDE_BARE_RE = re.compile(
+    r'^\W*bob\W+(zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)\W*(?::\s*(.*))?$',
+    re.IGNORECASE | re.DOTALL,
 )
 # "Bob chaty" / "Bob status chatów" — show per-chat enabled/disabled status
 _CHAT_STATUS_RE = re.compile(
@@ -1023,9 +1182,10 @@ def _load_control() -> dict:
 
 def _save_control(state: dict) -> None:
     try:
-        Path(_BOB_CONTROL_FILE).write_text(
-            json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8',
-        )
+        # atomic: the panel reads this file too (chatcfg) - never a half-written state
+        tmp = Path(_BOB_CONTROL_FILE).with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
+        os.replace(tmp, _BOB_CONTROL_FILE)
     except Exception as exc:
         print(f"[watch] BLAD zapisu bob-control: {exc}", file=sys.stderr)
 
@@ -1194,6 +1354,9 @@ def _broadcast_scheduler_tick(log_path: str) -> None:
             pass  # fire every day of the week, no filter
         elif schedule_type == "daily":
             if not is_workday:
+                continue
+        elif schedule_type == "weekly":
+            if today.weekday() != int(job_def.get("weekday", 0)):  # 0 = Monday
                 continue
         else:
             if not is_planning_day:
@@ -1403,6 +1566,11 @@ def _apply_chat_config_change(
         return
     if name not in chat_config:
         chat_config[name] = {}
+    if field == "mcp" and "role" in chat_config[name]:
+        # an explicit group list from the control chat replaces the chat's roles: it goes back to the hand-written list
+        print(f"[watch] {name!r}: role {chat_config[name].get('role')} zastapione reczna lista mcp", flush=True)
+        for key in ("role", "bez", "dodatkowo"):
+            chat_config[name].pop(key, None)
     if field == "epithets":
         if value is None or (isinstance(value, list) and len(value) == 0):
             chat_config[name].pop("epithets", None)
@@ -1435,6 +1603,28 @@ def _conv_id_override_for(chat_name: str, chat_config: dict) -> str | None:
     return (chat_config.get(chat_name) or {}).get("conv_id")
 
 
+def _ingest_only_for(chat_name: str, chat_config: dict) -> bool:
+    """True when chat-config marks the chat "ingest_only": Bob listens, never replies/posts."""
+    return bool((chat_config.get(chat_name) or {}).get("ingest_only"))
+
+
+def _receive_only_conv_ids(chat_config: dict) -> set[str]:
+    """conv_ids of every ingest_only chat that has a hardcoded conv_id in chat-config."""
+    return {
+        cfg["conv_id"] for cfg in chat_config.values()
+        if isinstance(cfg, dict) and cfg.get("ingest_only") and cfg.get("conv_id")
+    }
+
+
+def _refresh_receive_only(chat_config: dict, extra_ids: set[str] | None = None) -> None:
+    """Replace api_client.RECEIVE_ONLY_CONV_IDS (config + resolved ingest-only ids).
+
+    One atomic rebind, never clear()+update(): worker threads check the set while this runs
+    every tick, and an empty set in between would let a post into the listen-only chat through."""
+    ids = _receive_only_conv_ids(chat_config) | (extra_ids or set())
+    api_client.RECEIVE_ONLY_CONV_IDS = frozenset(ids)
+
+
 def _caller_for(chat_name: str, chat_config: dict, args: argparse.Namespace) -> str:
     """Return per-chat caller mode, falling back to the global --caller arg."""
     per_chat = (chat_config.get(chat_name) or {}).get("caller")
@@ -1457,6 +1647,22 @@ def _hold_s_for(chat_name: str, chat_config: dict | None) -> int:
         return 0
 
 
+def _hold_wait_s(hold_s: int, msg_ts: float, now: float, invited: bool) -> float:
+    """Seconds still to wait before sending an uninvited reply (0 = send now).
+
+    The window runs from when the message was POSTED, not from when we started
+    answering it: messages are answered one by one per chat, so one measured from
+    our own start stacked a full hold on every message of a burst. A message that
+    already sat in the queue for hold_s gets no extra wait. An invited reply (called
+    by name, quoting the bot, answering its question) never waits. Unknown
+    timestamp -> full hold counted from now.
+    """
+    if invited or hold_s <= 0:
+        return 0.0
+    start = msg_ts if msg_ts > 0 else now
+    return max(0.0, hold_s - (now - start))
+
+
 def _control_chat_for(chat_name: str, chat_config: dict) -> bool:
     """Return True if this chat is allowed to issue Bob control commands."""
     return bool((chat_config.get(chat_name) or {}).get("control_chat", False))
@@ -1465,18 +1671,31 @@ def _control_chat_for(chat_name: str, chat_config: dict) -> bool:
 def _mcp_for(chat_name: str, chat_config: dict) -> list[str] | None:
     """Return list of allowed MCP groups for this chat, or None (= all groups).
 
-    chat-config.json format: "mcp": ["jira", "todos"] or omitted/null for all.
+    chat-config.json format: "role": ["project_manager", ...] (roles.json, scripts/teams_agent/roles.py), or the
+    older hand-written "mcp": ["jira", "todos"] or omitted/null for all.
     Valid group names: keys of ai._MCP_GROUPS.
     "mcp_extra": ["<group>"] adds opt-in groups (ai._OPT_IN_GROUPS) on top of
     "mcp": null, so the chat keeps every default group and gains the extras.
     """
+    # roles (roles.json, read fresh: panel edits apply at once) or the hand-written list; a chat on a channel
+    # with external users ("kanal_fr") never gets a team-only group
+    import roles  # noqa: PLC0415
     cfg = chat_config.get(chat_name) or {}
-    groups = cfg.get("mcp", None)
-    extra = [g for g in cfg.get("mcp_extra") or [] if g in ai._MCP_GROUPS]
-    if not extra:
-        return groups
-    base = list(ai._ALL_GROUPS) if groups is None else list(groups)
-    return base + [g for g in extra if g not in base]
+    doc = roles.load() if ("role" in cfg or cfg.get("kanal_fr")) else {}
+    return roles.effective_groups(cfg, doc, list(ai._ALL_GROUPS), list(ai._MCP_GROUPS))
+
+
+def _role_knowledge_for(chat_name: str, chat_config: dict | None) -> str:
+    """The chat's role knowledge added in the panel ("wpiecie": "prompt" in roles.json), read fresh per reply."""
+    cfg = (chat_config or {}).get(chat_name) or {}
+    if "role" not in cfg:
+        return ""
+    import roles  # noqa: PLC0415
+    try:
+        return roles.knowledge_text(roles.knowledge_for(cfg, roles.load()))
+    except Exception as exc:  # noqa: BLE001 -- knowledge must never block a reply
+        print(f"[watch] wiedza rol {chat_name!r}: {exc}", file=sys.stderr, flush=True)
+        return ""
 
 
 def _epithets_for(chat_name: str, chat_config: dict) -> list[str] | None:
@@ -2088,13 +2307,16 @@ def _process_chat_messages(
                     history=_chat_hist or None,
                     allowed_mcp=allowed_mcp,
                     epithets=epithets,
+                    role_knowledge=_role_knowledge_for(chat_name, chat_config),
                     private_notes=_load_private_notes(chat_name),
                     schedule_context=_build_schedule_context(),
                     persona=persona,
                     extra_env={
                         "BOB_CURRENT_CHAT": chat_name,
+                        "BOB_CURRENT_CONV": conv_id,  # long tools post their progress here
                         "BOB_SENDER": _triggered[-1].get("sender", ""),
                         "BOB_SENDER_MRI": _triggered[-1].get("sender_mri", ""),
+                        "BOB_SENDER_TEXT": str(_triggered[-1].get("text", ""))[:4000],
                     },
                     effort=chat_effort,
                 )
@@ -2105,6 +2327,7 @@ def _process_chat_messages(
                 _reply = _extract_and_send_files(_reply, conv_id, chat_name)
                 _reply = _handle_example_learning(_reply, _last_m.get("sender_mri", ""))
                 _reply = _handle_example_idea(_reply, _last_sender)
+                _reply = _handle_reaction(_reply, _last_m.get("id", ""), conv_id)
                 _reply, _mention_html, _mention_entries = _handle_bob_mention(_reply)
                 _sent = False
                 _silent_skip = _is_silent_reply(_reply)
@@ -2478,13 +2701,37 @@ def _process_chat_messages(
                 unit = m.group(2).lower()
                 minutes = amount * 60 if unit.startswith(('h', 'g')) else amount
                 until_dt = datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=minutes)
-                _save_control({"paused_until": until_dt.isoformat(), "disabled": False})
+                _save_control({**_load_control(), "paused_until": until_dt.isoformat(), "disabled": False})
                 ack = (
                     f"Ok, milknę na {minutes} min "
                     f"(do {until_dt.strftime('%H:%M')} UTC)."
                 )
                 api_client.reply_to_message(ack, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri)
                 print(f"[watch] -> Bob pause {minutes}min (do {until_dt.isoformat()})", flush=True)
+                last_seq_id = max(last_seq_id, seq)
+                continue
+            _apr = None
+            if m := _APR_DECIDE_RE.search(text):
+                _apr = (m.group(1), m.group(2).lower(), m.group(3) or "")
+            elif mb := _APR_DECIDE_BARE_RE.search(text):
+                from bob_panel import approvals as _approvals  # noqa: PLC0415
+                _waiting = _approvals.listing()["pending"]
+                # exactly one request waits -> "Bob zatwierdzam" is unambiguous
+                if len(_waiting) == 1 and str(_waiting[0].get("id", "")).startswith("apr-"):
+                    _apr = (mb.group(1), _waiting[0]["id"], mb.group(2) or "")
+            if _apr:
+                from bob_panel import approvals as _approvals  # noqa: PLC0415
+                _verb, _apr_id, _note = _apr
+                _approve = _verb.lower().startswith(("zatw", "akcept"))
+                try:
+                    _res = _approvals.decide(_apr_id, _approve, _note.strip(), by=f"{_approvals.OWNER} (chat)")
+                    _ack = _res.get("message") or ("Zapisane." if _res.get("ok") else "Nic do zatwierdzenia.")
+                    if _res.get("ok"):
+                        _ack = f"{'✅ Zatwierdzone' if _approve else '❌ Odrzucone'}: {_apr_id}. {_ack}"
+                except Exception as exc:  # noqa: BLE001
+                    _ack = f"Nie udało się zapisać decyzji {_apr_id}: {exc}"
+                api_client.reply_to_message(_ack, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri)
+                print(f"[watch] -> approval {_apr_id} {'approved' if _approve else 'rejected'}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if m := _CHAT_DISABLE_RE.search(text):
@@ -2514,7 +2761,9 @@ def _process_chat_messages(
                 for _n, _cv in _live_cfg.items():
                     _en = "✅" if _n not in _disabled else "❌"
                     _cal = _cv.get("caller") or "(globalny)"
-                    _mcp = ", ".join(_cv["mcp"]) if _cv.get("mcp") else "wszystkie"
+                    _eff = _mcp_for(_n, _live_cfg)
+                    _mcp = (f"role {'+'.join(_cv['role'])} -> " if _cv.get("role") else "") + (
+                        ", ".join(_eff) if _eff is not None else "wszystkie")
                     _kl = _cv.get("knowledge")
                     _know = ", ".join(_kl) if isinstance(_kl, list) and _kl else (
                         "brak" if isinstance(_kl, list) else "wszystkie"
@@ -2549,7 +2798,9 @@ def _process_chat_messages(
                         continue
                 _dis = _tgt in _load_control().get("disabled_chats", [])
                 _cal = _cv.get("caller") or f"(globalny: {args.caller})"
-                _mcp_v = ", ".join(_cv["mcp"]) if _cv.get("mcp") else "wszystkie (jira, todos, urlopy, datetime)"
+                _eff_v = _mcp_for(_tgt, _live_cfg)
+                _mcp_v = (f"role {'+'.join(_cv['role'])} -> " if _cv.get("role") else "") + (
+                    ", ".join(_eff_v) if _eff_v is not None else "wszystkie domyślne")
                 _kl_v = _cv.get("knowledge")
                 _know_v = ", ".join(_kl_v) if isinstance(_kl_v, list) and _kl_v else (
                     "brak" if isinstance(_kl_v, list) else "wszystkie"
@@ -2648,7 +2899,8 @@ def _process_chat_messages(
                         _job_def = _jobs_by_id.get(_jid, {})
                         _display = _job_def.get("name") or _job_def.get("team") or _jid
                         _stype = _job_def.get("schedule_type", "planning")
-                        _stype_label = "codziennie" if _stype == "daily" else "planning"
+                        _stype_label = {"daily": "codziennie", "weekly": "co tydzień",
+                                        "always": "codziennie (też weekend)"}.get(_stype, "planning")
                         _parts = []
                         for _phase_key, _phase_arg, _phase_label in [
                             ("generate",      "generate",      "generuj"),
@@ -2933,7 +3185,7 @@ def _process_chat_messages(
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if _BOB_OFF_RE.search(text):
-                _save_control({"disabled": True, "paused_until": None})
+                _save_control({**_load_control(), "disabled": True, "paused_until": None})
                 api_client.reply_to_message(
                     "Wyłączam się.", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
@@ -2941,7 +3193,7 @@ def _process_chat_messages(
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if _BOB_ON_RE.search(text):
-                _save_control({"disabled": False, "paused_until": None})
+                _save_control({**_load_control(), "disabled": False, "paused_until": None})
                 api_client.reply_to_message(
                     "Jestem z powrotem :)", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
@@ -2973,8 +3225,10 @@ def _process_chat_messages(
 
             _grill_env = {
                 "BOB_CURRENT_CHAT": chat_name,
+                "BOB_CURRENT_CONV": conv_id,  # long tools post their progress here
                 "BOB_SENDER": msg.get("sender", ""),
                 "BOB_SENDER_MRI": msg.get("sender_mri", ""),
+                "BOB_SENDER_TEXT": text[:4000],
             }
             if _GRILL_STOP_RE.search(text):
                 state["grill_active"] = False
@@ -2982,6 +3236,7 @@ def _process_chat_messages(
                 print("[watch] -> grill stop — dezaktywuje grill mode", flush=True)
                 reply = ai.freeform_reply(text, model=chat_model,
                                           allowed_mcp=allowed_mcp, epithets=epithets,
+                                          role_knowledge=_role_knowledge_for(chat_name, chat_config),
                                           private_notes=_load_private_notes(chat_name),
                                           schedule_context=_build_schedule_context(),
                                           persona=persona,
@@ -3202,6 +3457,11 @@ def _process_chat_messages(
         _current_attach_urls = {a.get("url") for a in (msg.get("attachments") or [])}
         _live_ctx: list[dict] = []
         for _rm in _raw_recent:
+            # The freshest entry is usually the message being answered: it already goes in as
+            # the user turn, so listing it here too made the model think it was sent twice.
+            # Its attachments are captured above.
+            if msg.get("id") and _rm.get("id") == msg.get("id"):
+                continue
             _rm_has_img = bool(_rm.get("image_urls")) or any(
                 (a.get("type") or "").lower() in _IMAGE_EXTS_CLI
                 or a.get("name", "").rsplit(".", 1)[-1].lower() in _IMAGE_EXTS_CLI
@@ -3241,13 +3501,32 @@ def _process_chat_messages(
                         _img_urls_seen.append(_iu)
         _image_paths = _images_to_tmp_files(_img_urls_seen) if _img_urls_seen else []
         _image_paths.extend(_attach_image_paths)
+        # Bob's own earlier file the message points at (link, name or a quoted Bob message) -> its content
+        _files_note = ""
+        try:
+            import bob_files as _bf  # noqa: PLC0415
+
+            def _quoted_html(qids: list[str], _conv=conv_id) -> dict:
+                # the quoted messages as the server has them (one page): the sender proves a message is Bob's own
+                wanted = {str(q) for q in qids}
+                return {str(m.get("id")): m for m in api_client.get_messages(_conv, n=200)
+                        if str(m.get("id")) in wanted}
+
+            _files_note = _bf.note_for(raw_text, msg.get("raw_html", ""), chat_name, fetch_quoted=_quoted_html)
+        except Exception as exc:  # noqa: BLE001 -- the reply goes on without it
+            print(f"[watch] bob_files: {exc}", file=sys.stderr, flush=True)
 
         _extra_env = {
             "BOB_CURRENT_CHAT": chat_name,
+            "BOB_CURRENT_CONV": conv_id,  # long tools post their progress here
             "BOB_SENDER": msg.get("sender", ""),
             "BOB_SENDER_MRI": msg.get("sender_mri", ""),
+            # the requester's own words: write tools check their arguments against it, so text
+            # read through tool results cannot trigger a write
+            "BOB_SENDER_TEXT": raw_text[:4000],
         }
         _allow_web = _internet_allows(_internet_for(chat_name, chat_config or {}), is_owner)
+        _sw = None                       # the "still working" note of the plain reply path, if any
         if _GRILL_START_RE.search(raw_text):
             state["grill_active"] = True
             state["grill_start_seq"] = seq
@@ -3272,43 +3551,30 @@ def _process_chat_messages(
             t0 = _time_mod.time()
             _user_ctx = _load_user_context(msg.get("sender_mri", ""))
             _private_notes = _load_private_notes(chat_name)
+            if _files_note:
+                _private_notes = ((_private_notes or "") + "\n\n" + _files_note).strip()
             if persona and _image_paths:
                 _attach_note = "Załączniki z wiadomości:\n" + "\n".join(
                     f"  {p}" for p in _image_paths
                 )
                 _private_notes = ((_private_notes or "") + "\n\n" + _attach_note).strip()
+            _sw_ts = _parse_teams_ts(msg.get("timestamp", ""))
+            _sw_invited = bool(
+                trigger_re.search(text) or is_quote_of_bob or is_continuation
+                or (bool(state.get("last_bob_reply_sender_mri"))
+                    and state.get("last_bob_reply_sender_mri") == msg.get("sender_mri")
+                    and 0 <= _sw_ts - state.get("last_bob_reply_time", 0.0) < _CONTINUATION_WINDOW_S)
+            )
+            _sw = _StillWorking(conv_id, enabled=_sw_invited)      # an uninvited reply may still be dropped
             try:
-                reply = ai.freeform_reply(
-                    text, model=chat_model,
-                    history=chat_history or None, sender=sender,
-                    allow_web=_allow_web,
-                    allowed_mcp=allowed_mcp,
-                    epithets=epithets,
-                    private_notes=_private_notes,
-                    schedule_context=_build_schedule_context(),
-                    live_context=_live_ctx or None,
-                    extra_env=_extra_env,
-                    metrics_ctx={"chat": chat_name},
-                    image_paths=_image_paths or None,
-                    user_memory_context=_user_ctx,
-                    persona=persona,
-                    effort=chat_effort,
-                )
-
-                # MCP cold-start guard: in BOB_MCP_TRANSPORT=http mode, claude CLI
-                # initialises HTTP MCP connections asynchronously and may finish
-                # generating before tool sessions are ready. Sonnet then writes
-                # something like "serwery MCP sie nie polaczyli". One retry — the
-                # second call is warm and gets the tools. Cheap, deterministic.
-                if _looks_like_mcp_cold_start(reply):
-                    print("[watch] -> wykryto cold-start MCP w odpowiedzi, retry...",
-                          flush=True)
+                with _sw:
                     reply = ai.freeform_reply(
-                        text, model=chat_model,
+                        text, model=chat_model, timeout_s=_CHAT_REPLY_TIMEOUT_S,
                         history=chat_history or None, sender=sender,
                         allow_web=_allow_web,
                         allowed_mcp=allowed_mcp,
                         epithets=epithets,
+                        role_knowledge=_role_knowledge_for(chat_name, chat_config),
                         private_notes=_private_notes,
                         schedule_context=_build_schedule_context(),
                         live_context=_live_ctx or None,
@@ -3319,6 +3585,32 @@ def _process_chat_messages(
                         persona=persona,
                         effort=chat_effort,
                     )
+
+                    # MCP cold-start guard: in BOB_MCP_TRANSPORT=http mode, claude CLI
+                    # initialises HTTP MCP connections asynchronously and may finish
+                    # generating before tool sessions are ready. Sonnet then writes
+                    # something like "serwery MCP sie nie polaczyli". One retry — the
+                    # second call is warm and gets the tools. Cheap, deterministic.
+                    if _looks_like_mcp_cold_start(reply):
+                        print("[watch] -> wykryto cold-start MCP w odpowiedzi, retry...",
+                              flush=True)
+                        reply = ai.freeform_reply(
+                            text, model=chat_model, timeout_s=_CHAT_REPLY_TIMEOUT_S,
+                            history=chat_history or None, sender=sender,
+                            allow_web=_allow_web,
+                            allowed_mcp=allowed_mcp,
+                            epithets=epithets,
+                            role_knowledge=_role_knowledge_for(chat_name, chat_config),
+                            private_notes=_private_notes,
+                            schedule_context=_build_schedule_context(),
+                            live_context=_live_ctx or None,
+                            extra_env=_extra_env,
+                            metrics_ctx={"chat": chat_name},
+                            image_paths=_image_paths or None,
+                            user_memory_context=_user_ctx,
+                            persona=persona,
+                            effort=chat_effort,
+                        )
             finally:
                 # Always unlink temp image files after both possible reply calls.
                 for _tmp_p in _image_paths:
@@ -3327,83 +3619,108 @@ def _process_chat_messages(
                     except Exception:
                         pass
 
-        elapsed = _time_mod.time() - t0
-        print(f"[watch] -> {len(reply)}b odp w {elapsed:.1f}s", flush=True)
+        try:  # an error anywhere between the reply and its send must not leave the "still working" note behind
+            elapsed = _time_mod.time() - t0
+            print(f"[watch] -> {len(reply)}b odp w {elapsed:.1f}s", flush=True)
 
-        reply, _gif_plan = _plan_gifs(reply, persona=persona)
-        reply = _extract_and_send_files(reply, conv_id, chat_name)
-        reply = _handle_example_learning(reply, msg.get("sender_mri", ""))
-        reply = _handle_example_idea(reply, sender)
-        reply, _mention_html, _mention_entries = _handle_bob_mention(reply)
+            reply, _gif_plan = _plan_gifs(reply, persona=persona)
+            reply = _extract_and_send_files(reply, conv_id, chat_name)
+            reply = _handle_example_learning(reply, msg.get("sender_mri", ""))
+            reply = _handle_example_idea(reply, sender)
+            reply = _handle_reaction(reply, msg.get("id", ""), conv_id)
+            reply, _mention_html, _mention_entries = _handle_bob_mention(reply)
 
-        if _is_silent_reply(reply):
-            _skip_reason = "silent_sentinel" if reply.strip() else "empty"
-            print(f"[watch] -> {_skip_reason}: pomijam wysylanie ({reply.strip()[:40]!r})",
-                  flush=True)
-            _append_log(log_path, {
-                "ts": _ts(),
-                "chat_name": chat_name,
-                "incoming_text": text,
-                "reply": reply,
-                "action": f"watch_skip_{_skip_reason}",
-            })
-            last_seq_id = max(last_seq_id, seq)
-            continue
+            if _is_silent_reply(reply):
+                _skip_reason = "silent_sentinel" if reply.strip() else "empty"
+                print(f"[watch] -> {_skip_reason}: pomijam wysylanie ({reply.strip()[:40]!r})",
+                      flush=True)
+                _append_log(log_path, {
+                    "ts": _ts(),
+                    "chat_name": chat_name,
+                    "incoming_text": text,
+                    "reply": reply,
+                    "action": f"watch_skip_{_skip_reason}",
+                })
+                if _sw:
+                    _sw.finish(False)
+                last_seq_id = max(last_seq_id, seq)
+                continue
 
-        # Grace period before speaking uninvited: hold the finished reply for a
-        # moment so a human gets the first word — _check_skip_answered() below
-        # then sees their message and drops ours. Only for replies nobody asked
-        # for; an explicit call by name is answered at full speed. Time already
-        # spent generating counts towards the window, so a slow answer waits less.
-        # The sleep blocks this chat's worker only (one thread + one lock per
-        # chat), and messages arriving during the hold are picked up by the next
-        # tick — which is what we want anyway: they are part of the answer.
-        # Deliberately not applied on the catch-up path: that one fires on a
-        # backlog after downtime, where the conversation is already over.
-        _hold_s = _hold_s_for(chat_name, chat_config)
-        if _hold_s and not trigger_re.search(text):
-            _wait = _hold_s - (_time_mod.time() - t0)
-            if _wait > 0:
+            # Grace period before speaking uninvited: hold the finished reply for a
+            # moment so a human gets the first word — _check_skip_answered() below
+            # then sees their message and drops ours. Only for replies nobody asked
+            # for; an explicit call by name is answered at full speed. Time already
+            # spent in the queue and generating counts towards the window (it runs from
+            # the message's own timestamp - _hold_wait_s), so a backlog does not pile up.
+            # A reply to the bot itself - a quote of its message, or the same sender
+            # writing within _CONTINUATION_WINDOW_S of its last answer to them - is
+            # invited and goes out at once.
+            # The sleep blocks this chat's worker only (one thread + one lock per
+            # chat), and messages arriving during the hold are picked up by the next
+            # tick — which is what we want anyway: they are part of the answer.
+            # Deliberately not applied on the catch-up path: that one fires on a
+            # backlog after downtime, where the conversation is already over.
+            _hold_s = _hold_s_for(chat_name, chat_config)
+            if _hold_s:
+                _msg_ts = _parse_teams_ts(msg.get("timestamp", ""))
+                _answers_bot = (
+                    bool(state.get("last_bob_reply_sender_mri"))
+                    and state.get("last_bob_reply_sender_mri") == msg.get("sender_mri")
+                    and 0 <= _msg_ts - state.get("last_bob_reply_time", 0.0) < _CONTINUATION_WINDOW_S
+                )
+                _invited = bool(
+                    trigger_re.search(text) or is_quote_of_bob or is_continuation or _answers_bot
+                )
+                _wait = _hold_wait_s(_hold_s, _msg_ts, _time_mod.time(), _invited)
+                if _wait > 0:
+                    print(
+                        f"[watch] -> hold {_wait:.0f}s: czekam, czy ktos odpisze "
+                        "(odpowiedz nieproszona)",
+                        flush=True,
+                    )
+                    _time_mod.sleep(_wait)
+
+            _skip, _skip_reason = _check_skip_answered(
+                conv_id, seq, msg["id"], text, reply,
+            )
+            if _skip:
                 print(
-                    f"[watch] -> hold {_wait:.0f}s: czekam, czy ktos odpisze "
-                    "(odpowiedz nieproszona)",
+                    f"[watch] -> juz odpowiedziane: pomijam wysylanie ({_skip_reason[:60]!r})",
                     flush=True,
                 )
-                _time_mod.sleep(_wait)
+                _append_log(log_path, {
+                    "ts": _ts(),
+                    "chat_name": chat_name,
+                    "sender": sender,
+                    "msg_id": msg["id"],
+                    "action": "watch_skip_answered",
+                    "reason": _skip_reason,
+                    "original_question": text,
+                    "skipped_reply": reply,
+                })
+                if _sw:
+                    _sw.finish(False)
+                last_seq_id = max(last_seq_id, seq)
+                continue
 
-        _skip, _skip_reason = _check_skip_answered(
-            conv_id, seq, msg["id"], text, reply,
-        )
-        if _skip:
-            print(
-                f"[watch] -> juz odpowiedziane: pomijam wysylanie ({_skip_reason[:60]!r})",
-                flush=True,
+            sent = api_client.reply_to_message(
+                reply,
+                msg["id"],
+                sender,
+                text,
+                conv_id,
+                msg.get("sender_mri", ""),
+                mentions=_mention_entries or None,
+                mentions_html=_mention_html,
+                persona=persona,
             )
-            _append_log(log_path, {
-                "ts": _ts(),
-                "chat_name": chat_name,
-                "sender": sender,
-                "msg_id": msg["id"],
-                "action": "watch_skip_answered",
-                "reason": _skip_reason,
-                "original_question": text,
-                "skipped_reply": reply,
-            })
-            last_seq_id = max(last_seq_id, seq)
-            continue
-
-        sent = api_client.reply_to_message(
-            reply,
-            msg["id"],
-            sender,
-            text,
-            conv_id,
-            msg.get("sender_mri", ""),
-            mentions=_mention_entries or None,
-            mentions_html=_mention_html,
-            persona=persona,
-        )
-        state["last_reply_ts"] = _time_mod.time()
+            state["last_reply_ts"] = _time_mod.time()
+            if _sw:
+                _sw.finish(bool(sent))
+        except BaseException:
+            if _sw:
+                _sw.finish(False)
+            raise
         if sent:
             _execute_gif_plan(_gif_plan, conv_id, persona=persona)
         _send_mode = "cytat REST"
@@ -3609,6 +3926,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
     # Resolve conversation IDs for all watched chats.
     # Priority: conv_id from chat-config.json → autodetect via Teams API.
     chat_convs: list[tuple[str, str]] = []
+    ingest_convs: list[tuple[str, str]] = []  # ingest_only chats: never reach the reply loop
     for chat_name in watch_chats:
         conv_id = _conv_id_override_for(chat_name, chat_config) or _resolve_conv_id(chat_name)
         if not conv_id:
@@ -3616,8 +3934,13 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                   f"Dodaj 'conv_id' w chat-config.json jako fallback.", file=sys.stderr)
         else:
             src = "config" if _conv_id_override_for(chat_name, chat_config) else "autodetect"
+            if _ingest_only_for(chat_name, chat_config):
+                ingest_convs.append((chat_name, conv_id))
+                print(f"[watch] {chat_name!r}: ingest-only (bez odpowiedzi)", flush=True)
+                continue
             chat_convs.append((chat_name, conv_id))
             print(f"[watch] Aktywuje chat: {chat_name!r} ({src}, conv_id={conv_id})", flush=True)
+    _refresh_receive_only(chat_config, {c for _, c in ingest_convs})
 
     if not chat_convs:
         print("[watch] Brak aktywnych konwersacji — koniec.", file=sys.stderr)
@@ -3635,7 +3958,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
         for _ in range(10):
             if api_client._auth_token:
                 break
-            _time_mod.sleep(0.5)
+            page.wait_for_timeout(500)  # lets the token interceptor run (time.sleep would not)
     if not api_client._auth_token:
         print("[watch] OSTRZEZENIE: Bearer token nie zostal przechwycony — "
               "API moze zwrocic 401. Sprobuj --force-login.", file=sys.stderr, flush=True)
@@ -3744,7 +4067,9 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             for _ in range(20):
                 if api_client._auth_token_gen > gen_before:
                     break
-                _time_mod.sleep(0.5)
+                # wait_for_timeout, not time.sleep: the sync API dispatches the `request` events
+                # (and so the token interceptor) only while Playwright itself is waiting.
+                page.wait_for_timeout(500)
             _last_token_nav_ts = _time_mod.time()
             if api_client._auth_token_gen > gen_before:
                 print(f"[watch] Bearer token odswiezony OK "
@@ -3761,11 +4086,91 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
         except Exception as exc:
             print(f"[watch] BLAD odswiezania tokenu: {exc}", file=sys.stderr, flush=True)
 
+    def _relaunch_teams_page() -> bool:
+        """Open Teams in a FRESH browser context from session.json (what a manual Bob restart does).
+
+        The old page keeps handing back the same dead token once its own sign-in state is stuck.
+        On success the new page replaces `page` for the whole loop and the old context is closed;
+        on failure the new context is closed and the old page stays.
+        """
+        nonlocal page, _last_token_nav_ts
+        gen_before = api_client._auth_token_gen
+        old_ctx = page.context
+        ctx = None
+        new_page = None
+        loaded = False
+        try:
+            ctx = old_ctx.browser.new_context(storage_state=str(SESSION_FILE))
+            new_page = ctx.new_page()
+            _attach_token_interceptor(new_page)
+            _attach_ic3_token_interceptor(new_page)
+            if args.sniff_api:
+                _start_api_sniffer(new_page)
+            new_page.goto(TEAMS_URL, wait_until="domcontentloaded", timeout=60000)
+            loaded = True
+            for _ in range(60):
+                if api_client._auth_token_gen > gen_before:
+                    break
+                new_page.wait_for_timeout(500)
+        except Exception as exc:
+            print(f"[watch] BLAD ponownego otwarcia Teams: {exc}", file=sys.stderr, flush=True)
+        # Swap only to a page that actually loaded Teams; a token that arrived meanwhile through the
+        # old page's listener is kept either way.
+        if loaded and new_page is not None and api_client._auth_token_gen > gen_before:
+            page = new_page
+            _last_token_nav_ts = _time_mod.time()
+            try:
+                old_ctx.close()
+            except Exception:
+                pass
+            print("[watch] Teams otwarty od nowa (session.json) — nowy token OK.", flush=True)
+            return True
+        if ctx is not None:
+            try:
+                ctx.close()
+            except Exception:
+                pass
+        print("[watch] Teams otwarty od nowa, ale token dalej bez zmiany.", file=sys.stderr, flush=True)
+        return False
+
+    def _mac_alert(text: str) -> None:
+        # Teams is unreachable without a token, so the alert goes to the desktop instead.
+        try:
+            subprocess.run(["osascript", "-e", f'display notification {json.dumps(text)} with title "Bob"'],
+                           timeout=10, check=False)
+        except Exception as exc:
+            print(f"[watch] powiadomienie macOS nieudane: {exc}", file=sys.stderr, flush=True)
+
+    def _token_event(event: str, **extra) -> None:
+        _append_log(log_path, {"ts": _ts(), "event": event, **extra})
+
+    def _handle_token_health(changed: bool) -> None:
+        now = _time_mod.time()
+        minutes = _token_health.dead_minutes(now)
+        action = _token_health.after_refresh(changed, now)
+        if action == "relaunch":
+            _token_event("teams_token_relaunch", failed_refreshes=_token_health.failed_refreshes)
+            if _relaunch_teams_page():
+                action = _token_health.after_refresh(True, _time_mod.time())
+        elif action == "alert":
+            _token_event("teams_token_stuck", minutes=minutes)
+            _mac_alert(f"Token Teams nie odnawia się od {minutes} min — Bob nie czyta czatów. Zaloguj się "
+                       f"w oknie przeglądarki albo zrestartuj Boba.")
+        if action == "recovered":
+            _token_event("teams_token_recovered", minutes=minutes)
+            if minutes >= 2:
+                api_client.send_message(f"Bob: przez ~{minutes} min nie miałem dostępu do Teams (token się nie "
+                                        f"odnawiał). Odzyskałem go sam — wiadomości z tego czasu czytam teraz.",
+                                        api_client.NOTES_CONV_ID)
+
+    _token_health = token_health.TokenHealth()
+
     _last_stats_ts: float = 0.0
     _last_notif_check: float = 0.0
-    _last_sharepoint_ts: float = 0.0
+    _last_sharepoint_ts: float = _timer_last("sharepoint")
+    _last_panel_approvals_ts: float = 0.0
     _last_refresh_ts: float = 0.0
-    _last_sp_session_warm_ts: float = 0.0
+    _last_sp_session_warm_ts: float = _timer_last("sp_session_warm")
     _last_broadcast_ts: float = 0.0
     _last_daemon_watchdog_ts: float = _time_mod.time()
     _MIN_REFRESH_COOLDOWN_S = 30  # ignore 401 flags for 30s after a refresh
@@ -3781,6 +4186,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
         try:
             tick += 1
             _chat_config_mtime = _reload_chat_config_if_changed(chat_config, _CHAT_CONFIG_PATH, _chat_config_mtime)
+            _refresh_receive_only(chat_config, {c for _, c in ingest_convs})
 
             # Proactive token refresh — navigate browser every 40 min to keep token alive.
             # Cooldown: after a refresh, suppress 401-triggered re-refreshes for 30s.
@@ -3790,20 +4196,34 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             since_last_refresh = _time_mod.time() - _last_refresh_ts
             _backoff_idx = min(_noop_refresh_streak, len(_NOOP_REFRESH_BACKOFF_S) - 1)
             _refresh_cooldown = max(_MIN_REFRESH_COOLDOWN_S, _NOOP_REFRESH_BACKOFF_S[_backoff_idx])
-            needs_refresh_401 = api_client._needs_token_refresh and since_last_refresh >= _refresh_cooldown
-            if needs_refresh_401 or token_age >= _TOKEN_REFRESH_INTERVAL_S:
-                reason = "401 wykryty" if needs_refresh_401 else f"token ma {token_age/60:.0f} min"
+            # Expired token: retried every minute (feeds relaunch / alert); before the expiry a
+            # proactive refresh instead of waiting for the first 401 (token_health.plan_refresh).
+            _plan = token_health.plan_refresh(now=_time_mod.time(), token=api_client._auth_token,
+                                              flagged_401=api_client._needs_token_refresh,
+                                              since_last_refresh=since_last_refresh, base_cooldown=_refresh_cooldown)
+            token_expired, needs_refresh_401, expiring = _plan["expired"], _plan["needs_401"], _plan["expiring"]
+            if needs_refresh_401 or expiring or token_age >= _TOKEN_REFRESH_INTERVAL_S:
+                reason = ("401 wykryty" if needs_refresh_401 else "token wygasa za <10 min" if expiring
+                          else f"token ma {token_age/60:.0f} min")
                 if needs_refresh_401 and _noop_refresh_streak:
                     reason += f", {_noop_refresh_streak}x bez zmiany tokenu"
                 print(f"[watch] Token refresh ({reason})", flush=True)
+                # A proactive refresh that hands back the same, still valid token is normal (Teams caches
+                # it until its renewal window) and must not build up the 401 back-off below.
                 api_client._needs_token_refresh = False  # clear before refresh, not after
                 _last_refresh_ts = _time_mod.time()
                 _gen_before_refresh = api_client._auth_token_gen
                 _refresh_token_via_browser()
                 if api_client._auth_token_gen > _gen_before_refresh:
                     _noop_refresh_streak = 0
-                else:
+                elif token_health.counts_for_backoff(changed=False, needs_401=needs_refresh_401, expired=token_expired):
                     _noop_refresh_streak += 1
+                # Only a refresh made with an already expired token counts towards relaunch / alert:
+                # a 401 with a valid token has another cause and a new browser won't fix it.
+                if token_expired:
+                    _handle_token_health(api_client._auth_token_gen > _gen_before_refresh)
+                    if api_client._auth_token_gen > _gen_before_refresh:
+                        _noop_refresh_streak = 0  # the relaunch brought a new token
 
             # Post/edit stats to Notatki every 10 min — run in executor so the
             # subprocess call does not block the main poll loop for up to 30 s.
@@ -3845,6 +4265,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                 print("[watch] URLOPY_SHAREPOINT_URL not configured — urlopy poll disabled", flush=True)
             if _time_mod.time() - _last_sharepoint_ts >= _SHAREPOINT_POLL_INTERVAL_S:
                 _last_sharepoint_ts = _time_mod.time()
+                _timer_mark("sharepoint", _last_sharepoint_ts)
                 _sp_script = Path(__file__).parent / "sharepoint_poller.py"
                 _sp_log_path = args.log_file
                 def _sharepoint_task(_script=_sp_script, _lp=_sp_log_path):
@@ -3886,6 +4307,25 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                         )
                 _executor.submit(_sharepoint_task)
 
+            # Yes/no requests opened in Bob's panel (Claude Code, automations): each posted to the control chat
+            # once, so the owner can answer "Bob, zatwierdzam apr-..." away from the computer (the panel
+            # is loopback-only).
+            if _time_mod.time() - _last_panel_approvals_ts >= _PANEL_APPROVALS_INTERVAL_S:
+                _last_panel_approvals_ts = _time_mod.time()
+
+                def _panel_approvals_task():
+                    if not _PANEL_APPROVALS_LOCK.acquire(blocking=False):
+                        return
+                    try:
+                        from bob_panel import approvals as _approvals  # noqa: PLC0415
+                        _approvals.announce_pending(
+                            lambda text: api_client.send_message(text, api_client.NOTES_CONV_ID))
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[watch] panel approvals blad: {exc}", file=sys.stderr, flush=True)
+                    finally:
+                        _PANEL_APPROVALS_LOCK.release()
+                _executor.submit(_panel_approvals_task)
+
             # Check broadcast schedule every 30 s — fire generate/dry-run/send phases
             # as subprocesses on Sprint Planning days. Non-blocking via executor.
             if _time_mod.time() - _last_broadcast_ts >= _BROADCAST_CHECK_INTERVAL_S:
@@ -3920,6 +4360,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             # traffic through a PAC proxy that blocks direct SharePoint connections.
             if _time_mod.time() - _last_sp_session_warm_ts >= _SP_SESSION_WARM_INTERVAL_S:
                 _last_sp_session_warm_ts = _time_mod.time()
+                _timer_mark("sp_session_warm", _last_sp_session_warm_ts)
                 def _sp_session_warm_task():
                     try:
                         from playwright.sync_api import sync_playwright as _sync_pw
@@ -4291,6 +4732,13 @@ def main(argv=None) -> None:
 
     # Session check / re-login.
     is_fresh = ensure_fresh_session()
+    if (not is_fresh or args.force_login) and not sys.stdin.isatty():
+        # started by Bob's panel (no terminal): login.py would wait for an Enter nobody can press. The panel
+        # logs in itself ("Zaloguj do Teams", login.py --done-file) and only then starts Bob.
+        print("BLAD: sesja Teams wygasla - zaloguj sie w panelu Boba: "
+              f"http://localhost:{os.environ.get('BOB_PANEL_PORT') or '3006'} (Zaloguj do Teams).",
+              file=sys.stderr, flush=True)
+        sys.exit(4)
     if not is_fresh or args.force_login:
         if args.force_login and SESSION_FILE.exists():
             SESSION_FILE.unlink(missing_ok=True)
@@ -4434,6 +4882,17 @@ def main(argv=None) -> None:
         finally:
             import contextlib
             import io
+            # Keep the live session for the next start: a restart from the panel must not need a new
+            # SSO login. session.json is otherwise saved only by the 6-hourly SharePoint warm-up. The
+            # watch loop may have swapped the context, so take the newest one with a Teams page.
+            for _c in reversed(browser.contexts):
+                if any("teams" in (pg.url or "") for pg in _c.pages):
+                    try:
+                        save_storage_state(_c)
+                        print("Sesja zapisana (session.json).", file=sys.stderr, flush=True)
+                    except Exception as exc:  # noqa: BLE001 -- never block the shutdown
+                        print(f"Nie zapisano sesji: {exc}", file=sys.stderr, flush=True)
+                    break
             with contextlib.redirect_stderr(io.StringIO()):
                 try:
                     browser.close()

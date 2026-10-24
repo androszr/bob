@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "teams_agent"))
 import stats  # noqa: E402
 
-_CET = timezone(timedelta(hours=2))  # CEST (summer), same as stats._CET
+_CET = stats._CET  # Europe/Warsaw, same as stats.py
 _UTC = UTC
 
 
@@ -390,79 +390,72 @@ def test_render_html_perf_not_available_shows_no_data():
 
 
 def test_render_html_perf_not_available_does_not_contain_dollar():
-    """When perf not available, render_html must not show cost ($) in perf section."""
+    """When perf is not available, no cost is shown."""
     html = stats.render_html(_minimal_stats(), [], perf={"available": False})
-    # Should not have cost rows
-    assert "Koszt" not in html
+    assert "$" not in html
 
 
-def test_render_html_full_perf_contains_dollar(tmp_path):
-    """render_html with full perf data shows cost ($) and section headers."""
+def _perf_two_chats(tmp_path):
     p = tmp_path / "perf.jsonl"
-    records = [
-        {
-            "ts": _ts_today(), "model": "haiku",
-            "input_tokens": 500,
-            "output_tokens": 100,
-            "cache_read_input_tokens": 1000,
-            "cache_creation_input_tokens": 0,
-            "total_cost_usd": 0.005,
-            "duration_ms": 800, "ttft_ms": 250,
-            "ctx": {"chat": "Alpha"},
-        },
-    ]
-    _write_perf(p, records)
+    rec = {"input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 900,
+           "cache_creation_input_tokens": 0, "duration_ms": 3000, "ttft_ms": 900}
+    _write_perf(p, [
+        {**rec, "ts": _ts_today(), "model": "claude-sonnet-5-5", "total_cost_usd": 3.0, "ctx": {"chat": "Projekt"}},
+        {**rec, "ts": _ts_today(), "model": "claude-haiku-4-5", "total_cost_usd": 0.5, "ctx": {"chat": "Notatki"}},
+        {**rec, "ts": _ts_yesterday(hour=1), "model": "claude-sonnet-5-5", "total_cost_usd": 7.0, "ctx": {}},
+    ])
+    return p
+
+
+def test_render_html_headline_channels_and_notes(tmp_path):
+    p = _perf_two_chats(tmp_path)
     perf = stats.aggregate_perf(p, _midnight_cet())
+    activity = {"Projekt": {"wiadomosci": 10, "odpowiedz": 2, "milczenie": 8, "juz_odpowiedziane": 0, "last_ts": None}}
+    html = stats.render_html(_minimal_stats(), [], perf=perf, activity=activity, costs=stats.daily_costs(p))
+    assert "<strong>10</strong> wiadomości do Boba" in html and "<strong>2</strong> odpowiedzi" in html
+    assert "<strong>8</strong> bez odpowiedzi" in html and "3,50 $" in html
+    assert "<strong>Projekt</strong> to 86% dzisiejszego kosztu, 8 z 10 wiadomości bez odpowiedzi" in html
+    assert html.index(">Projekt<") < html.index(">Notatki<")                 # most expensive channel first
+    assert "Modele:" in html and "sonnet-5-5" in html                          # >1 model -> one line
+    assert "Koszt - ostatnie 7 dni" in html and "dziś 4 $" in html
+    assert "3,0 s" in html and "Latencja" not in html                          # plain words, no ms tables
 
-    html = stats.render_html(_minimal_stats(), [], perf=perf)
-    assert "$" in html
-    assert "Latencja" in html
-    assert "Tokeny" in html
-    assert "Koszt" in html
-    assert "Cache hit-rate" in html
-    assert "Breakdown per model" in html
 
-
-def test_render_html_full_perf_model_breakdown(tmp_path):
-    """render_html shows model name in breakdown section."""
-    p = tmp_path / "perf.jsonl"
-    records = [
-        {
-            "ts": _ts_today(), "model": "claude-haiku-4-5",
-            "input_tokens": 200, "output_tokens": 30,
-            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
-            "total_cost_usd": 0.001, "duration_ms": 400, "ttft_ms": 120,
-            "ctx": {"chat": "Alpha"},
-        },
-    ]
-    _write_perf(p, records)
+def test_cost_compared_with_yesterday_at_the_same_time(tmp_path):
+    p = _perf_two_chats(tmp_path)
     perf = stats.aggregate_perf(p, _midnight_cet())
+    costs = stats.daily_costs(p)
+    assert costs["yday_so_far"] == 7.0
+    html = stats.render_html(_minimal_stats(), [], perf=perf, costs=costs)
+    assert "wobec wczoraj o tej porze: 7,00 $" in html
 
-    html = stats.render_html(_minimal_stats(), [], perf=perf)
-    assert "claude-haiku-4-5" in html
+
+def test_channel_activity_counts_bobs_decisions(tmp_path):
+    log = tmp_path / "log.jsonl"
+    rows = [{"ts": _ts_today(), "chat_name": "A", "action": "watch_send", "send_ok": True},
+            {"ts": _ts_today(), "chat_name": "A", "action": "watch_skip_silent_sentinel"},
+            {"ts": _ts_today(), "chat_name": "A", "action": "watch_skip_answered"},
+            {"ts": _ts_today(), "chat_name": "A", "action": "watch_skip_empty"},
+            {"ts": _ts_today(), "chat_name": "['A', 'B']", "action": "watch_stop"},
+            {"ts": _ts_yesterday(), "chat_name": "A", "action": "watch_send", "send_ok": True}]
+    log.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    a = stats.channel_activity(log, _midnight_cet())
+    assert list(a) == ["A"]
+    assert (a["A"]["wiadomosci"], a["A"]["odpowiedz"], a["A"]["milczenie"], a["A"]["juz_odpowiedziane"]) == (3, 1, 1, 1)
 
 
-def test_render_html_perf_cache_hit_rate_displayed(tmp_path):
-    """Cache hit-rate percentage appears in rendered HTML."""
-    p = tmp_path / "perf.jsonl"
-    records = [
-        {
-            "ts": _ts_today(), "model": "sonnet",
-            "input_tokens": 100,
-            "output_tokens": 20,
-            "cache_read_input_tokens": 900,
-            "cache_creation_input_tokens": 0,
-            "total_cost_usd": 0.003,
-            "duration_ms": 1000, "ttft_ms": 300,
-            "ctx": {},
-        },
-    ]
-    _write_perf(p, records)
-    perf = stats.aggregate_perf(p, _midnight_cet())
+def test_unchanged_message_is_not_edited_again(monkeypatch):
+    state = {"message_id": "today-1", "conv_id": "48:notes", "posted_at": _ts_today()}
+    fake, saved = _patch_post(monkeypatch, state)
+    stats.post_or_edit("<p>stan na 10:00</p><p>body</p>")
+    assert len(fake.edit_calls) == 1 and saved["body"] == "<p>body</p>"
+    fake2, _ = _patch_post(monkeypatch, {**state, "body": "<p>body</p>"})
+    stats.post_or_edit("<p>stan na 10:10</p><p>body</p>")
+    assert not fake2.edit_calls and not fake2.send_calls
 
-    html = stats.render_html(_minimal_stats(), [], perf=perf)
-    # 900/(100+900+0) = 90.0%
-    assert "90.0%" in html
+
+def test_today_follows_warsaw_time_across_the_winter_change():
+    assert str(stats._CET) == "Europe/Warsaw"
 
 
 # ---------------------------------------------------------------------------
@@ -695,68 +688,35 @@ def test_aggregate_otel_filters_yesterday(tmp_path):
 
 
 def test_render_html_otel_none_does_not_raise():
-    """render_html with otel=None must not raise and shows brak note."""
+    """render_html with otel=None must not raise."""
     html = stats.render_html(_minimal_stats(), [], otel=None)
     assert isinstance(html, str)
-    assert "brak danych OTEL" in html
 
 
-def test_render_html_otel_not_available_shows_no_data():
-    """render_html with otel={'available': False} shows brak danych OTEL."""
-    html = stats.render_html(_minimal_stats(), [], otel={"available": False})
-    assert "brak danych OTEL" in html
-
-
-def test_render_html_otel_available_shows_narzedzia_header(tmp_path):
-    """render_html with available OTEL data contains 'OTEL: Narzedzia' header."""
+def test_render_html_leaves_otel_tables_to_the_panel(tmp_path):
+    """The phone message has no OTEL tables (no data source today); aggregate_otel stays usable for scripts."""
     p = tmp_path / "otel.jsonl"
-    records = [
-        {
-            "ts": _ts_today(),
-            "span_type": "tool_use",
-            "session_id": "s1",
-            "tool_name": "Read",
-            "duration_ms": 120.0,
-            "success": True,
-            "source": "dev",
-        },
-    ]
-    _write_otel(p, records)
+    _write_otel(p, [{"ts": _ts_today(), "span_type": "tool_use", "session_id": "s1", "tool_name": "Read",
+                     "duration_ms": 120.0, "success": True, "source": "dev"}])
     otel = stats.aggregate_otel(p, _midnight_cet())
+    assert otel.get("available")
+    for o in (otel, {"available": False}):
+        html = stats.render_html(_minimal_stats(), [], otel=o)
+        assert "OTEL" not in html and "brak danych OTEL" not in html
 
-    html = stats.render_html(_minimal_stats(), [], otel=otel)
-    assert "OTEL: Narzedzia" in html
-    assert "Read" in html
+
+def test_daily_costs_sum_money_as_decimals(tmp_path):
+    from decimal import Decimal  # noqa: PLC0415
+    p = tmp_path / "perf.jsonl"
+    _write_perf(p, [{"ts": _ts_today(), "total_cost_usd": 0.1} for _ in range(3)]
+                + [{"ts": _ts_today(), "total_cost_usd": "n/a"}])
+    costs = stats.daily_costs(p)
+    today = list(costs["days"].values())[-1]
+    # as floats 0.1 + 0.1 + 0.1 would be 0.30000000000000004
+    assert today == Decimal("0.3") and isinstance(today, Decimal)
+    assert "0,30 $" in stats._usd(today)
 
 
-def test_render_html_otel_does_not_break_perf_section(tmp_path):
-    """render_html with both perf and otel produces both sections without error."""
-    pp = tmp_path / "perf.jsonl"
-    po = tmp_path / "otel.jsonl"
-    _write_perf(pp, [
-        {
-            "ts": _ts_today(), "model": "haiku",
-            "input_tokens": 100, "output_tokens": 10,
-            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
-            "total_cost_usd": 0.001, "duration_ms": 300, "ttft_ms": 100,
-            "ctx": {"chat": "Alpha"},
-        },
-    ])
-    _write_otel(po, [
-        {
-            "ts": _ts_today(),
-            "span_type": "tool_use",
-            "session_id": "s1",
-            "tool_name": "Bash",
-            "duration_ms": 200.0,
-            "success": True,
-            "source": "dev",
-        },
-    ])
-    perf = stats.aggregate_perf(pp, _midnight_cet())
-    otel = stats.aggregate_otel(po, _midnight_cet())
-
-    html = stats.render_html(_minimal_stats(), [], perf=perf, otel=otel)
-    assert "Latencja" in html
-    assert "OTEL: Narzedzia" in html
-    assert "Bash" in html
+def test_daily_costs_without_a_file_has_no_yesterday_figure(tmp_path):
+    costs = stats.daily_costs(tmp_path / "nie-ma.jsonl")
+    assert costs["yday_so_far"] is None and len(costs["days"]) == 7

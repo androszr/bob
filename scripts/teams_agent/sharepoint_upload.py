@@ -16,6 +16,13 @@ trickery needed). The caller then sends a normal text message with a link via
 `api_client.send_message`, which is the same reliable REST path already used
 for every other Bob reply.
 
+The primary path is SharePoint REST (no browser): FedAuth cookies from
+attachments.ensure_cookies -> POST /_api/contextinfo (form digest) -> POST
+GetFolderByServerRelativePath(...)/Files/AddUsingPath(..., overwrite=false). The answer names the
+stored file, so there is nothing to scrape. Expired cookies (401/403) -> one refresh and retry;
+a name collision -> the name gets a numeric suffix. The Playwright UI flow below stays only as
+the fallback when REST fails for another reason.
+
 Public API:
   upload_file(file_path, folder_url=DEFAULT_FOLDER_URL) -> str | None
        Returns a direct URL to the uploaded file, or None on failure.
@@ -37,6 +44,27 @@ SESSION_FILE = Path(__file__).parent / "session.json"
 
 # SHAREPOINT_UPLOAD_FOLDER_URL; empty = uploads are not configured (upload_file says so).
 DEFAULT_FOLDER_URL = org_config.SHAREPOINT_UPLOAD_FOLDER_URL
+
+
+def _site_and_path(folder_url: str) -> tuple[str, str]:
+    """(site URL, server-relative folder path) from a ":f:/r/sites/<site>/<library>/<folder>?..." sharing
+    URL; ("", "") when the URL does not have that shape (REST is then skipped, the browser flow runs)."""
+    parsed = urllib.parse.urlparse(folder_url or "")
+    marker = "/:f:/r/"
+    if not parsed.netloc or marker not in parsed.path:
+        return "", ""
+    path = urllib.parse.unquote(parsed.path.split(marker, 1)[1])
+    parts = path.split("/")
+    if len(parts) < 4:
+        return "", ""
+    return f"{parsed.scheme}://{parsed.netloc}/{parts[0]}/{parts[1]}", "/" + path
+
+
+SITE_URL, DEFAULT_FOLDER_PATH = _site_and_path(DEFAULT_FOLDER_URL)
+_REST_TIMEOUT_S = 60
+_REST_NAME_ATTEMPTS = 5
+# SPException code of "file already exists" (the message itself is localised)
+_FILE_EXISTS_CODE = "-2130575257"
 
 _UPLOAD_BUTTON_TEXT = "Utwórz lub przekaż"
 _UPLOAD_MENU_ITEM_TEXT = "Przekazywanie plików"
@@ -64,6 +92,70 @@ def _build_file_url(page_url: str, folder_path: str, filename: str) -> str:
     origin = f"{parsed.scheme}://{parsed.netloc}"
     full_path = f"{folder_path.rstrip('/')}/{filename}"
     return origin + urllib.parse.quote(full_path)
+
+
+def _odata_path(path: str) -> str:
+    """A path inside an OData string literal: quotes doubled, then URL-encoded."""
+    return urllib.parse.quote(path.replace("'", "''"), safe="/")
+
+
+def _suffixed(name: str, n: int) -> str:
+    stem, dot, ext = name.rpartition(".")
+    return f"{stem}-{n}.{ext}" if dot and stem else f"{name}-{n}"
+
+
+def _upload_rest(data: bytes, folder_path: str, dest_name: str, *, session_factory=None,
+                 site_url: str | None = None) -> str | None:
+    """SharePoint REST upload; the file URL, or None when REST did not work (caller falls back)."""
+    import attachments  # noqa: PLC0415 -- shares the SP cookie jar with attachment downloads
+    import requests  # noqa: PLC0415
+
+    site_url = site_url or SITE_URL
+    make = session_factory or requests.Session
+    headers = {"Accept": "application/json;odata=nometadata"}
+    for attempt in (1, 2):
+        cookies = attachments.ensure_cookies(site_url + "/")
+        if "FedAuth" not in cookies:
+            print("[sp-upload] REST: brak ciasteczka FedAuth", file=sys.stderr)
+            return None
+        s = make()
+        s.cookies.update(cookies)
+        try:
+            r = s.post(site_url + "/_api/contextinfo", headers=headers, timeout=_REST_TIMEOUT_S)
+            if r.status_code in (401, 403) and attempt == 1:
+                attachments.invalidate_cookies()
+                continue
+            r.raise_for_status()
+            digest = r.json()["FormDigestValue"]
+            name = dest_name
+            for n in range(1, _REST_NAME_ATTEMPTS + 1):
+                url = (f"{site_url}/_api/web/GetFolderByServerRelativePath(decodedurl='{_odata_path(folder_path)}')"
+                       f"/Files/AddUsingPath(decodedurl='{_odata_path(name)}',overwrite=false)")
+                r = s.post(url, headers={**headers, "X-RequestDigest": digest}, data=data,
+                           timeout=_REST_TIMEOUT_S)
+                if r.status_code == 400 and _FILE_EXISTS_CODE in r.text:
+                    name = _suffixed(dest_name, n + 1)
+                    continue
+                break
+            if r.status_code in (401, 403) and attempt == 1:
+                attachments.invalidate_cookies()
+                continue
+            r.raise_for_status()
+            info = r.json()
+            if int(info.get("Length") or -1) != len(data):
+                print(f"[sp-upload] REST: zapisano {info.get('Length')} B zamiast {len(data)} B",
+                      file=sys.stderr)
+                return None
+            parsed = urllib.parse.urlparse(site_url)
+            file_url = f"{parsed.scheme}://{parsed.netloc}" + urllib.parse.quote(info["ServerRelativeUrl"])
+            print(f"[sp-upload] OK (REST): {info.get('Name')!r} -> {file_url}", file=sys.stderr)
+            return file_url
+        except Exception as exc:  # noqa: BLE001 -- any REST failure -> the UI fallback
+            print(f"[sp-upload] REST blad: {exc}", file=sys.stderr)
+            return None
+        finally:  # cli watch lives for days: no pooled connection left behind per upload
+            s.close()
+    return None
 
 
 def upload_file(
@@ -109,6 +201,16 @@ def upload_file(
 
     dest_name = dest_name or file_path.name
 
+    if folder_url == DEFAULT_FOLDER_URL and SITE_URL:
+        url = _upload_rest(file_path.read_bytes(), DEFAULT_FOLDER_PATH, dest_name)
+        if url:
+            return url
+        print("[sp-upload] REST nie wyszedl - probuje przez przegladarke", file=sys.stderr)
+    return _upload_ui(file_path, folder_url, dest_name, timeout_s)
+
+
+def _upload_ui(file_path: Path, folder_url: str, dest_name: str, timeout_s: float) -> str | None:
+    """Fallback: SharePoint's own upload button in a headless browser (the pre-REST flow)."""
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,

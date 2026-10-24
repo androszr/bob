@@ -19,6 +19,9 @@ Ports between 7101 and 7131 that are not in the table belonged to retired server
 Tool groups per chat (`ai._MCP_GROUPS`): `jira`, `jira_write`, `jira_hypercare`, `todos`,
 `datetime`, `urlopy`, `md_to_mp3`.
 
+Roles map onto the same groups: a role's `dostep` list names groups from `ai._MCP_GROUPS`, so a chat on a role
+gets exactly those servers' tools (see [Roles](running.md#roles)). The table and the ports do not change.
+
 `mcp-config.json` is **generated** by `_refresh_mcp_config()` in `ai.py` (the transport
 depends on `BOB_MCP_TRANSPORT`) - it is in `.gitignore`; do not edit it by hand.
 

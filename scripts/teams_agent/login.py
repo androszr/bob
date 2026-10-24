@@ -13,10 +13,17 @@ NOTE: Requires a real display (X server / macOS Aqua). Do NOT run on a headless
 CI server — the browser will fail with 'Missing X server'.
 
 Usage:
-    python scripts/teams_agent/login.py
+    python scripts/teams_agent/login.py                      # terminal: Enter when logged in
+    python scripts/teams_agent/login.py --done-file PATH     # Bob's panel: "Jestem zalogowany" creates PATH
+
+With --done-file (the panel runs it without a terminal) the Enter is replaced by the file: the panel's button
+creates it, this script then checks the page and saves the session. Closing the browser or 20 minutes without
+the button cancels it.
 """
 
+import argparse
 import sys
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -49,7 +56,33 @@ def _safe_close(browser) -> None:
         pass
 
 
-def main() -> None:
+PANEL_TIMEOUT_S = 20 * 60
+
+
+def _wait_for_panel(page, done_file: Path) -> bool:
+    """Panel mode: True once the panel's "Jestem zalogowany" created done_file; False when the browser was
+    closed or nothing happened for PANEL_TIMEOUT_S."""
+    deadline = time.time() + PANEL_TIMEOUT_S
+    while time.time() < deadline:
+        if done_file.exists():
+            done_file.unlink(missing_ok=True)
+            return True
+        if page.is_closed():
+            return False
+        try:
+            page.wait_for_timeout(1000)
+        except Exception:                               # the browser window was closed
+            return False
+    return False
+
+
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description="Logowanie Teams SSO (session.json).")
+    ap.add_argument("--done-file", help="tryb panelu: zamiast Enter czekaj na ten plik")
+    args = ap.parse_args(argv)
+    done_file = Path(args.done_file) if args.done_file else None
+    if done_file:
+        done_file.unlink(missing_ok=True)
     print("Otwieram przegladarke do logowania Teams SSO...", file=sys.stderr, flush=True)
     with sync_playwright() as p:
         # --proxy-auto-detect intentionally omitted: PAC proxy routes traffic through a
@@ -68,17 +101,26 @@ def main() -> None:
             file=sys.stderr,
             flush=True,
         )
-        print(
-            "Gdy zobaczysz interfejs Teams (lista czatow po lewej stronie), wroc tutaj.",
-            file=sys.stderr,
-            flush=True,
-        )
-        try:
-            input("Nacisnij Enter gdy jestes zalogowany do Teams (Ctrl-C aby anulowac)... ")
-        except (EOFError, KeyboardInterrupt):
-            print("\nAnulowane przez uzytkownika.", file=sys.stderr, flush=True)
-            _safe_close(browser)
-            sys.exit(1)
+        if done_file:
+            print("Gdy zobaczysz interfejs Teams (lista czatow po lewej stronie), kliknij w panelu Boba "
+                  "„Jestem zalogowany”.", file=sys.stderr, flush=True)
+            if not _wait_for_panel(page, done_file):
+                print("Anulowane (zamknieta przegladarka albo 20 min bez potwierdzenia w panelu).",
+                      file=sys.stderr, flush=True)
+                _safe_close(browser)
+                sys.exit(1)
+        else:
+            print(
+                "Gdy zobaczysz interfejs Teams (lista czatow po lewej stronie), wroc tutaj.",
+                file=sys.stderr,
+                flush=True,
+            )
+            try:
+                input("Nacisnij Enter gdy jestes zalogowany do Teams (Ctrl-C aby anulowac)... ")
+            except (EOFError, KeyboardInterrupt):
+                print("\nAnulowane przez uzytkownika.", file=sys.stderr, flush=True)
+                _safe_close(browser)
+                sys.exit(1)
 
         current_url = page.url or ""
         if _looks_like_login(current_url) or "teams.microsoft.com" not in current_url.lower():

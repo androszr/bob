@@ -777,7 +777,8 @@ def get_messages(conversation_id: str = NOTES_CONV_ID, n: int = 20) -> list[dict
         return []
     url = f"{_BASE}/users/ME/conversations/{urllib.parse.quote(conversation_id, safe='')}/messages"
     # Teams chatsvc returns HTTP 400 for pageSize > ~200 on some 1:1 chats, so cap defensively.
-    params = {"view": "msnp24Equivalent", "pageSize": min(max(n * 3, 50), 200)}
+    # n + 10 covers control / system events between polls (5 s); was max(3n, 50) = 60 per chat per tick
+    params = {"view": "msnp24Equivalent", "pageSize": min(max(n + 10, 30), 200)}
     import time as _time
     _last_exc: Exception | None = None
     for _attempt in range(3):
@@ -894,7 +895,8 @@ def _md_to_html(text: str) -> str:
         return f"\x00L{len(links) - 1}\x00"
 
     safe = re.sub(
-        r"\[([^\]]+)\]\((https?://[^\s)]+)\)",
+        # no quotes in the URL: it lands inside href="..." (a quote would open a new attribute)
+        r"\[([^\]]+)\]\((https?://[^\s)\"']+)\)",
         lambda m: _stash(f'<a href="{m.group(2)}">{m.group(1)}</a>'),
         safe,
     )
@@ -907,7 +909,7 @@ def _md_to_html(text: str) -> str:
             url = url[:-1]
         return _stash(f'<a href="{url}">{url}</a>') + trail
 
-    safe = re.sub(r'https?://[^\s<>")]+', _autolink, safe)
+    safe = re.sub(r'https?://[^\s<>")\']+', _autolink, safe)
 
     safe = _JIRA_KEY_RE.sub(
         lambda m: _stash(f'<a href="{_JIRA_URL}/browse/{m.group(1)}">{m.group(1)}</a>'),
@@ -931,9 +933,14 @@ def md_to_html(text: str) -> str:
     return _md_to_html(text)
 
 
+def bob_html(text: str) -> str:
+    """Bob's message body as Teams HTML: the [Bob] prefix + markdown converted."""
+    return f"<p>🧑‍💻<strong>[Bob]</strong>: {_md_to_html(text)}</p>"
+
+
 def send_message(text: str, conversation_id: str = NOTES_CONV_ID) -> bool:
     """Post a message to the conversation, converting markdown to Teams HTML."""
-    return _post(conversation_id, f"<p>🧑‍💻<strong>[Bob]</strong>: {_md_to_html(text)}</p>")
+    return _post(conversation_id, bob_html(text))
 
 
 def send_html_message(
@@ -963,6 +970,8 @@ def edit_message(
     _needs_token_refresh and returns immediately.
     """
     global _needs_token_refresh
+    if _refuse_write(conversation_id, "edit"):
+        return False
     import time as _time
     url = (
         f"{_BASE}/users/ME/conversations/"
@@ -1067,6 +1076,8 @@ def delete_message(msg_id: str, conversation_id: str = NOTES_CONV_ID) -> bool:
     Returns True on success (2xx). Falls back gracefully on error.
     """
     global _needs_token_refresh
+    if _refuse_write(conversation_id, "delete"):
+        return False
     if not _is_bots_own_message(msg_id, conversation_id):
         print(
             f"[api] delete_message ODMOWA — {msg_id} nie wyglada na wiadomosc Boba, "
@@ -1134,9 +1145,33 @@ def reply_to_message(
     )
 
 
-def add_reaction(msg_id: str, conversation_id: str, reaction_type: str) -> bool:
-    """Add an emoji reaction to a Teams message. Currently disabled — endpoint not found."""
-    return False
+def add_reaction(msg_id: str, conversation_id: str, reaction_type: str = "like") -> bool:
+    """Add an emoji reaction (e.g. 'like' = 👍) to a Teams message as the owner's account.
+
+    PUT .../messages/{id}/properties?name=emotions with the emotion as a JSON string —
+    the call Teams web makes: a 2xx and the message's properties.emotions then lists the reaction. Returns True on 2xx.
+    """
+    global _needs_token_refresh
+    if _refuse_write(conversation_id, "reaction"):
+        return False
+    import time as _time
+    url = (
+        f"{_BASE}/users/ME/conversations/"
+        f"{urllib.parse.quote(conversation_id, safe='')}/messages/{msg_id}/properties"
+    )
+    body = {"emotions": json.dumps({"key": reaction_type, "value": int(_time.time() * 1000)})}
+    try:
+        r = _session().put(url, params={"name": "emotions"}, json=body, timeout=10)
+        r.raise_for_status()
+        print(f"[api] add_reaction {reaction_type} ({r.status_code})", file=sys.stderr, flush=True)
+        return True
+    except Exception as exc:
+        if getattr(getattr(exc, "response", None), "status_code", None) == 401:
+            _needs_token_refresh = True
+            print("[api] add_reaction 401 — token wymaga odświeżenia", file=sys.stderr, flush=True)
+        else:
+            print(f"[api] add_reaction błąd: {exc}", file=sys.stderr, flush=True)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -1243,6 +1278,119 @@ def _build_post_body(
     }
 
 
+# Conversations Bob only listens to (chat-config "ingest_only"). Refreshed by cli.py at
+# startup and after every chat-config hot reload. Every write entry point refuses these.
+RECEIVE_ONLY_CONV_IDS: set[str] | frozenset[str] = set()
+
+
+def _seed_receive_only(path: Path | None = None) -> None:
+    """Best-effort import-time seed from chat-config.json so every process that imports this module
+    (broadcast_runner, notifiers, manual CLI) refuses writes to ingest_only chats. Never raises."""
+    try:
+        cfg_path = path or Path(__file__).resolve().parents[2] / "chat-config.json"
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        chats = data.get("chats", data) if isinstance(data, dict) else {}  # real file: {"_comment", "chats"}
+        for cfg in chats.values():
+            if isinstance(cfg, dict) and cfg.get("ingest_only") and isinstance(cfg.get("conv_id"), str):
+                RECEIVE_ONLY_CONV_IDS.add(cfg["conv_id"])
+    except Exception:  # noqa: BLE001 -- best effort, cli refreshes the set anyway
+        pass
+
+
+_seed_receive_only()
+
+
+def _refuse_write(conv_id: str, op: str) -> bool:
+    """True (and logs) when conv_id is receive-only: the caller must fail without sending."""
+    if conv_id in RECEIVE_ONLY_CONV_IDS:
+        print(f"[api] ODMOWA {op}: receive-only conv", file=sys.stderr, flush=True)
+        return True
+    return False
+
+
+def send_ams_image_message(
+    caption_html: str,
+    image_file: Path,
+    conversation_id: str,
+    allowed_conv_id: str | None = None,
+    after_html: str = "",
+    mentions: list[dict] | None = None,
+) -> str | None:
+    """Upload a static image (PNG) to AMS and post caption_html + the inline <img> (+ after_html).
+
+    mentions: properties["mentions"] entries for @mention chips already in caption_html /
+    after_html (see build_mentions_html()).
+
+    Reuses the gif upload flow (same object-create + content PUT, ic3 token). When
+    allowed_conv_id is given the send is refused unless conversation_id equals it
+    (callers that must never post anywhere else). The
+    _post_returning_id receive-only guard still applies. Returns the message id or None.
+    """
+    if allowed_conv_id is not None and conversation_id != allowed_conv_id:
+        print("[api] ODMOWA ams_image: inna konwersacja niz dozwolona", file=sys.stderr, flush=True)
+        return None
+    if _refuse_write(conversation_id, "ams_image"):
+        return None
+    uploaded = _ams_upload_gif(image_file, conversation_id)  # generic: filename + bytes
+    if uploaded is None:
+        return None
+    object_id, byte_count = uploaded
+    img_url = f"{_AMS_VIEW_BASE}/v1/objects/{object_id}/views/imgo"
+    img_tag = (
+        f'<img src="{img_url}" itemtype="http://schema.skype.com/AMSImage" '
+        f'data-inline-image="true" data-file-size="{byte_count}" '
+        f'alt="{_escape(image_file.stem)}" id="{object_id}" itemid="{object_id}"/>'
+    )
+    return _post_returning_id(
+        conversation_id, f"{caption_html}<p>{img_tag}</p>{after_html}", mentions, amsreferences=[object_id])
+
+
+def fetch_raw_messages_since(conversation_id: str, after_seq: int, max_pages: int = 20) -> list[dict]:
+    """Raw chatsvc `Message` items with sequenceId > after_seq, ascending by sequenceId.
+
+    Paginates via _metadata.backwardLink (newest first) and stops once a page's lowest
+    sequenceId <= after_seq. Returns [] without side effects on 401 / pending token
+    refresh / any error, so the caller never moves its cursor on a failed fetch.
+    """
+    global _needs_token_refresh
+    if _needs_token_refresh:
+        return []
+    url: str | None = f"{_BASE}/users/ME/conversations/{urllib.parse.quote(conversation_id, safe='')}/messages"
+    params: dict | None = {"view": "msnp24Equivalent", "pageSize": 200}
+    found: dict[int, dict] = {}
+    for _page in range(max_pages):
+        if not url:
+            break
+        try:
+            r = _session().get(url, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 401:
+                _needs_token_refresh = True
+            print(f"[api] fetch_raw_messages_since blad (status={status}): {exc}", file=sys.stderr, flush=True)
+            return []
+        msgs = data.get("messages", [])
+        seqs = []
+        for m in msgs:
+            try:
+                seq = int(m.get("sequenceId"))
+            except (TypeError, ValueError):
+                continue
+            seqs.append(seq)
+            if seq > after_seq and m.get("type") == "Message":
+                found[seq] = m
+        url = (data.get("_metadata") or {}).get("backwardLink")
+        if url and not str(url).startswith(_BASE + "/"):
+            print("[api] fetch_raw_messages_since: backwardLink poza Teams, nie podazam", file=sys.stderr, flush=True)
+            url = None                                   # the bearer session goes to the Teams API only
+        params = None  # backwardLink already carries the query
+        if not seqs or min(seqs) <= after_seq:
+            break
+    return [found[k] for k in sorted(found)]
+
+
 def _post(conversation_id: str, content: str, mentions: list[dict] | None = None) -> bool:
     return _post_returning_id(conversation_id, content, mentions) is not None
 
@@ -1266,6 +1414,8 @@ def _post_returning_id(
     historical behavior of always sending an empty list.
     """
     global _needs_token_refresh
+    if _refuse_write(conversation_id, "post"):
+        return None
     import time as _time
     url = f"{_BASE}/users/ME/conversations/{urllib.parse.quote(conversation_id, safe='')}/messages"
     body = _build_post_body(conversation_id, content, mentions, amsreferences)
@@ -1342,6 +1492,8 @@ def post_card(card_json: dict, conversation_id: str = NOTES_CONV_ID) -> str | No
     returns immediately.
     """
     global _needs_token_refresh
+    if _refuse_write(conversation_id, "card"):
+        return None
     import time as _time
     url = f"{_BASE}/users/ME/conversations/{urllib.parse.quote(conversation_id, safe='')}/messages"
     now = (
@@ -1625,6 +1777,8 @@ def send_ams_gif_message(
     own-message detection keep recognizing it as a bot post. Returns the Teams
     message id, or None when the upload/post failed (caller skips silently).
     """
+    if _refuse_write(conversation_id, "ams_gif"):
+        return None
     uploaded = _ams_upload_gif(gif_file, conversation_id)
     if uploaded is None:
         return None

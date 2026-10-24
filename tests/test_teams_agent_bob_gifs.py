@@ -130,3 +130,11 @@ def test_ic3_interceptor_captures_ams_bearer_only(monkeypatch):
     handler(MagicMock(url="https://teams.microsoft.com/api/x", headers={"authorization": "Bearer a"}))
     handler(MagicMock(url="https://eu-prod.asyncgw.teams.microsoft.com/v1", headers={"authorization": "Bearer ic3"}))
     captured.assert_called_once_with("ic3")
+
+
+def test_waiting_mood_is_the_fishing_frog_and_gif_path_is_a_real_path(gif_dir):
+    assert bob_gifs.REACTION_MOODS["waiting"] == "bob-fishing.gif"
+    name, phrase = bob_gifs.pick_reaction_gif_and_phrase("waiting")
+    assert name == "bob-fishing.gif" and phrase in bob_gifs._REACTION_PHRASES["waiting"]
+    assert bob_gifs.gif_path(name) == gif_dir / "bob-fishing.gif"
+    assert set(bob_gifs._REACTION_PHRASES) == set(bob_gifs.REACTION_MOODS)

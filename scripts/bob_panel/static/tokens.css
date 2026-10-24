@@ -1,0 +1,119 @@
+/* The only file in the panel that holds a colour. Everything else (panel.css, index.html) refers to these
+   variables, so the whole look - light, dark, accent - changes here. System font only: no font files ship. */
+:root {
+  --font-main: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-80: 80px;
+
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-max: 999px;
+
+  /* light */
+  --brand-25: #2c4aa8;
+  --brand-35: #5878e0;
+  --body-primary-bg: #ffffff;
+  --body-secondary-bg: #f4f5f8;
+  --body-quaternary-bg: #eceef3;
+  --body-primary-text: #1b1f2a;
+  --body-secondary-text: #444b5c;
+  --body-tertiary-text: #6b7385;
+  --body-tertiary-border: #dfe2ea;
+  --body-secondary-border: #c3c8d4;
+  --body-brand-border: #5878e0;
+  --body-brand-text: #2c4aa8;
+  --body-secondary-icon: #596073;
+  --state-brand-bg: #e8edfc;
+  --state-success-icon: #2b8a4b;
+  --state-success-bg: #e4f4ea;
+  --state-warning-icon: #c27a06;
+  --state-warning-bg: #fdf0d3;
+  --state-danger-icon: #c93a3a;
+  --state-danger-bg: #fbe4e4;
+  --state-info-bg: #e3eefb;
+  --state-inactive-icon: #9aa1b2;
+  --on-brand: #ffffff;
+  --transparents-dark: rgba(15, 18, 28, 0.55);
+  --shadow-s: 0 1px 2px rgba(20, 24, 36, 0.06);
+  --shadow-l: 0 12px 40px rgba(20, 24, 36, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand-25: #8fa5f0;
+    --brand-35: #6c88e8;
+    --body-primary-bg: #1a1e29;
+    --body-secondary-bg: #121520;
+    --body-quaternary-bg: #252a38;
+    --body-primary-text: #eceff6;
+    --body-secondary-text: #c3c9d8;
+    --body-tertiary-text: #8d95a8;
+    --body-tertiary-border: #2f3547;
+    --body-secondary-border: #434a60;
+    --body-brand-border: #6c88e8;
+    --body-brand-text: #9fb3f5;
+    --body-secondary-icon: #aab1c3;
+    --state-brand-bg: #22294a;
+    --state-success-icon: #4fc274;
+    --state-success-bg: #1b3326;
+    --state-warning-icon: #e2a22d;
+    --state-warning-bg: #3a2e12;
+    --state-danger-icon: #ee6b6b;
+    --state-danger-bg: #3d1e1e;
+    --state-info-bg: #1c2d46;
+    --state-inactive-icon: #6b7388;
+    --on-brand: #0e1220;
+    --transparents-dark: rgba(0, 0, 0, 0.7);
+    --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-l: 0 12px 40px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* the page's own toggle ("Tryb ciemny / jasny") sets data-theme and wins over the system setting */
+:root[data-theme="dark"] {
+  --brand-25: #8fa5f0;
+  --brand-35: #6c88e8;
+  --body-primary-bg: #1a1e29;
+  --body-secondary-bg: #121520;
+  --body-quaternary-bg: #252a38;
+  --body-primary-text: #eceff6;
+  --body-secondary-text: #c3c9d8;
+  --body-tertiary-text: #8d95a8;
+  --body-tertiary-border: #2f3547;
+  --body-secondary-border: #434a60;
+  --body-brand-border: #6c88e8;
+  --body-brand-text: #9fb3f5;
+  --body-secondary-icon: #aab1c3;
+  --state-brand-bg: #22294a;
+  --state-success-icon: #4fc274;
+  --state-success-bg: #1b3326;
+  --state-warning-icon: #e2a22d;
+  --state-warning-bg: #3a2e12;
+  --state-danger-icon: #ee6b6b;
+  --state-danger-bg: #3d1e1e;
+  --state-info-bg: #1c2d46;
+  --state-inactive-icon: #6b7388;
+  --on-brand: #0e1220;
+  --transparents-dark: rgba(0, 0, 0, 0.7);
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-l: 0 12px 40px rgba(0, 0, 0, 0.6);
+}

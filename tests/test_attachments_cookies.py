@@ -53,3 +53,25 @@ def test_refresh_for_one_host_keeps_the_other_hosts_fedauth(monkeypatch, tmp_pat
                         lambda url, ck, max_bytes: (b"PK", "x") if ck.get("FedAuth") == "sites" else None)
     assert attachments.download("https://contoso.sharepoint.com/sites/x/a.docx") == (b"PK", "x")
     assert attachments._cookies["contoso-my.sharepoint.com"] == {"FedAuth": "onedrive"}
+
+
+def test_refresh_inside_asyncio_loop_runs_in_a_worker_thread(monkeypatch):
+    import asyncio  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+
+    seen = {}
+
+    def fake_here(url):
+        seen["thread"] = threading.current_thread().name
+        return {"contoso.sharepoint.com": {"FedAuth": "fresh"}}
+
+    monkeypatch.setattr(attachments, "_refresh_via_playwright_here", fake_here)
+
+    async def inside_a_loop():
+        return attachments._refresh_via_playwright("https://contoso.sharepoint.com/x")
+
+    assert asyncio.run(inside_a_loop()) == {"contoso.sharepoint.com": {"FedAuth": "fresh"}}
+    assert seen["thread"].startswith("sp-refresh")                      # not the loop's own thread
+    seen.clear()
+    assert attachments._refresh_via_playwright("https://contoso.sharepoint.com/x")
+    assert seen["thread"] == threading.current_thread().name            # no loop: runs right here

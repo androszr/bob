@@ -11,10 +11,13 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps na stdout/stderr
@@ -24,7 +27,7 @@ _PERF_LOG = Path(__file__).parent / "perf-metrics.jsonl"
 _OTEL_LOG = Path(__file__).parent.parent / "otel" / "otel-spans.jsonl"
 _CHAT_CONFIG = Path(__file__).resolve().parents[2] / "chat-config.json"
 _STATS_STATE = Path(__file__).parent / "stats-state.json"
-_CET = timezone(timedelta(hours=2))  # CEST (summer); use +1 in winter
+_CET = ZoneInfo("Europe/Warsaw")   # was a fixed +2: wrong "today" and times from the winter time change on
 _NOTATKI_CONV_ID = "48:notes"
 
 
@@ -404,281 +407,175 @@ def _e(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+# The daily Notatki message: read on a phone - one line of headline numbers, what needs attention,
+# one channel table, a 7-day trend. Tokens / latency percentiles / OTEL tables moved to the panel (Pulpit).
+_KIND = {"watch_send": "odpowiedz", "catchup_send": "odpowiedz", "watch_skip_silent_sentinel": "milczenie",
+         "watch_skip_answered": "juz_odpowiedziane"}
+_PANEL_URL = f"http://localhost:{os.environ.get('BOB_PANEL_PORT') or '3006'}"
+_WD = ("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
+
+
+def channel_activity(log_path: Path, since: datetime) -> dict[str, dict]:
+    """Per chat since `since`: messages Bob had to react to and how (replied / silent / someone already answered)."""
+    out: dict[str, dict] = {}
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for raw in lines:
+        try:
+            r = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        kind = _KIND.get(r.get("action") or "")
+        chat = r.get("chat_name")
+        ts = _parse_ts(r.get("ts", ""))
+        if not kind or not isinstance(chat, str) or ts is None or ts < since:
+            continue
+        if kind == "odpowiedz" and not r.get("send_ok", True):
+            continue
+        c = out.setdefault(chat, {"wiadomosci": 0, "odpowiedz": 0, "milczenie": 0, "juz_odpowiedziane": 0,
+                                  "last_ts": None})
+        c["wiadomosci"] += 1
+        c[kind] += 1
+        if c["last_ts"] is None or ts > c["last_ts"]:
+            c["last_ts"] = ts
+    return out
+
+
+def daily_costs(perf_path: Path, days: int = 7, now: datetime | None = None) -> dict:
+    """Cost per local day for the last `days` days (today last) + yesterday's cost up to this time of day."""
+    now = (now or _cet_now()).astimezone(_CET)
+    first = (now - timedelta(days=days - 1)).date()
+    per_day = {first + timedelta(days=i): Decimal(0) for i in range(days)}
+    yday_so_far = Decimal(0)
+    yday_cut = now - timedelta(days=1)
+    try:
+        fh = perf_path.open(encoding="utf-8")
+    except OSError:
+        return {"days": per_day, "yday_so_far": None}
+    with fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = _parse_ts(r.get("ts", ""))
+            if ts is None:
+                continue
+            local = ts.astimezone(_CET)
+            try:
+                cost = Decimal(str(r.get("total_cost_usd") or 0))      # money never goes through float math
+            except ArithmeticError:
+                continue
+            if local.date() in per_day:
+                per_day[local.date()] += cost
+            if local.date() == yday_cut.date() and local <= yday_cut:
+                yday_so_far += cost
+    return {"days": per_day, "yday_so_far": yday_so_far}
+
+
+def _usd(v: Decimal | float) -> str:
+    return f"{v:,.2f} $".replace(",", " ").replace(".", ",")
+
+
 def render_html(  # noqa: PLR0912, PLR0915
     stats: dict,
     configured_chats: list[str],
     since_label: str = "",
     perf: dict | None = None,
     otel: dict | None = None,
+    activity: dict | None = None,
+    costs: dict | None = None,
 ) -> str:
-    """Render stats as Teams-compatible HTML (rich table + perf + otel sections)."""
-    now = _cet_now().strftime("%Y-%m-%d %H:%M CET")
+    """The daily Notatki message: headline numbers, notes, channels, trend (Teams HTML, phone-first)."""
+    now = _cet_now()
+    head = (f"<p><strong>&#128202; Bob - dziś</strong> &nbsp;<span style='color:#888'>"
+            f"{_WD[now.weekday()]} {now:%d.%m}, stan na {now:%H:%M}</span></p>")
+    activity = activity or {}
+    perf_ok = bool(perf and perf.get("available"))
+    t = (perf or {}).get("total", {}) if perf_ok else {}
+    per_chat_p = (perf or {}).get("per_chat", {}) if perf_ok else {}
 
-    # Only rows with activity for the HTML view (skip dead chats), sorted by last activity.
-    all_chats = list(dict.fromkeys(configured_chats + list(stats.keys())))
-    _min_dt = datetime.min.replace(tzinfo=UTC)
-    active = [(c, stats[c]) for c in all_chats if c and stats.get(c, {}).get("sent", 0) > 0]
-    active.sort(key=lambda x: x[1].get("last_ts") or _min_dt, reverse=True)
-
-    total_sent = sum(s["sent"] for _, s in active)
-    total_skipped = sum(s.get("skipped", 0) for _, s in active)
-
-    since_note = f" &nbsp;|&nbsp; od {_e(since_label)}" if since_label else ""
-
-    td = '<td style="padding:2px 10px;border:1px solid #ddd;">'
-    td_r = '<td style="padding:2px 10px;border:1px solid #ddd;text-align:right;">'
-    th = '<th style="padding:4px 10px;border:1px solid #bbb;background:#f4f4f4;text-align:left;">'
-    th_r = '<th style="padding:4px 10px;border:1px solid #bbb;background:#f4f4f4;text-align:right;">'
-    tfoot_td = 'style="padding:4px 10px;border:1px solid #bbb;background:#f9f9f9;"'
-    tfoot_td_r = (
-        'style="padding:4px 10px;border:1px solid #bbb;background:#f9f9f9;text-align:right;"'
-    )
-
-    # --- Section 1: Aktywnosc (from log.jsonl) ---
-    act_rows = []
-    for chat, s in active:
-        last = _fmt_ts(s.get("last_ts"))
-        act_rows.append(
-            f"<tr>"
-            f"{td}{_e(chat)}</td>"
-            f"{td_r}{s['sent']}</td>"
-            f"{td_r}{s.get('skipped', 0)}</td>"
-            f"{td}{_e(last)}</td>"
-            f"</tr>"
-        )
-
-    act_section = (
-        f"<p><strong>Aktywność</strong></p>"
-        f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-        f"<thead><tr>"
-        f"{th}Chat</th>{th_r}Wysłane</th>{th_r}Pominięte</th>{th}Ostatnia aktyw.</th>"
-        f"</tr></thead>"
-        f"<tbody>{''.join(act_rows)}</tbody>"
-        f"<tfoot><tr>"
-        f"<td {tfoot_td}><strong>SUMA</strong></td>"
-        f"<td {tfoot_td_r}><strong>{total_sent}</strong></td>"
-        f"<td {tfoot_td_r}><strong>{total_skipped}</strong></td>"
-        f"<td {tfoot_td}></td>"
-        f"</tr></tfoot>"
-        f"</table>"
-    )
-
-    # --- Perf sections (2-6) ---
-    perf_available = perf is not None and perf.get("available", False)
-    no_perf_note = (
-        "<p style='font-size:0.9em;'>"
-        "brak danych perf (czekam na perf-metrics.jsonl)</p>"
-    )
-
-    if not perf_available:
-        perf_section = no_perf_note
+    n_msg = sum(c["wiadomosci"] for c in activity.values())
+    n_rep = sum(c["odpowiedz"] for c in activity.values())
+    n_sil = sum(c["milczenie"] for c in activity.values())
+    n_ans = sum(c["juz_odpowiedziane"] for c in activity.values())
+    lines = [f"&#128172; <strong>{n_msg}</strong> wiadomości do Boba &middot; &#9989; <strong>{n_rep}</strong> "
+             f"odpowiedzi &middot; &#129323; <strong>{n_sil}</strong> bez odpowiedzi"
+             + (f" &middot; &#128101; {n_ans} odpowiedział ktoś inny" if n_ans else "")]
+    if perf_ok:
+        cost = Decimal(str(t.get("total_cost_usd", 0.0)))
+        yday = (costs or {}).get("yday_so_far")
+        cmp = ""
+        if yday:
+            diff = (cost - yday) / yday * 100
+            arrow = "&#9650;" if diff > 0 else "&#9660;"
+            cmp = f" <span style='color:#888'>({arrow} {abs(diff):.0f}% wobec wczoraj o tej porze: {_usd(yday)})</span>"
+        p50, p95 = t.get("p50_duration_ms") or 0, t.get("p95_duration_ms") or 0
+        lines.append(f"&#128176; <strong>{_usd(cost)}</strong> koszt Claude{cmp}")
+        if p50:
+            sec = lambda ms: f"{ms / 1000:.1f}".replace(".", ",")  # noqa: E731
+            lines.append(f"&#9201; odpowiedź zwykle w <strong>{sec(p50)} s</strong>"
+                         f" <span style='color:#888'>(najdłuższe {sec(p95)} s)</span>")
     else:
-        t = perf.get("total", {})
-        per_chat_p = perf.get("per_chat", {})
-        per_model_p = perf.get("per_model", {})
+        lines.append("<span style='color:#888'>brak danych o koszcie i czasie (czekam na perf-metrics.jsonl)</span>")
+    body = f"<p>{'<br>'.join(lines)}</p>"
 
-        # --- Section 2: Latencja ---
-        def _ms(v: object) -> str:
-            if isinstance(v, (int, float)) and v > 0:
-                return f"{v:.0f} ms"
-            return "-"
+    # what needs attention - at most three plain-language notes
+    notes = []
+    if perf_ok and t.get("total_cost_usd", 0) > 0:
+        top_chat, top = max(per_chat_p.items(), key=lambda kv: kv[1].get("total_cost_usd", 0), default=("", {}))
+        share = top.get("total_cost_usd", 0) / t["total_cost_usd"]
+        a = activity.get(top_chat, {})
+        if share >= 0.5 and top_chat:
+            silent = f", {a['milczenie']} z {a['wiadomosci']} wiadomości bez odpowiedzi" if a.get("milczenie") else ""
+            notes.append(f"<strong>{_e(top_chat)}</strong> to {share:.0%} dzisiejszego kosztu{silent}.")
+        hit = t.get("cache_hit_rate", 0.0)
+        if t.get("count", 0) >= 5 and hit < 0.6:
+            notes.append(f"Tylko {hit:.0%} treści szło z pamięci podręcznej (cache) - reszta była wysyłana od nowa "
+                         "i liczona drożej.")
+        if p95 and p95 > 60_000:
+            notes.append(f"Najdłuższe odpowiedzi trwały ponad {p95 / 60000:.0f} min - analizy albo przeciążenie.")
+    if notes:
+        body += "<p><strong>Warto wiedzieć</strong><br>" + "<br>".join(f"&#8226; {n}" for n in notes[:3]) + "</p>"
 
-        lat_section = (
-            f"<p><strong>Latencja</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>{th}Metryka</th>{th_r}p50</th>{th_r}p95</th></tr></thead>"
-            f"<tbody>"
-            f"<tr>{td}duration_ms</td>"
-            f"{td_r}{_ms(t.get('p50_duration_ms'))}</td>"
-            f"{td_r}{_ms(t.get('p95_duration_ms'))}</td></tr>"
-            f"<tr>{td}ttft_ms</td>"
-            f"{td_r}{_ms(t.get('p50_ttft_ms'))}</td>"
-            f"{td_r}{_ms(t.get('p95_ttft_ms'))}</td></tr>"
-            f"</tbody></table>"
-        )
+    # channels: one table, most expensive first, then most active
+    names = set(activity) | {c for c in per_chat_p if c}
+    rows = sorted(names, key=lambda c: (-(per_chat_p.get(c, {}).get("total_cost_usd", 0)),
+                                        -(activity.get(c, {}).get("wiadomosci", 0))))
+    if rows:
+        td = "<td style='padding:3px 8px;border-bottom:1px solid #ddd;'>"
+        tdr = "<td style='padding:3px 8px;border-bottom:1px solid #ddd;text-align:right;white-space:nowrap;'>"
+        th = "<th style='padding:3px 8px;border-bottom:2px solid #999;text-align:{a};'>{t}</th>"
+        trs = "".join(
+            f"<tr>{td}{_e(c)}</td>{tdr}{activity.get(c, {}).get('wiadomosci', 0)}</td>"
+            f"{tdr}{activity.get(c, {}).get('odpowiedz', 0)}</td>"
+            f"{tdr}{_usd(per_chat_p.get(c, {}).get('total_cost_usd', 0.0)) if perf_ok else '-'}</td></tr>"
+            for c in rows)
+        body += ("<p><strong>Kanały</strong></p><table style='border-collapse:collapse;font-size:0.95em;'><tr>"
+                 + th.format(a="left", t="Kanał") + th.format(a="right", t="Wiad.")
+                 + th.format(a="right", t="Odp.") + th.format(a="right", t="Koszt") + f"</tr>{trs}</table>")
 
-        # --- Section 3: Tokeny (per chat) ---
-        tok_rows = []
-        for cname, cb in sorted(per_chat_p.items()):
-            tok_rows.append(
-                f"<tr>{td}{_e(cname or '(bez chatu)')}</td>"
-                f"{td_r}{_fmt_tokens(cb.get('input_tokens', 0))}</td>"
-                f"{td_r}{_fmt_tokens(cb.get('output_tokens', 0))}</td>"
-                f"{td_r}{_fmt_tokens(cb.get('cache_read_input_tokens', 0))}</td>"
-                f"{td_r}{_fmt_tokens(cb.get('cache_creation_input_tokens', 0))}</td>"
-                f"</tr>"
-            )
-        tok_section = (
-            f"<p><strong>Tokeny (realne)</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>"
-            f"{th}Chat</th>{th_r}Input</th>{th_r}Output</th>"
-            f"{th_r}Cache read</th>{th_r}Cache create</th>"
-            f"</tr></thead>"
-            f"<tbody>{''.join(tok_rows)}</tbody>"
-            f"<tfoot><tr>"
-            f"<td {tfoot_td}><strong>SUMA</strong></td>"
-            f"<td {tfoot_td_r}><strong>{_fmt_tokens(t.get('input_tokens', 0))}</strong></td>"
-            f"<td {tfoot_td_r}><strong>{_fmt_tokens(t.get('output_tokens', 0))}</strong></td>"
-            f"<td {tfoot_td_r}>"
-            f"<strong>{_fmt_tokens(t.get('cache_read_input_tokens', 0))}</strong></td>"
-            f"<td {tfoot_td_r}>"
-            f"<strong>{_fmt_tokens(t.get('cache_creation_input_tokens', 0))}</strong></td>"
-            f"</tr></tfoot>"
-            f"</table>"
-        )
-
-        # --- Section 4: Koszt ---
-        cost_rows = []
-        for cname, cb in sorted(per_chat_p.items()):
-            cost_rows.append(
-                f"<tr>{td}{_e(cname or '(bez chatu)')}</td>"
-                f"{td_r}{_fmt_cost(cb.get('total_cost_usd', 0.0))}</td>"
-                f"</tr>"
-            )
-        cost_model_rows = []
-        for mname, mb in sorted(per_model_p.items()):
-            cost_model_rows.append(
-                f"<tr>{td}{_e(mname or '(nieznany)')}</td>"
-                f"{td_r}{mb.get('count', 0)}</td>"
-                f"{td_r}{_fmt_cost(mb.get('total_cost_usd', 0.0))}</td>"
-                f"</tr>"
-            )
-        cost_section = (
-            f"<p><strong>Koszt</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>{th}Chat</th>{th_r}Koszt</th></tr></thead>"
-            f"<tbody>{''.join(cost_rows)}</tbody>"
-            f"<tfoot><tr>"
-            f"<td {tfoot_td}><strong>SUMA dzienna</strong></td>"
-            f"<td {tfoot_td_r}>"
-            f"<strong>{_fmt_cost(t.get('total_cost_usd', 0.0))}</strong></td>"
-            f"</tr></tfoot>"
-            f"</table>"
-        )
-
-        # --- Section 5: Cache hit-rate ---
-        hit_rate = t.get("cache_hit_rate", 0.0)
-        cache_section = (
-            f"<p><strong>Cache hit-rate: {hit_rate:.1%}</strong>"
-            f" &nbsp;<span style='font-size:0.9em;'>"
-            f"(cache_read / input+cache_read+cache_creation)</span></p>"
-        )
-
-        # --- Section 6: Breakdown per model ---
-        model_section = (
-            f"<p><strong>Breakdown per model</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>"
-            f"{th}Model</th>{th_r}Odpowiedzi</th>"
-            f"{th_r}Input</th>{th_r}Output</th>{th_r}Koszt</th>"
-            f"</tr></thead>"
-            f"<tbody>{''.join(cost_model_rows)}</tbody>"
-            f"</table>"
-        )
-
-        perf_section = lat_section + tok_section + cost_section + cache_section + model_section
-
-    # --- OTEL section ---
-    otel_available = otel is not None and otel.get("available", False)
-    no_otel_note = (
-        "<p style='font-size:0.9em;'>"
-        "brak danych OTEL (czekam na otel-spans.jsonl)</p>"
-    )
-
-    if not otel_available:
-        otel_section = no_otel_note
-    else:
-        per_tool_o = otel.get("per_tool", {})
-        trend_o = otel.get("trend", {})
-        per_source_o = otel.get("per_source", {})
-
-        # --- OTEL sub-section: Narzedzia ---
-        tool_rows = []
-        for tname in sorted(per_tool_o.keys()):
-            tb = per_tool_o[tname]
-            tool_rows.append(
-                f"<tr>{td}{_e(tname)}</td>"
-                f"{td_r}{tb.get('count', 0)}</td>"
-                f"{td_r}{tb.get('p50_duration_ms', 0.0):.0f}</td>"
-                f"{td_r}{tb.get('p95_duration_ms', 0.0):.0f}</td>"
-                f"{td_r}{tb.get('error_rate', 0.0):.1%}</td>"
-                f"</tr>"
-            )
-
-        narzedzia_section = (
-            f"<p><strong>OTEL: Narzedzia</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>"
-            f"{th}Narzedzie</th>{th_r}Wywolania</th>"
-            f"{th_r}p50 ms</th>{th_r}p95 ms</th>{th_r}Error %</th>"
-            f"</tr></thead>"
-            f"<tbody>{''.join(tool_rows) or '<tr><td colspan=5>(brak danych)</td></tr>'}</tbody>"
-            f"</table>"
-        )
-
-        # --- OTEL sub-section: Trend (day-over-day) ---
-        trend_rows = []
-        for day in sorted(trend_o.keys()):
-            db = trend_o[day]
-            trend_rows.append(
-                f"<tr>{td}{_e(day)}</td>"
-                f"{td_r}{db.get('count', 0)}</td>"
-                f"{td_r}{_fmt_cost(db.get('cost_usd', 0.0))}</td>"
-                f"{td_r}{db.get('duration_ms', 0.0):.0f}</td>"
-                f"</tr>"
-            )
-
-        trend_section = (
-            f"<p><strong>OTEL: Trend</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>"
-            f"{th}Dzien</th>{th_r}Spany</th>{th_r}Koszt</th>{th_r}Total ms</th>"
-            f"</tr></thead>"
-            f"<tbody>{''.join(trend_rows) or '<tr><td colspan=4>(brak danych)</td></tr>'}</tbody>"
-            f"</table>"
-        )
-
-        # --- OTEL sub-section: Zrodlo (source breakdown) ---
-        source_rows = []
-        for src in sorted(per_source_o.keys()):
-            source_rows.append(
-                f"<tr>{td}{_e(src)}</td>{td_r}{per_source_o[src]}</td></tr>"
-            )
-
-        source_section = (
-            f"<p><strong>OTEL: Zrodlo</strong></p>"
-            f"<table style='border-collapse:collapse;font-size:0.95em;'>"
-            f"<thead><tr>{th}Zrodlo</th>{th_r}Spany</th></tr></thead>"
-            f"<tbody>{''.join(source_rows) or '<tr><td colspan=2>(brak danych)</td></tr>'}</tbody>"
-            f"</table>"
-        )
-
-        otel_section = narzedzia_section + trend_section + source_section
-
-    # Build footer note
-    if perf_available:
-        footer = (
-            "<p style='font-size:0.85em;margin-top:4px;'>"
-            "&#x2139; tokeny i koszt z perf-metrics.jsonl (realne dane API)</p>"
-        )
-    else:
-        footer = (
-            "<p style='font-size:0.85em;margin-top:4px;'>"
-            "&#x2139; tokeny szacowane &middot; 1 token &asymp; 4 znaki "
-            "&middot; nie uwzgl. sys-prompt &amp; knowledge</p>"
-        )
-
-    html = (
-        f"<p><strong>&#128202; BOB STATS</strong>"
-        f"&nbsp;&nbsp;<span style='font-size:0.9em'>"
-        f"aktualizacja: {_e(now)}{since_note}</span></p>"
-        f"{act_section}"
-        f"{perf_section}"
-        f"{otel_section}"
-        f"{footer}"
-    )
-    return html
+    # trend: one line, readable on a phone
+    if costs and costs.get("days"):
+        days = list(costs["days"].items())
+        vals = [v for _, v in days]
+        avg = sum(vals[:-1]) / max(1, len(vals) - 1)
+        top = max(vals) if vals else 0
+        cells = [(("dziś" if i == len(days) - 1 else _WD[d.weekday()].rstrip(".")), v) for i, (d, v) in enumerate(days)]
+        line = " &middot; ".join(f"<strong>{lab} {v:.0f} $</strong>" if v == top and top else f"{lab} {v:.0f} $"
+                                 for lab, v in cells)
+        body += (f"<p><strong>Koszt - ostatnie 7 dni</strong><br>{line}<br>"
+                 f"<span style='color:#888'>średnio {_usd(avg)} dziennie (bez dzisiaj)</span></p>")
+    models = (perf or {}).get("per_model", {}) if perf_ok else {}
+    if len(models) > 1:
+        body += ("<p style='color:#888;font-size:0.9em'>Modele: " + ", ".join(
+            f"{_e(m.replace('claude-', ''))} {b.get('count', 0)}× {_usd(b.get('total_cost_usd', 0.0))}"
+            for m, b in sorted(models.items(), key=lambda kv: -kv[1].get("total_cost_usd", 0))) + "</p>")
+    foot = (f"<p style='color:#888;font-size:0.85em'>Szczegóły na żywo (mapa ciepła, logi): panel Boba "
+            f"{_PANEL_URL} na Macu &middot; odświeżane co 10 min</p>")
+    return head + body + foot
 
 
 # ---------------------------------------------------------------------------
@@ -717,11 +614,16 @@ def post_or_edit(html: str, conv_id: str = _NOTATKI_CONV_ID) -> None:
         and posted_at.astimezone(_CET).date() == _cet_now().date()
     )
 
+    body = html.split("</p>", 1)[-1]                   # everything but the "stan na HH:MM" header
+    if existing_id and existing_id != "unknown" and same_day and state.get("body") == body:
+        print("[stats] bez zmian - nie edytuje", flush=True)
+        return
     if existing_id and existing_id != "unknown" and same_day:
         ok = api_client.edit_message(existing_id, html, conv_id)
         if ok:
             print(f"[stats] wiadomosc edytowana (id={existing_id})", flush=True)
             state["updated_at"] = _cet_now().isoformat()
+            state["body"] = body
             _save_state(state)
             return
         print("[stats] edit nie powiodl sie -- probuje nowa wiadomosc", flush=True)
@@ -731,7 +633,7 @@ def post_or_edit(html: str, conv_id: str = _NOTATKI_CONV_ID) -> None:
         reason = "nowy dzien -- nowa" if (existing_id and not same_day) else "nowa"
         print(f"[stats] {reason} wiadomosc wyslana (id={msg_id})", flush=True)
         _save_state({"message_id": msg_id, "conv_id": conv_id,
-                     "posted_at": _cet_now().isoformat()})
+                     "posted_at": _cet_now().isoformat(), "body": body})
     else:
         print("[stats] BLAD: nie udalo sie wyslac wiadomosci", file=sys.stderr, flush=True)
 
@@ -780,8 +682,8 @@ def main(argv=None) -> None:
 
     if args.post:
         perf = aggregate_perf(_PERF_LOG, perf_since)
-        otel = aggregate_otel(_OTEL_LOG, perf_since)
-        html = render_html(stats, configured, since_label=since_label, perf=perf, otel=otel)
+        html = render_html(stats, configured, since_label=since_label, perf=perf,
+                           activity=channel_activity(log_path, perf_since), costs=daily_costs(_PERF_LOG))
         post_or_edit(html)
     else:
         print(render(stats, configured))

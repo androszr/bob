@@ -83,12 +83,18 @@ Klasyczny tryb z menu zatwierdzania: `[s]end / [e]dit / [r]egen / [n]ext / [q]ui
 | `scraper.py` | Playwright DOM — używany tylko do nawigacji (keepalive sesji) |
 | `cli.py` | Orkiestrator: watch loop, sniffery, tryb interaktywny |
 | `session.py` | Zarządzanie świeżością `session.json` |
+| `roles.py` | Role czatów (`roles.json`): dostęp do grup narzędzi, umiejętności, wiedza doklejana do promptu; czysty moduł, ten sam dla Boba i panelu |
+| `token_health.py` | Maszyna stanów odnawiania tokenu Teams: kiedy otworzyć przeglądarkę od nowa, kiedy wysłać alert na pulpit |
+| `bob_files.py` | Pamięć plików wysłanych przez Boba (`user-data/bob-files/`): gdy ktoś wskaże plik, Bob dostaje jego treść |
 
 ## Pliki (gitignored)
 
 - `session.json` — cookies Playwright (nie commitować)
 - `log.jsonl` — audit log wysłanych wiadomości
 - `watch-state.json` — ostatni `sequence_id` per kanał (pozwala wznowić po restarcie)
+- `timers-state.json` — kiedy ostatnio ruszyły wolne zadania cykliczne (rozgrzewka SharePoint, odpytywanie urlopów); restart ich nie powtarza
+- `perf-metrics.jsonl` — czas i koszt każdego wywołania Claude (źródło dla statystyk i panelu)
+- `bob-control.json` — pauza / wyłączenie Boba i lista wyłączonych czatów (zapisywane atomowo, czyta je też panel)
 - `api-sniff.jsonl` — logi HTTP z `--sniff-api`
 - `ws-sniff.jsonl` — logi WebSocket z `--sniff-ws`
 

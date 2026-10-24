@@ -66,6 +66,7 @@ flowchart TB
         KB5["Knowledge base\nMarkdown per chat"]
         HIST5["Chat history\nJSONL per chat"]
         PW5["Playwright Browser\nSSO · keepalive · file uploads"]
+        PAN5["Panel (browser, loopback)\nbob_panel — start · stop · sign in\nchats · roles · approvals · logs"]
     end
 
     subgraph DataS["📊 External data sources"]
@@ -76,6 +77,8 @@ flowchart TB
 
     T2 -- "writes a message" --> MS2
     R2 -- "starts" --> CLIW
+    R2 -- "./bob — opens the panel" --> PAN5
+    PAN5 -- "starts, stops,\nsupervises" --> CLIW
     MS2 -- "new messages" --> CLIW
     PW5 -- "token keepalive" --> MS2
     CLIW -- "generate a reply" --> AIM
@@ -99,10 +102,14 @@ teams-agent/
 │   │   ├── session.py     — session.json freshness (TTL ~7 days)
 │   │   ├── api_client.py  — Teams chatsvc REST: get/send/reply, persona labels
 │   │   ├── scraper.py     — Playwright DOM (navigation + keepalive)
+│   │   ├── roles.py       — roles.json: tool groups, skills, knowledge per chat
+│   │   ├── token_health.py — when to reopen the browser / alert on a dead token
+│   │   ├── bob_files.py   — memory of the files Bob sent
 │   │   ├── ai.py          — prompt, personas, MCP groups, claude CLI call
 │   │   ├── cli.py         — orchestrator: watch / interactive / sniff
 │   │   ├── prompts/       — Bob's prompt, tool modules, template persona
 │   │   └── eval/          — regression suite for replies (run_eval.py)
+│   ├── bob_panel/         — the browser panel: local server, supervisor, chat/role editors, static page
 │   ├── jira/              — Jira MCP servers (read and write) + REST client
 │   ├── mcp_admin/         — HTTP MCP daemons (launchd), ports, healthcheck
 │   ├── broadcast/         — schedule of reports and standups to channels
@@ -112,7 +119,8 @@ teams-agent/
 ├── tests/                 — pytest (mock Playwright, REST and the claude CLI)
 ├── docs/                  — these pages and the README pictures
 ├── tools/                 — readme_images.py: redraws and checks the pictures
-├── .env.example · chat-config.example.json · config/jira-fields.example.json
+├── .env.example · chat-config.example.json · roles.example.json · config/jira-fields.example.json
+├── bob                    — launcher: starts the panel and opens it
 └── pyproject.toml         — ruff + pytest
 ```
 

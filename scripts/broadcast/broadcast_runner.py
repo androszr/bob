@@ -28,6 +28,7 @@ import sys
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -78,6 +79,7 @@ from session import ensure_fresh_session  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_CHANNEL = "NOTATKI_CONV_ID_PLACEHOLDER"
+_WARSAW = ZoneInfo("Europe/Warsaw")
 _CHAT_CONFIG_FILE = _PROJECT_ROOT / "chat-config.json"
 _SECTION_TIMEOUT_S = 600   # timeout per individual section call
 _GENERATE_TIMEOUT_S = 600  # timeout for legacy single-call mode
@@ -861,6 +863,45 @@ def _load_generated(job_id: str) -> list[dict] | None:
         return None
 
 
+def _sent_before(job_id: str, channel: str, since: datetime | None = None) -> bool:
+    """True when broadcast.log.jsonl has a successful send of this job to this channel (after ``since``)."""
+    try:
+        lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if (e.get("job_id") == job_id and e.get("channel") == channel and e.get("success")
+                and e.get("phase") in ("send", "generate-send") and e.get("chars_sent")):
+            if since is None:
+                return True
+            try:
+                if datetime.fromisoformat(e.get("ts", "")) >= since:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
+def _skip_generate_send(job_id: str, job: dict, now: datetime | None = None) -> str:
+    """Why a scheduled generate-send must not run now ("" = go ahead).
+
+    * a "weekly" job only fires on its own weekday (Warsaw time; 0 = Monday) - a run started on another day
+      (a manual call, a watch loop that restarted) does nothing;
+    * the same job already sent to its channel today - a watch-loop restart inside the firing window
+      must not post the report twice."""
+    now = now or datetime.now(_WARSAW)
+    if job.get("schedule_type") == "weekly" and now.weekday() != int(job.get("weekday", 0)):
+        return f"dzis nie dzien zadania (weekday={job.get('weekday', 0)})"
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if _sent_before(job_id, job.get("channel", ""), since=midnight):
+        return "dzisiaj juz wyslane"
+    return ""
+
+
 def _run_phase_dry_run(job_id: str, job: dict) -> bool:
     """Phase dry-run: read generated/<job_id>.json, send all messages to control chat.
 
@@ -1050,6 +1091,10 @@ def run_job(job_id: str, phase: str = "all") -> bool:
             return False
         if job.get("generator") in ("worklog-daily", "worklog-missing"):
             return _run_worklog_daily(job_id, job, "generate-send")
+        skip = _skip_generate_send(job_id, job)
+        if skip:
+            print(f"[broadcast] generate-send {job_id}: {skip} -- pomijam.", flush=True)
+            return True
         ok = _run_phase_generate(job_id, job)
         if not ok:
             return False
