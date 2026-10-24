@@ -187,3 +187,39 @@ def test_a_genuine_upload_is_read_back_by_its_stored_name_in_the_same_chat(bf, m
     bob_files.REGISTRY.unlink()
     assert "z SharePointa" in bob_files.note_for(f"popraw {stored}", "", "Tom Becker", owner_mri=OWNER)
     assert bf == [stored]
+
+
+def test_a_chat_name_without_ascii_letters_uses_clis_default_history_file(bf):
+    import cli  # noqa: PLC0415
+    assert cli._chat_name_to_filename("Żółć") == "default"
+    bob_files.HISTORY_DIR.mkdir(parents=True)
+    (bob_files.HISTORY_DIR / "default.jsonl").write_text(
+        json.dumps({"sender": "Bob", "text": f"📎 x {URL}", "kind": "upload", "file": NAME}) + "\n", encoding="utf-8")
+    assert "# z SharePointa" in bob_files.note_for(f"[Załącznik: {NAME}] popraw", "", "Żółć")
+
+
+def test_the_sharepoint_fetch_url_encodes_the_file_name(monkeypatch):
+    import attachments  # noqa: PLC0415
+    import requests  # noqa: PLC0415
+    import sharepoint_upload  # noqa: PLC0415
+    monkeypatch.setattr(sharepoint_upload, "SITE_URL", "https://contoso.sharepoint.com/sites/Team")
+    monkeypatch.setattr(sharepoint_upload, "DEFAULT_FOLDER_PATH", "/sites/Team/Shared Documents/Bob")
+    monkeypatch.setattr(attachments, "ensure_cookies", lambda url: {})
+    seen = []
+
+    class _S:
+        cookies = requests.cookies.RequestsCookieJar()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, timeout):
+            seen.append(url)
+            return type("R", (), {"status_code": 200, "content": b"ok"})()
+
+    monkeypatch.setattr(requests, "Session", _S)
+    assert bob_files._fetch_from_sharepoint("20261023T070027_a #1's 100%.md") == b"ok"
+    assert "decodedurl='/sites/Team/Shared%20Documents/Bob/20261023T070027_a%20%231%27%27s%20100%25.md'" in seen[0]

@@ -81,7 +81,8 @@ def _refs(text: str) -> list[str]:
 
 def _bob_posted_here(name: str, chat: str) -> bool:
     """Bob's own history line in this chat names the file (older posts, before the registry)."""
-    from_disk = HISTORY_DIR / f"{re.sub(r'[^a-z0-9]+', '_', chat.lower()).strip('_')}.jsonl"
+    # the same name as cli._chat_name_to_filename (incl. "default" for a name with no ASCII letters / digits)
+    from_disk = HISTORY_DIR / f"{re.sub(r'[^a-z0-9]+', '_', chat.lower()).strip('_') or 'default'}.jsonl"
     try:
         for line in from_disk.read_text(encoding="utf-8").splitlines():
             try:
@@ -105,7 +106,7 @@ def _fetch_from_sharepoint(name: str) -> bytes | None:
     import sharepoint_upload  # noqa: PLC0415
     if not sharepoint_upload.SITE_URL:
         return None                          # no upload folder configured: nothing to fetch from
-    path = f"{sharepoint_upload.DEFAULT_FOLDER_PATH}/{name}".replace("'", "''")
+    path = sharepoint_upload._odata_path(f"{sharepoint_upload.DEFAULT_FOLDER_PATH}/{name}")   # '#', '%', spaces
     url = f"{sharepoint_upload.SITE_URL}/_api/web/GetFileByServerRelativePath(decodedurl='{path}')/$value"
     cookies = attachments.ensure_cookies(sharepoint_upload.SITE_URL + "/")
     with requests.Session() as s:

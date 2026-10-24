@@ -297,6 +297,9 @@ def start_knowledge(rid: str, instruction: str, kid: str | None = None, new: dic
                               "tylko_zespol": new.get("tylko_zespol")})
         if any(k.get("id") == entry["id"] for k in r.get("wiedza") or []) or (REPO / entry["plik"]).exists():
             raise ValueError("Wiedza o tej nazwie już jest - edytuj ją albo nazwij inaczej.")
+        # checked now, not at approval: there the file is written before roles.json is validated
+        if entry["wpiecie"] not in roles.WIRINGS:
+            raise ValueError(f"wpiecie: jedno z {', '.join(roles.WIRINGS)}.")
     jid = "wz-" + uuid.uuid4().hex[:8]
     _save_job(jid, id=jid, status="running", start=_now(), rola=rid, wpis=entry["id"], nazwa=entry["nazwa"],
               nowy=not kid, by=by, polecenie=instruction[:500])

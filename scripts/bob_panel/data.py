@@ -6,7 +6,7 @@ import ast
 import json
 import operator
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -59,10 +59,10 @@ def status() -> dict:
             last_log = json.loads(lines[-1]).get("ts")
         except ValueError:
             pass
+    sup = supervisor.read_state()
     return {
-        "bob": {"running": bool(bob), **(bob or {}),
-                "managed": bool(bob) and bob["pid"] == supervisor.read_state().get("pid")},
-        "supervisor": supervisor.read_state(),
+        "bob": {"running": bool(bob), **(bob or {}), "managed": bool(bob) and bob["pid"] == sup.get("pid")},
+        "supervisor": sup,
         "last_activity": _iso_from_epoch(last) if last else None,
         "last_log": last_log,
         "owner": org_config.OWNER_DISPLAY_NAME,
@@ -191,24 +191,25 @@ def chats() -> list[dict]:
     return out
 
 
-def _mcp_groups() -> list[str]:
-    """Keys of ai._MCP_GROUPS, read from the source (importing ai pulls in the whole bot)."""
+def _ai_dict_keys(name: str) -> list[str]:
+    """Keys of the module-level `name: dict[str, str] = {...}` in ai.py, read from the source (importing ai pulls
+    in the whole bot)."""
     try:
         src = AI_PY.read_text(encoding="utf-8")
     except OSError:
         return []
-    m = re.search(r"^_MCP_GROUPS: dict\[str, str\] = \{(.*?)^\}", src, re.M | re.S)
+    m = re.search(rf"^{name}: dict\[str, str\] = \{{(.*?)^\}}", src, re.M | re.S)
     return re.findall(r'^\s*"([a-z0-9_]+)"\s*:', m.group(1), re.M) if m else []
+
+
+def _mcp_groups() -> list[str]:
+    """Keys of ai._MCP_GROUPS."""
+    return _ai_dict_keys("_MCP_GROUPS")
 
 
 def _personas() -> list[str]:
-    """Keys of ai._PERSONA_PROMPTS (channel personas), read from the source like _mcp_groups."""
-    try:
-        src = AI_PY.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    m = re.search(r"^_PERSONA_PROMPTS: dict\[str, str\] = \{(.*?)^\}", src, re.M | re.S)
-    return re.findall(r'^\s*"([a-z0-9_]+)"\s*:', m.group(1), re.M) if m else []
+    """Keys of ai._PERSONA_PROMPTS (channel personas)."""
+    return _ai_dict_keys("_PERSONA_PROMPTS")
 
 
 # -- live dashboard (Dashboard) ------------------------------------------------------------------------
@@ -217,15 +218,16 @@ _KIND = {"watch_send": "odpowiedz", "catchup_send": "odpowiedz", "watch_skip_sil
          "watch_skip_answered": "juz_odpowiedziane"}
 
 
-def _local_hour(ts: str):
-    from zoneinfo import ZoneInfo  # noqa: PLC0415
+def _hour_slot(ts: str):
+    """The UTC hour of a timestamp. Warsaw's offset is whole hours, so this is also the local hour, and UTC keys
+    stay distinct at the DST change - where the two local 02:00 hours compare equal (one slot, 25 h window)."""
     try:
         d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
     except ValueError:
         return None
     if d.tzinfo is None:
         d = d.replace(tzinfo=UTC)
-    return d.astimezone(ZoneInfo("Europe/Warsaw")).replace(minute=0, second=0, microsecond=0)
+    return d.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
 
 
 def dashboard(hours: int = 24) -> dict:
@@ -235,8 +237,8 @@ def dashboard(hours: int = 24) -> dict:
     as already answered) - the heatmap; per hour: Claude calls, cost and reply time (perf-metrics.jsonl) - the
     load charts; plus headline numbers and the latest actions. Reads only the tail of both files."""
     from zoneinfo import ZoneInfo  # noqa: PLC0415
-    now = datetime.now(ZoneInfo("Europe/Warsaw")).replace(minute=0, second=0, microsecond=0)
-    slots = [now - timedelta_hours(h) for h in range(hours - 1, -1, -1)]
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    slots = [now - timedelta(hours=h) for h in range(hours - 1, -1, -1)]
     index = {s: i for i, s in enumerate(slots)}
     chats: dict[str, dict] = {}
     feed = []
@@ -249,7 +251,7 @@ def dashboard(hours: int = 24) -> dict:
         chat = e.get("chat_name")
         if not kind or not isinstance(chat, str):
             continue
-        slot = _local_hour(e.get("ts"))
+        slot = _hour_slot(e.get("ts"))
         if slot not in index:
             continue
         c = chats.setdefault(chat, {"name": chat, "cells": [[0, 0, 0] for _ in slots], "total": 0,
@@ -269,7 +271,7 @@ def dashboard(hours: int = 24) -> dict:
             e = json.loads(line)
         except ValueError:
             continue
-        slot = _local_hour(e.get("ts"))
+        slot = _hour_slot(e.get("ts"))
         if slot not in index:
             continue
         i = index[slot]
@@ -288,7 +290,7 @@ def dashboard(hours: int = 24) -> dict:
     for r in rows:
         r["koszt"] = float(round(per_chat_cost.get(r["name"], Decimal(0)), 2))
     return {
-        "hours": [s.isoformat() for s in slots],
+        "hours": [s.astimezone(ZoneInfo("Europe/Warsaw")).isoformat() for s in slots],
         "chats": rows,
         "load": {"calls": calls, "cost": [float(round(x, 3)) for x in cost],
                  "dur_avg": [round(sum(d) / len(d), 1) if d else None for d in dur]},
@@ -298,8 +300,3 @@ def dashboard(hours: int = 24) -> dict:
                 "czas_mediana": round(all_dur[len(all_dur) // 2], 1) if all_dur else None},
         "feed": list(reversed(feed[-12:])),
     }
-
-
-def timedelta_hours(h: int):
-    from datetime import timedelta  # noqa: PLC0415
-    return timedelta(hours=h)

@@ -7,7 +7,6 @@ computer - in the notes chat ("Bob, zatwierdzam apr-..."), where announce_pendin
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 
@@ -35,11 +34,7 @@ def _update(fn) -> object:
 
 
 def _load() -> list[dict]:
-    try:
-        data = json.loads(STORE.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except (OSError, ValueError):
-        return []
+    return store.load(STORE)
 
 
 def create(title: str, details: str = "", source: str = "", options: list[str] | None = None,

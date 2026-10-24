@@ -234,6 +234,24 @@ def test_dashboard_counts_per_chat_and_ignores_old_or_odd_rows(monkeypatch, tmp_
                         "kanaly": 1, "czas_mediana": 4.0}
 
 
+def test_dashboard_keeps_both_local_two_oclock_hours_apart_at_the_dst_change(monkeypatch, tmp_path):
+    log = tmp_path / "log.jsonl"
+    # 2026-10-25: Warsaw goes from +02:00 to +01:00 at 03:00 local - 02:00 local happens twice
+    _jsonl(log, [{"action": "watch_send", "chat_name": "A", "ts": "2026-10-25T00:30:00+00:00"},   # 02:30 CEST
+                 {"action": "watch_send", "chat_name": "A", "ts": "2026-10-25T01:30:00+00:00"}])  # 02:30 CET
+    monkeypatch.setattr(data, "LOG_JSONL", log)
+    monkeypatch.setattr(data, "PERF_JSONL", tmp_path / "none.jsonl")
+
+    class _Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 10, 25, 4, 10, tzinfo=UTC).astimezone(tz) if tz else datetime(2026, 10, 25, 5, 10)
+    monkeypatch.setattr(data, "datetime", _Frozen)
+    d = data.dashboard(6)
+    assert len(set(d["hours"])) == 6                                # six real hours, six distinct labels
+    assert [sum(c) for c in d["chats"][0]["cells"]].count(1) == 2   # one message in each of the two 02:00 hours
+
+
 def test_tasks_drops_watch_stop_and_list_like_chat_names(monkeypatch, tmp_path):
     log = tmp_path / "log.jsonl"
     _jsonl(log, [
@@ -465,6 +483,17 @@ def test_added_chat_is_enabled_and_a_removed_one_switched_off_until_the_restart(
         chatcfg.apply("add", "Stary", None)          # already there
 
 
+def test_renaming_a_switched_off_chat_keeps_it_off(chat_files):
+    chatcfg, tmp = chat_files
+    base = {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}
+    chatcfg.set_enabled("Projekt", False)
+    assert chatcfg.apply("save", "Projekt", base, new_name="Projekt 2")["ok"]
+    assert {"Projekt", "Projekt 2"} <= chatcfg.disabled()          # the new name is off too
+    chatcfg.set_enabled("Projekt 2", True)
+    assert chatcfg.apply("save", "Projekt 2", base, new_name="Projekt 3")["ok"]
+    assert "Projekt 3" not in chatcfg.disabled() and "Projekt 2" in chatcfg.disabled()
+
+
 def test_flipping_listen_only_needs_a_restart_and_says_so(chat_files):
     chatcfg, tmp = chat_files
     base = {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}
@@ -604,6 +633,13 @@ def test_knowledge_change_goes_through_approvals_and_new_knowledge_joins_the_rol
     entry = roles.load()["role"]["pm"]["wiedza"][-1]
     assert entry["plik"] == "knowledge/role/pm/kolejka-zgloszen.md" and entry["tylko_zespol"]
     assert "1 dzień" in roles.knowledge_text(roles.knowledge_for({"role": ["pm"]}, roles.load()))
+
+
+def test_new_knowledge_with_an_unknown_wiring_is_refused_before_claude_runs(rfiles):
+    with pytest.raises(ValueError):
+        rolecfg.start_knowledge("pm", "zasady kolejki", new={"nazwa": "Kolejka", "wpiecie": "magia"},
+                                claude=lambda s, p: pytest.fail("Claude must not be asked"))
+    assert approvals.listing()["pending"] == []
 
 
 def test_a_knowledge_proposal_that_loses_most_of_the_file_is_refused(rfiles):
