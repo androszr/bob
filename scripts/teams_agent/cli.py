@@ -1830,9 +1830,12 @@ def _check_skip_answered(
         m for m in recent
         if m.get("sequence_id", 0) > trigger_seq
         and m.get("id") != trigger_msg_id
+        # Bob's own posts (e.g. the "still working" note) are not someone else answering: their text starts
+        # with the emoji, so the [Bob]-prefixed HTML is what identifies them
         and not (
             m.get("sender_mri") == api_client.USER_MRI
-            and m.get("text", "").lstrip().startswith(api_client.AGENT_TEXT_LABELS)
+            and (m.get("text", "").lstrip().startswith(api_client.AGENT_TEXT_LABELS)
+                 or m.get("raw_html", "").lstrip().startswith(api_client.BOT_HTML_PREFIXES))
         )
     ]
     if not newer:

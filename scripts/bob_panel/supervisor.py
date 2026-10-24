@@ -18,6 +18,7 @@ run (state "ma_dzialac": set by start, cleared by a manual stop) and the session
 from __future__ import annotations
 
 import os
+import shlex
 import signal
 import subprocess
 import threading
@@ -153,7 +154,7 @@ def start(by: str = "panel") -> dict:
         log = open(LOG_FILE, "ab", buffering=0)  # noqa: SIM115 -- handed to the child
         os.chmod(LOG_FILE, 0o600)
         log.write(f"\n===== start {datetime.now().isoformat(timespec='seconds')} ({by}) =====\n".encode())
-        cmd = f"cd {_q(str(REPO))} && exec python3 {CLI_REL}"
+        cmd = f"cd {shlex.quote(str(REPO))} && exec python3 {CLI_REL}"
         proc = subprocess.Popen([SHELL, "-il", "-c", cmd], stdin=subprocess.DEVNULL, stdout=log, stderr=log,  # noqa: S603
                                 start_new_session=True, cwd=str(REPO))
         log.close()
@@ -193,7 +194,7 @@ def login(by: str = "panel", then_start: bool = False) -> dict:
         os.chmod(STATE_DIR, 0o700)
         LOGIN_DONE.unlink(missing_ok=True)
         log = os.fdopen(os.open(LOGIN_LOG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb", buffering=0)
-        cmd = f"cd {_q(str(REPO))} && exec python3 {LOGIN_REL} --done-file {_q(str(LOGIN_DONE))}"
+        cmd = f"cd {shlex.quote(str(REPO))} && exec python3 {LOGIN_REL} --done-file {shlex.quote(str(LOGIN_DONE))}"
         proc = subprocess.Popen([SHELL, "-il", "-c", cmd], stdin=subprocess.DEVNULL, stdout=log, stderr=log,  # noqa: S603
                                 start_new_session=True, cwd=str(REPO))
         log.close()
@@ -256,7 +257,3 @@ def log_tail(lines: int = 200) -> str:
     except OSError:
         return ""
     return "\n".join(data.splitlines()[-lines:])
-
-
-def _q(s: str) -> str:
-    return "'" + s.replace("'", "'\\''") + "'"

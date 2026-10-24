@@ -1812,6 +1812,18 @@ def test_check_skip_answered_no_newer_messages_skips_ai_call(monkeypatch):
     assert ai_called == []
 
 
+def test_check_skip_answered_ignores_bobs_own_still_working_note(monkeypatch):
+    """The "still working" note Bob posts between the question and the reply is not someone answering."""
+    html = cli.api_client.bob_html("⏳ Nadal pracuję nad odpowiedzią (2 min)")
+    fake_msgs = [{"id": "m2", "sender_mri": cli.api_client.USER_MRI, "sequence_id": 11, "raw_html": html,
+                  "text": cli.api_client._strip_html(html)}]
+    monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=10: fake_msgs)
+    monkeypatch.setattr(cli.ai, "check_already_answered",
+                        lambda *a, **kw: pytest.fail("Bob's own note must not reach the classifier"))
+
+    assert cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp") == (False, "")
+
+
 def test_check_skip_answered_newer_and_answered_skips(monkeypatch):
     """Newer message present + classifier says answered, no override -> skip."""
     fake_msgs = [

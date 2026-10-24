@@ -254,8 +254,10 @@ def _apply(op: str, name: str, cfg: dict | None, new_name: str | None, by: str) 
     was_off = name in disabled()
     if op == "remove" or (op == "save" and target != name):
         _set_disabled(name, True)          # still watched until the restart - with no config of its own
-    if op == "add" or (op == "save" and target != name and not was_off):
-        _set_disabled(target, False)       # a rename keeps a deliberately switched-off chat off
+    if op == "add":
+        _set_disabled(target, False)
+    elif op == "save" and target != name:
+        _set_disabled(target, was_off)     # a rename keeps a deliberately switched-off chat off
     _log(by, op, name, target)
     # the watch loop sorts chats into "answered" and "listen only" at start: a flip needs a restart
     listen_flip = bool(((cur.get("chats") or {}).get(name) or {}).get("ingest_only")) != \
