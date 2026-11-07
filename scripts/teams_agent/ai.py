@@ -35,7 +35,7 @@ from pathlib import Path
 # Each MCP server prints to stderr with a prefix like "[jira-mcp]" (jira-bob and
 # jira-read-bob), "[todos]", "[urlopy-mcp]". Match any of those.
 _MCP_LOG_RE = re.compile(
-    r'^\[(jira-mcp|todos|md-to-mp3|urlopy-mcp|datetime-mcp)\]'
+    r'^\[(jira-mcp|todos|md-to-mp3|urlopy-mcp|datetime-mcp|snowflake-bob)\]'
 )
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,7 @@ _MCP_SERVERS = {
     "md-to-mp3-bob":    "scripts/md_to_mp3/mcp_server.py",
     "urlopy-bob":       "scripts/urlopy/mcp_server.py",
     "datetime-bob":     "scripts/datetime_bob/mcp_server.py",
+    "snowflake-bob":    "scripts/snowflake_bob/mcp_server.py",
 }
 
 # Servers whose tools gate on BOB_SENDER_MRI (per-message Teams identity) must
@@ -225,10 +226,14 @@ _MCP_GROUPS: dict[str, str] = {
                    "mcp__datetime-bob__resolve_date,"
                    "mcp__datetime-bob__weekday,"
                    "mcp__datetime-bob__date_range"),
+    # Raporty ze Snowflake: tylko predefiniowane zapytania, bez dowolnego SQL. Opt-in; w roles.json tylko dla zespolu.
+    "snowflake":  ("mcp__snowflake-bob__report_status,mcp__snowflake-bob__report_morning_pulse,"
+                   "mcp__snowflake-bob__report_network_panorama,"
+                   "mcp__snowflake-bob__report_forecast_vs_actual"),
 }
 # Groups a chat gets ONLY when its chat-config.json "mcp" list names them: a chat
 # without a list (None = "every group") does not receive these.
-_OPT_IN_GROUPS: frozenset[str] = frozenset()
+_OPT_IN_GROUPS: frozenset[str] = frozenset({"snowflake"})
 _ALL_GROUPS = [g for g in _MCP_GROUPS if g not in _OPT_IN_GROUPS]
 _ALLOWED_TOOLS = ",".join(_MCP_GROUPS[g] for g in _ALL_GROUPS)  # backwards-compat fallback
 _WEB_TOOLS = "WebSearch,WebFetch"

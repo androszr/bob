@@ -112,12 +112,13 @@ teams-agent/
 │   ├── bob_panel/         — the browser panel: local server, supervisor, chat/role editors, static page
 │   ├── jira/              — Jira MCP servers (read and write) + REST client
 │   ├── mcp_admin/         — HTTP MCP daemons (launchd), ports, healthcheck
+│   ├── snowflake_bob/     — reports: predefined queries, demo data, connector, one-file pages
 │   ├── broadcast/         — schedule of reports and standups to channels
 │   └── …                  — todos, urlopy, datetime_bob, md_to_mp3, …
 ├── knowledge/             — knowledge base (Markdown) injected per chat
 ├── templates/             — issue and meeting-note templates
 ├── tests/                 — pytest (mock Playwright, REST and the claude CLI)
-├── docs/                  — these pages and the README pictures
+├── docs/                  — these pages, the README pictures and the sample reports
 ├── tools/                 — readme_images.py: redraws and checks the pictures
 ├── .env.example · chat-config.example.json · roles.example.json · config/jira-fields.example.json
 ├── bob                    — launcher: starts the panel and opens it

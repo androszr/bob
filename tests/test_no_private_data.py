@@ -29,7 +29,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DENYLIST = Path(os.environ.get("BOB_PRIVATE_DENYLIST", Path.home() / ".bob-anon" / "private-denylist.sha256"))
 
-# The four README pictures: rendered by tools/readme_images.py from the committed sources, every chunk outside the
+# The README pictures: rendered by tools/readme_images.py from the committed sources, every chunk outside the
 # allow-list stripped, pinned by tests/test_readme_images.py.
 REVIEWED_BINARIES: frozenset[str] = frozenset({
     "docs/images/hero-bob-in-teams.png",
@@ -37,6 +37,9 @@ REVIEWED_BINARIES: frozenset[str] = frozenset({
     "docs/images/a-day-with-bob.png",
     "docs/images/architecture.png",
     "docs/images/bob-panel.png",
+    "docs/images/reports-gallery.png",
+    "docs/images/snowflake-flow.png",
+    "docs/images/snowsight-rerun.png",
 })
 
 _ZERO_GUID_PREFIX = "00000000-0000-0000-0000-"

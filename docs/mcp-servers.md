@@ -13,11 +13,13 @@ that chat in `chat-config.json` (`mcp`, `mcp_extra`).
 | `md-to-mp3-bob` | 7110 | `convert_md_to_mp3`, `list_md_to_mp3_files` |
 | `urlopy-bob` | 7112 | `urlopy_meta`, `urlopy_check`, `urlopy_list` |
 | `datetime-bob` | 7113 | `now`, `resolve_date`, `weekday`, `date_range` |
+| `snowflake-bob` | 7132 | `report_morning_pulse`, `report_network_panorama`, `report_forecast_vs_actual`, `report_status` |
 
 Ports between 7101 and 7131 that are not in the table belonged to retired servers; `ports.py` keeps them reserved, so do not reuse them.
 
 Tool groups per chat (`ai._MCP_GROUPS`): `jira`, `jira_write`, `jira_hypercare`, `todos`,
-`datetime`, `urlopy`, `md_to_mp3`.
+`datetime`, `urlopy`, `md_to_mp3`, and the opt-in `snowflake` (a chat gets it only by naming it or through a role; see
+[Snowflake reports](snowflake-reports.md)).
 
 Roles map onto the same groups: a role's `dostep` list names groups from `ai._MCP_GROUPS`, so a chat on a role
 gets exactly those servers' tools (see [Roles](running.md#roles)). The table and the ports do not change.

@@ -40,13 +40,18 @@ def load(path: Path | None = None) -> dict:
     return doc if isinstance(doc, dict) else {}
 
 
+# team-only whatever roles.json says: a file copied before the group existed has no flag for it
+ALWAYS_TEAM_ONLY = frozenset({"snowflake"})
+
+
 def roles_of(cfg: dict) -> list[str]:
     r = (cfg or {}).get("role")
     return [x for x in r if isinstance(x, str)] if isinstance(r, list) else []
 
 
 def team_only(doc: dict) -> set[str]:
-    return {g for g, d in (doc.get("grupy") or {}).items() if isinstance(d, dict) and d.get("tylko_zespol")}
+    flagged = {g for g, d in (doc.get("grupy") or {}).items() if isinstance(d, dict) and d.get("tylko_zespol")}
+    return ALWAYS_TEAM_ONLY | flagged
 
 
 def resolve_groups(cfg: dict, doc: dict, default_groups: list[str], known_groups: list[str]) -> list[str] | None:

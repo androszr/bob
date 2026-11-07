@@ -10,7 +10,7 @@
 <a href="https://github.com/androszr/bob/actions/workflows/ci.yml"><img src="https://github.com/androszr/bob/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
 </p>
 
-**Bob (the `teams-agent` project) is a self-hosted personal AI agent for Microsoft Teams: it watches the chats you choose and, when someone calls "Bob, ...", answers there as you, with your own tools (Jira, a to-do list, the team leave sheet, dates, Markdown to MP3) and a clear `[Bob]` label on every reply. Everything runs on your own machine.**
+**Bob (the `teams-agent` project) is a self-hosted personal AI agent for Microsoft Teams: it watches the chats you choose and, when someone calls "Bob, ...", answers there as you, with your own tools (Jira, a to-do list, the team leave sheet, dates, Markdown to MP3, reports from Snowflake) and a clear `[Bob]` label on every reply. Everything runs on your own machine.**
 
 <p align="center"><img src="docs/images/hero-bob-in-teams.png" alt="A chat where Bob answers a question about open Jira tickets and then says it is an AI when asked." width="880"></p>
 
@@ -71,6 +71,48 @@ Full detail: [docs/setup.md](docs/setup.md).
 
 It listens on `127.0.0.1` only and every change must come from the page itself (an Origin and Host check), so another website in your browser cannot drive Bob. Starting Bob the old way (`python3 scripts/teams_agent/cli.py`) still works unchanged. To have the panel start at login, run `./bob install`. More: [docs/panel.md](docs/panel.md).
 
+## Reports from Snowflake
+
+<p align="center"><img src="docs/images/reports-gallery.png" alt="Three interactive report pages on a dark slide: Morning Pulse and Network Panorama on a desktop, Forecast vs Actual on a phone, all with made-up data." width="880"></p>
+
+Ask Bob something your warehouse knows, and you get one line with the number plus a link to an interactive page: tap a bar, open a queue group, search a list, on a desktop or a phone. Each report is one self-contained HTML file that loads nothing from outside.
+
+**Open the samples** (a made-up contact-centre group, Acme: the UK cities are real, but every site, queue, person and number comes from a random generator):
+
+| Report | What it answers |
+|---|---|
+| [Morning Pulse](https://androszr.github.io/bob/reports/morning-pulse.html) | How did team leads treat the day's suggested staffing plans? |
+| [Network Panorama](https://androszr.github.io/bob/reports/network-panorama.html) | How is one queue doing across all sites, day by day? |
+| [Forecast vs Actual](https://androszr.github.io/bob/reports/forecast-vs-actual.html) | Does the forecast match the contacts handled, for one queue group at one site? |
+
+**Try it with no account:** `python3 scripts/snowflake_bob/build_samples.py`, then open `docs/reports/index.html`. Pages built from the demo data say so.
+
+### Three use cases
+
+**"How is this queue doing?"** A workforce planner writes "Bob, how is queue 4788 doing across the network?". Bob runs one report and answers: "Device swap: 4,743 contacts handled a day over the last 7 days, 3% of sites with nobody rostered in the morning, 86 sites serve it", with a link to [the whole network, day by day](https://androszr.github.io/bob/reports/network-panorama.html).
+
+**The 07:30 pulse.** A scheduled job posts one sentence and a link to the operations chat before anyone has asked: "67% accepted as is, down 0.4 points on last Friday". The team opens [Morning Pulse](https://androszr.github.io/bob/reports/morning-pulse.html) only if the number looks wrong.
+
+**A support ticket arrives.** Someone drops a ticket key in the team chat, saying the forecast looks low at one site. Bob reads the ticket, finds the site and the queue group, runs [Forecast vs Actual](https://androszr.github.io/bob/reports/forecast-vs-actual.html), and writes a proposed reply for the team to check. The example role reads Jira but has no tool to post to it.
+
+### How it connects
+
+<p align="center"><img src="docs/images/snowflake-flow.png" alt="A flow from a question in a team chat, through a predefined query and Snowflake, to three files and a link back in the chat." width="880"></p>
+
+- **Predefined queries only.** The model picks a report and passes values. No tool takes SQL, and each value is checked, then passed as a parameter to a fixed read-only statement.
+- **The official connector.** Sign-in is SSO in a browser or a key pair; there is no password setting. Use a role that can only read.
+- **Team chats only.** The tools are opt-in, and they never reach a chat you have flagged as having outside people, in a reply or a scheduled job. The flag is yours to set on each chat.
+
+### Check it in Snowsight
+
+<p align="center"><img src="docs/images/snowsight-rerun.png" alt="A drawing of a SQL worksheet running the statement behind a report, with six rows of results." width="880"></p>
+
+Every report comes with the SQL it ran, with the values written in, and a CSV of its main result. An analyst pastes the `.sql` file into a Snowsight worksheet and gets the rows behind the page, so nobody has to take a chat message on trust.
+
+Without a service account, the same statements can also be run by a person in a Snowsight browser session, with the result exported as CSV. This repository has no driver for that: automating a web session this way may break your organisation's rules, as the [safety section](#safety--ethics-in-brief) explains for Teams. It uses the connector instead. This project is not affiliated with Snowflake.
+
+Setup, your own tables and loading the demo data into a trial account: [docs/snowflake-reports.md](docs/snowflake-reports.md).
+
 ## Roles
 
 A chat can wear one or more **roles** instead of a hand-written `mcp` list. A role is a named bundle: the tool groups it may use, what it can do, and the knowledge files it reads. Copy `roles.example.json` to `roles.json` (git ignores it), then in `chat-config.json`:
@@ -86,6 +128,7 @@ A chat can wear one or more **roles** instead of a hand-written `mcp` list. A ro
 - **Jira**, read and write: look up, search, create and comment on issues.
 - **To-do list**, **team leave sheet** and **dates** (what weekday, how many days).
 - **Markdown to MP3**, so a long text can be listened to.
+- **[Reports from Snowflake](#reports-from-snowflake)**: three interactive pages from predefined read-only queries, with the SQL to re-run in Snowsight.
 - **Scheduled broadcasts**: a standup, planning prep, a daily worklog note and a missing-worklog reminder for managers.
 - **Channel personas** with their own label, emoji and trigger word, and **per-chat knowledge** files.
 - **A browser panel** (`./bob`) that starts, stops and signs Bob in without a terminal, and shows chats, roles, approvals and logs.
@@ -134,6 +177,7 @@ answering for you, and do not use it where they have not agreed to that.
 How the model is boxed in:
 
 - The `claude` CLI gets an explicit tool list and `--permission-mode dontAsk`: no shell and no file-editing tools. It changes things only through the tools a chat is given (Jira, to-dos, MP3 files), and it can read images only from a throwaway folder.
+- Snowflake reports run predefined read-only statements with checked values; the model cannot send SQL. Details: [docs/snowflake-reports.md](docs/snowflake-reports.md).
 - The tool servers, when run as daemons, listen on `127.0.0.1` only and need a bearer token.
 - The Teams daemon runs under `umask 077` and writes the browser session and tokens as `0600`; the launchd tool daemons and the stand-alone recap and broadcast scripts use your normal umask. "Owner only" actions are checked in code, not just in the prompt.
 
@@ -170,6 +214,7 @@ The LaunchAgents under `~/Library/LaunchAgents/` are removed by the script in st
 - [Ways to run it, roles, personas and the sandbox](docs/running.md)
 - [The panel](docs/panel.md)
 - [MCP servers and ports](docs/mcp-servers.md)
+- [Snowflake reports](docs/snowflake-reports.md) and [the sample pages](docs/reports/index.html)
 - [Architecture](docs/architecture.md)
 - [Product spec (PRD, in Polish)](PRD.md)
 - [Agent module notes](scripts/teams_agent/README.md) and [MCP admin notes](scripts/mcp_admin/README.md)
@@ -181,7 +226,7 @@ I wanted to stop being the bottleneck on small questions. Most of what people as
 
 ## Credits
 
-Built with Claude Code. The company, the people and the projects in every example and picture are fictional.
+Built with Claude Code. The company, the people, the projects and the report data in every example and picture are fictional.
 
 ## License
 

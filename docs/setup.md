@@ -63,6 +63,9 @@ until you set `OWNER_TEAMS_USER_ID`.
 Build broadcast briefs (`scripts/broadcast/briefs/*.md`) from `daily-standup.example.md`
 and `planning-prep.example.md`, and point to them from `jobs.json` with `brief_file`.
 
+Reports from Snowflake are optional and need nothing here until you connect a real account: see
+[Snowflake reports](snowflake-reports.md).
+
 ## Quick start in two commands
 
 ```bash

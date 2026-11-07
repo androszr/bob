@@ -18,6 +18,7 @@ MCP_SERVERS=(
   "urlopy-bob|scripts/urlopy/mcp_server.py|7112"
   "datetime-bob|scripts/datetime_bob/mcp_server.py|7113"
   "jira-read-bob|scripts/jira/mcp_read_server.py|7126"
+  "snowflake-bob|scripts/snowflake_bob/mcp_server.py|7132"
 )
 
 mkdir -p "$RUNDIR" "$LOGDIR"

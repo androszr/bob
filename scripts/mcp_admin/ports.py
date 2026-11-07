@@ -17,6 +17,7 @@ MCP_PORTS: dict[str, int] = {
     "urlopy-bob":              7112,
     "datetime-bob":            7113,
     "jira-read-bob":           7126,
+    "snowflake-bob":           7132,
 }
 
 

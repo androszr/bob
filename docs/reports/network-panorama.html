@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Queue 4788 across the network, 23 Sep to 6 Nov 2026</title><style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1a1a1a;--ink2:#5c5c5c;--ink3:#8a8a8a;--line:#e6e9ec;--soft:#f2f4f6;
+--green:#1f9d55;--green2:#5cc488;--green3:#a9e2c0;--red:#b81414;--redbg:#fde8e8;--removed:#f1a9a9;--added:#a9c8f1;
+--blue:#2f6fdb;--amber:#8a5a00;--amberbg:#fff3d6;--up:#0d732f;--down:#b81414}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+/* the SharePoint viewer injects absolutely placed "comment on this graphic" buttons at every graphic, also at ones
+   scrolled sideways inside a .scroll box - they must not widen the page */
+html,body{overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,'Segoe UI',Roboto,Inter,Helvetica,
+Arial,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:12px 12px 120px}
+@media(min-width:720px){.wrap{padding:24px 24px 120px}body{font-size:14px}}
+h1{font-size:19px;line-height:1.25;margin:0 0 4px}h2{font-size:16px;margin:22px 0 8px}h3{font-size:14px;margin:0 0 6px}
+.sub{color:var(--ink2);font-size:13px}.hint{color:var(--ink2);font-size:12.5px;margin:-2px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+@media(min-width:720px){.card{padding:16px 18px}}
+.muted{color:var(--ink2)}.small{font-size:12.5px}.nowrap{white-space:nowrap}.num{font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--ink2)}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:12px 0 4px;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button,.seg button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+border-radius:999px;padding:7px 14px;min-height:36px;white-space:nowrap;cursor:pointer}
+.tabs button.on,.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.seg button{font-size:13px;padding:5px 12px;min-height:34px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media(min-width:720px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi .t{font-size:12px;color:var(--ink2);line-height:1.25}.kpi .v{font-size:22px;font-weight:700;margin:2px 0}
+.kpi .d{font-size:13px;font-weight:600}.kpi .c{font-size:12px;color:var(--ink2)}
+.kpi.main{border-color:var(--green);box-shadow:inset 3px 0 0 var(--green)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.stack{position:relative;display:flex;height:26px;border-radius:6px;overflow:hidden;background:var(--soft)}
+.stack.thin{height:16px;border-radius:4px}.stack i{display:block;height:100%;position:relative;cursor:pointer;
+font-style:normal;font-size:11.5px;line-height:26px;text-align:center;color:#2a2a2a;white-space:nowrap;overflow:hidden}
+.stack.thin i{line-height:16px;font-size:10px}.stack i.dk{color:#fff;font-weight:600}
+.stack u{position:absolute;top:0;bottom:0;width:2px;background:#1a1a1a;opacity:.6;pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink2);margin:8px 0}
+.rows .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:8px 0;border-top:1px solid var(--line);
+cursor:pointer}.rows .row:first-child{border-top:none}.rows .row .l{font-weight:600;min-width:0;overflow-wrap:anywhere}.rows .row .r{text-align:right;white-space:nowrap}
+.rows .row .b{grid-column:1/-1}.rows .row .x{grid-column:1/-1;display:none;font-size:12.5px;color:var(--ink2)}
+.rows .row.open .x{display:block}
+.badge{display:inline-block;font-size:11px;line-height:16px;font-weight:700;padding:0 6px;border-radius:999px;
+background:#eef1f3;color:#4a4a4a;white-space:nowrap;vertical-align:1px}.badge.top{background:#e8f5ec;color:#0d732f}
+.badge.topf{background:var(--green);color:#fff}.badge.danger{background:var(--redbg);color:var(--red)}
+.badge.warning{background:var(--amberbg);color:var(--amber)}
+.list .it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:0 8px;padding:8px 0;border-top:1px solid var(--line)}
+.list .it:first-child{border-top:none}.list .it .o{color:var(--ink3);text-align:right}.list .it .nm{font-weight:600}
+.list .it .meta{font-size:12.5px;color:var(--ink2)}.list .it .n{text-align:right;font-weight:700;white-space:nowrap}
+.list .it .n small{display:block;font-weight:600;font-size:12px}
+input.search{font:inherit;width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:38px;
+background:var(--card)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;
+background:linear-gradient(to right,var(--card) 30%,rgba(255,255,255,0)),linear-gradient(to left,var(--card) 30%,rgba(255,255,255,0)) 100% 0,
+radial-gradient(farthest-side at 0 50%,rgba(16,24,40,.18),transparent),radial-gradient(farthest-side at 100% 50%,rgba(16,24,40,.18),transparent) 100% 0;
+background-repeat:no-repeat;background-size:40px 100%,40px 100%,14px 100%,14px 100%;background-attachment:local,local,scroll,scroll}
+table.t{border-collapse:collapse;font-size:13px;width:100%}table.t th,table.t td{padding:6px 8px;border-bottom:1px solid
+var(--line);text-align:right;white-space:nowrap}table.t th:first-child,table.t td:first-child{text-align:left}
+table.t th{font-size:12px;color:var(--ink2);font-weight:600}
+.warn{font-size:13px;color:var(--amber);background:#fff6e0;border-radius:8px;padding:8px 10px;margin:8px 0}
+.foot{font-size:12px;color:var(--ink3);margin-top:20px;line-height:1.5}
+#tip{position:fixed;z-index:9;max-width:min(320px,calc(100vw - 24px));background:#1a1a1a;color:#fff;font-size:12.5px;
+line-height:1.4;border-radius:8px;padding:7px 10px;pointer-events:none;display:none;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+#tip b{color:#fff}
+.cp{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:-4px 0 -4px 2px;padding:0;
+border:none;background:none;color:var(--ink3);cursor:pointer;border-radius:5px;vertical-align:middle}
+.cp:hover{color:var(--ink);background:var(--soft)}.cp svg{width:13px;height:13px}.cp.ok{color:var(--green)}
+.hero .cp{color:#C9EFD0}.hero .cp:hover{background:rgba(255,255,255,.12);color:#fff}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;
+padding:7px 14px;border-radius:999px;display:none;z-index:10}
+.hero{position:relative;overflow:hidden;color:#fff;background:radial-gradient(120% 140% at 100% 0%,#1F7A5C 0%,
+rgba(31,122,92,0) 55%),linear-gradient(160deg,#0B2112 0%,#123326 45%,#18463A 100%)}
+.hero:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 1px,
+transparent 1px 14px);pointer-events:none}
+.hero:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+background:linear-gradient(90deg,#9BE8A8,#5EC8B0 50%,#3F8FD6)}
+.hero .in{position:relative;max-width:1080px;margin:0 auto;padding:14px 12px 20px}
+@media(min-width:720px){.hero .in{padding:20px 24px 30px}}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.marks{display:inline-flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:6px 12px 6px 8px;
+box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.marks img{display:block;width:28px;height:28px;object-fit:contain}.marks .div{width:1px;height:26px;background:#e3e6e9}
+.marks .team{display:flex;flex-direction:column;color:#5c5c5c;font-size:10.5px;line-height:1.25;white-space:nowrap}
+.marks .team b{color:#1a1a1a;font-size:11.5px;letter-spacing:.2px}
+.brand .kind{font-size:15px;font-weight:700;letter-spacing:.2px;color:#fff;text-align:right;line-height:1.2}
+.brand .kind small{display:block;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#9BE8A8}
+.eyebrow .pk{display:none}
+.hero .eyebrow{margin:18px 0 4px;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#9BE8A8;font-weight:600}
+.hero h1{font-size:24px;line-height:1.15;margin:0;font-weight:700;letter-spacing:-.3px}
+@media(min-width:720px){.hero h1{font-size:30px}.hero .eyebrow{margin-top:24px}}
+.hero .lead{margin:6px 0 0;color:#D3E8DA;font-size:13.5px;max-width:760px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.chips span{font-size:12px;color:#EDF3EE;
+background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px;
+backdrop-filter:blur(4px)}
+@media(max-width:600px){.brand .kind{display:none}.eyebrow .pk{display:inline}}
+.site{margin-top:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:14px;
+backdrop-filter:blur(6px);color:#EDF3EE}
+.site summary{list-style:none;display:flex;align-items:center;gap:12px;padding:8px 12px;cursor:pointer}
+.site summary::-webkit-details-marker{display:none}
+.site .pl{color:#C9EFD0;flex:none}.site .pl.mini{width:34px;height:auto}.site[open] .pl.mini{display:none}
+.site .sl{display:flex;flex-direction:column;min-width:0;flex:1;font-size:13px;line-height:1.35}
+.site .sl b{font-size:14px;color:#fff}.site .sl>span{color:#D3E8DA}
+.site .roles{display:flex;gap:4px;flex-wrap:wrap}.site .ri{font-size:18px;line-height:1;cursor:help}
+.site .chev{transition:transform .2s;color:#C9EFD0}.site[open] .chev{transform:rotate(180deg)}
+.site .sbody{display:grid;grid-template-columns:minmax(0,1fr);gap:4px 18px;padding:0 12px 12px}
+@media(min-width:720px){.site .sbody{grid-template-columns:200px minmax(0,1fr)}}
+.site .pl.big{width:100%;max-width:170px;height:auto;justify-self:center;align-self:start;margin-top:4px}
+.site .sbody>dl:only-child{grid-column:1/-1}
+dl.skv{margin:0;display:grid;grid-template-columns:minmax(0,1fr);gap:0 22px;font-size:13px}
+@media(min-width:900px){dl.skv{grid-template-columns:1fr 1fr}}
+dl.skv>div{display:flex;gap:6px 14px;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(255,255,255,.12)}
+dl.skv dt{color:#A9D8B8;flex:0 0 38%;margin:0}dl.skv dd{margin:0;text-align:right;flex:1;min-width:0;overflow-wrap:anywhere}
+dl.skv a{color:#fff;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.4)}dl.skv .muted{color:#A2B2A7}
+.site .cp{color:#C9EFD0}
+.pulse{margin-top:10px}.pulse .phd{font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:#A9D8B8;margin:0 0 6px}
+.pulse .pts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pulse .pt{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:8px 9px;
+min-width:0;cursor:help}
+.pulse .ph{font-size:11.5px;color:#D3E8DA;line-height:1.25}.pulse .pv{display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;margin-top:3px}
+.pulse .pv b{font-size:20px;color:#fff;letter-spacing:-.3px;line-height:1.1}
+.pulse .pa{font-size:11.5px;color:#A2B2A7;margin-top:1px}
+.pulse .pd{font-size:11px;font-weight:700;border-radius:999px;padding:0 6px;background:rgba(255,255,255,.12);color:#EDF3EE;
+white-space:nowrap}.pulse .pd.good{background:#9BE8A8;color:#0B2112}.pulse .pd.bad{background:#ff8f8f;color:#3a0606}
+.pulse .pb span{display:block;height:4px;border-radius:3px;background:rgba(255,255,255,.28);margin-top:3px}
+.pulse .pb span.now{background:#D3E8DA}.pulse .pb span.now.good{background:#9BE8A8}.pulse .pb span.now.bad{background:#ff8f8f}
+.pulse .pft{font-size:11px;color:#A9D8B8;margin-top:6px}
+@media(min-width:720px){.pulse .pt{padding:10px 14px}.pulse .ph{font-size:12.5px}.pulse .pv b{font-size:26px}
+.pulse .pd{font-size:12px;padding:1px 8px}.pulse .pa{font-size:12.5px}.pulse .pts{gap:8px}}
+[hidden]{display:none!important}
+button.more{display:block;width:100%;margin:10px 0 2px;font:inherit;font-size:13.5px;font-weight:600;min-height:40px;
+border:1px dashed #cfd6dc;border-radius:10px;background:#fafbfc;color:var(--ink);cursor:pointer}button.more:hover{background:var(--soft)}@media(max-width:360px){.marks .team span{display:none}}
+.card,.kpi{box-shadow:0 1px 2px rgba(16,24,40,.04),0 6px 18px rgba(16,24,40,.05);border-color:#e9ecef}
+.kpi .v{letter-spacing:-.4px}@media(min-width:720px){.kpi .v{font-size:26px}h2{font-size:17px;margin-top:28px}}
+h2{letter-spacing:-.2px}
+
+.ctl{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}.ctl .seg{margin:0 0 4px}
+.readout{font-size:13px;min-height:44px;border-top:1px solid var(--line);margin-top:6px;padding-top:8px}
+.readout b{font-size:14px}.readout .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:2px 16px;margin-top:4px}
+.readout .g>span{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:3px 0;border-bottom:1px dashed #edf0f2}
+.readout .g>span>b{font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.legend button{font:inherit;font-size:12.5px;border:none;background:none;padding:4px 2px;color:var(--ink);cursor:pointer;
+min-height:30px}.legend button.off{opacity:.35}
+.sw.ln{height:3px;width:14px;border-radius:2px;vertical-align:3px}.sw.dash{background-image:linear-gradient(90deg,currentColor 60%,transparent 0)!important;background-size:6px 3px}
+#chart svg{display:block;width:100%;touch-action:pan-y}
+table.t th.s{cursor:pointer;user-select:none}table.t th .ar{font-style:normal}table.t th .ar:after{content:" ↕";color:var(--ink3);font-size:10px}
+table.t th.asc .ar:after{content:" ▲";color:var(--ink)}table.t th.desc .ar:after{content:" ▼";color:var(--ink)}
+table.t td:first-child,table.t th:first-child{position:sticky;left:0;background:var(--card);z-index:1}
+table.t tr.few td{color:var(--ink3)}table.t th small{display:block;font-weight:400;color:var(--ink3)}
+dl.kv{margin:0;font-size:13.5px}dl.kv>div{display:flex;justify-content:space-between;align-items:baseline;gap:6px 16px;
+padding:7px 0;border-top:1px solid var(--line)}dl.kv>div:first-child{border-top:none}
+dl.kv dt{flex:1 1 55%;min-width:0;color:var(--ink2);margin:0}
+dl.kv dd{flex:0 1 auto;min-width:0;margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+
+.k6{grid-template-columns:repeat(2,minmax(0,1fr))}@media(min-width:720px){.k6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1000px){.k6{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.kpi[data-tip]{cursor:help}
+#view{flex-wrap:wrap;overflow:visible}
+.grid3{display:grid;grid-template-columns:minmax(0,1fr);gap:0 12px}@media(min-width:900px){.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style></head>
+<body><header class="hero"><div class="in"><div class="brand"><span class="marks"><svg viewBox="0 0 1024 1024" width="28" height="28" role="img" aria-label="Bob"><rect width="1024" height="1024" rx="224" fill="#0B100F"/><path d="M232 232H792A72 72 0 0 1 864 304V600A72 72 0 0 1 792 672H520L372 808V672H232A72 72 0 0 1 160 600V304A72 72 0 0 1 232 232Z" fill="#9BE8A8"/><path d="M418 330H552A70 70 0 0 1 586 460A78 78 0 0 1 560 574H418ZM494 392V440H540A24 24 0 0 0 540 392ZM494 498V532H548A17 17 0 0 0 548 498Z" fill="#0B2112" fill-rule="evenodd"/></svg><span class="div"></span><span class="team"><b>Acme</b><span>Workforce analytics</span></span></span><span class="kind"><small>Bob Insights</small>Network Panorama</span></div><div class="eyebrow"><span class=pk>Network Panorama · </span>whole network, day by day</div><h1>Device swap</h1><p class="lead">Engine suggestions in plans, what team leads approved, contacts and rosters: one queue at every site, day by day.</p><div class="chips"><span>Made-up demo data</span><span data-cp="4788">queue 4788</span><span>23 Sep to 6 Nov 2026</span><span>45 days</span><span>served by 86 sites on average</span></div></div></header><div class="wrap">
+<div id="notice"></div>
+<h2>The last week against the first</h2>
+<div class="hint">The big number is the average of the last 7 days, under it the first week of the period. Green is a change
+for the better, red for the worse. Tap a tile to see what it means.</div>
+<div class="kpis k6" id="tiles"></div>
+<h2>Day by day</h2>
+<div class="tabs" id="view"><button class="on" data-k="total">Network total</button><button data-k="site">Per site</button>
+<button data-k="sites">Site counts</button></div>
+<div class="hint" id="v-hint"></div>
+<div class="card"><div class="ctl"><div class="seg" id="range"></div></div>
+<div class="legend" id="lg"></div><div id="chart"></div><div class="readout" id="ro"></div></div>
+<h2>Period summary</h2>
+<div class="grid3" id="sum"></div>
+<h2>Table</h2>
+<div class="seg" id="tbl"><button class="on" data-k="t">Weeks</button><button data-k="d">Days</button></div>
+<div class="hint" id="t-hint"></div>
+<div class="card"><div class="scroll" id="tab"></div></div>
+<p class="foot">Source: Snowflake, PLAN_LINES (plans approved that day; suggestion = what the planning screen showed), DAILY (contacts,
+morning roster and the first run's forecast for the day), QUEUES. Per site means per site serving the queue (roster: per site with an
+engine run). Few sites plan on a Saturday, so daily averages count the days that had plans.</p>
+</div><div id="tip"></div><div id="toast"></div>
+<script type="application/json" id="data">{"c": {"blue": "#2f6fdb", "fc": "#d98a00", "green": "#1f9d55", "grey": "#b9c2ca", "red": "#b81414", "rostered": "#7a5af0"}, "days": [{"d": "2026-09-23", "f": {"appr": "94", "appr_site": "1.09", "avg_appr": "2.5", "avg_sug": "2.5", "fc": "5,086", "handled": "5,239", "handled_site": "60.9", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.4", "sites_appr": "37", "sites_handled": "83", "sites_plan": "54", "sites_run": "86", "sites_serving": "86", "sites_sug": "40", "sug": "100", "sug_site": "1.16"}, "few": false, "v": {"appr": 94, "appr_site": 1.0930232558139534, "avg_appr": 2.5405405405405403, "avg_sug": 2.5, "fc": 5085.8, "handled": 5239, "handled_site": 60.91860465116279, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.36046511627907, "sites_appr": 37, "sites_handled": 83, "sites_plan": 54, "sites_run": 86, "sites_serving": 86, "sites_sug": 40, "sug": 100, "sug_site": 1.1627906976744187}}, {"d": "2026-09-24", "f": {"appr": "94", "appr_site": "1.09", "avg_appr": "2.3", "avg_sug": "2.5", "fc": "5,812", "handled": "5,609", "handled_site": "65.2", "no_agents": "4", "no_agents_pct": "5", "rostered_site": "2.4", "sites_appr": "41", "sites_handled": "82", "sites_plan": "54", "sites_run": "86", "sites_serving": "86", "sites_sug": "43", "sug": "106", "sug_site": "1.23"}, "few": false, "v": {"appr": 94, "appr_site": 1.0930232558139534, "avg_appr": 2.292682926829268, "avg_sug": 2.4651162790697674, "fc": 5812.5, "handled": 5609, "handled_site": 65.22093023255815, "no_agents": 4, "no_agents_pct": 4.651162790697675, "rostered_site": 2.372093023255814, "sites_appr": 41, "sites_handled": 82, "sites_plan": 54, "sites_run": 86, "sites_serving": 86, "sites_sug": 43, "sug": 106, "sug_site": 1.2325581395348837}}, {"d": "2026-09-25", "f": {"appr": "102", "appr_site": "1.19", "avg_appr": "2.4", "avg_sug": "2.3", "fc": "5,352", "handled": "5,144", "handled_site": "59.8", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.3", "sites_appr": "42", "sites_handled": "81", "sites_plan": "61", "sites_run": "86", "sites_serving": "86", "sites_sug": "44", "sug": "102", "sug_site": "1.19"}, "few": false, "v": {"appr": 102, "appr_site": 1.186046511627907, "avg_appr": 2.4285714285714284, "avg_sug": 2.3181818181818183, "fc": 5351.9, "handled": 5144, "handled_site": 59.81395348837209, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.2906976744186047, "sites_appr": 42, "sites_handled": 81, "sites_plan": 61, "sites_run": 86, "sites_serving": 86, "sites_sug": 44, "sug": 102, "sug_site": 1.186046511627907}}, {"d": "2026-09-26", "f": {"appr": "2", "appr_site": "0.02", "avg_appr": "2.0", "avg_sug": "2.0", "fc": "3,140", "handled": "3,081", "handled_site": "35.8", "no_agents": "9", "no_agents_pct": "10", "rostered_site": "1.5", "sites_appr": "1", "sites_handled": "78", "sites_plan": "3", "sites_run": "86", "sites_serving": "86", "sites_sug": "1", "sug": "2", "sug_site": "0.02"}, "few": true, "v": {"appr": 2, "appr_site": 0.023255813953488372, "avg_appr": 2.0, "avg_sug": 2.0, "fc": 3139.8, "handled": 3081, "handled_site": 35.825581395348834, "no_agents": 9, "no_agents_pct": 10.465116279069768, "rostered_site": 1.4534883720930232, "sites_appr": 1, "sites_handled": 78, "sites_plan": 3, "sites_run": 86, "sites_serving": 86, "sites_sug": 1, "sug": 2, "sug_site": 0.023255813953488372}}, {"d": "2026-09-27", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,697", "handled": "1,827", "handled_site": "21.2", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "55", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2696.9, "handled": 1827, "handled_site": 21.24418604651163, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 55, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-09-28", "f": {"appr": "108", "appr_site": "1.26", "avg_appr": "2.3", "avg_sug": "2.3", "fc": "6,654", "handled": "5,964", "handled_site": "69.3", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.8", "sites_appr": "46", "sites_handled": "81", "sites_plan": "61", "sites_run": "86", "sites_serving": "86", "sites_sug": "48", "sug": "112", "sug_site": "1.30"}, "few": false, "v": {"appr": 108, "appr_site": 1.255813953488372, "avg_appr": 2.347826086956522, "avg_sug": 2.3333333333333335, "fc": 6654.3, "handled": 5964, "handled_site": 69.34883720930233, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.802325581395349, "sites_appr": 46, "sites_handled": 81, "sites_plan": 61, "sites_run": 86, "sites_serving": 86, "sites_sug": 48, "sug": 112, "sug_site": 1.302325581395349}}, {"d": "2026-09-29", "f": {"appr": "102", "appr_site": "1.19", "avg_appr": "2.4", "avg_sug": "2.3", "fc": "5,729", "handled": "5,937", "handled_site": "69.0", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.5", "sites_appr": "43", "sites_handled": "84", "sites_plan": "63", "sites_run": "86", "sites_serving": "86", "sites_sug": "52", "sug": "122", "sug_site": "1.42"}, "few": false, "v": {"appr": 102, "appr_site": 1.186046511627907, "avg_appr": 2.372093023255814, "avg_sug": 2.3461538461538463, "fc": 5729.1, "handled": 5937, "handled_site": 69.03488372093024, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.511627906976744, "sites_appr": 43, "sites_handled": 84, "sites_plan": 63, "sites_run": 86, "sites_serving": 86, "sites_sug": 52, "sug": 122, "sug_site": 1.4186046511627908}}, {"d": "2026-09-30", "f": {"appr": "124", "appr_site": "1.44", "avg_appr": "2.5", "avg_sug": "2.3", "fc": "5,167", "handled": "5,002", "handled_site": "58.2", "no_agents": "3", "no_agents_pct": "3", "rostered_site": "2.2", "sites_appr": "50", "sites_handled": "83", "sites_plan": "63", "sites_run": "86", "sites_serving": "86", "sites_sug": "50", "sug": "116", "sug_site": "1.35"}, "few": false, "v": {"appr": 124, "appr_site": 1.441860465116279, "avg_appr": 2.48, "avg_sug": 2.32, "fc": 5166.6, "handled": 5002, "handled_site": 58.16279069767442, "no_agents": 3, "no_agents_pct": 3.488372093023256, "rostered_site": 2.2093023255813953, "sites_appr": 50, "sites_handled": 83, "sites_plan": 63, "sites_run": 86, "sites_serving": 86, "sites_sug": 50, "sug": 116, "sug_site": 1.3488372093023255}}, {"d": "2026-10-01", "f": {"appr": "100", "appr_site": "1.16", "avg_appr": "2.6", "avg_sug": "2.4", "fc": "5,440", "handled": "5,296", "handled_site": "61.6", "no_agents": "0", "no_agents_pct": "0", "rostered_site": "2.5", "sites_appr": "39", "sites_handled": "85", "sites_plan": "52", "sites_run": "86", "sites_serving": "86", "sites_sug": "41", "sug": "100", "sug_site": "1.16"}, "few": false, "v": {"appr": 100, "appr_site": 1.1627906976744187, "avg_appr": 2.5641025641025643, "avg_sug": 2.4390243902439024, "fc": 5439.5, "handled": 5296, "handled_site": 61.58139534883721, "no_agents": 0, "no_agents_pct": 0.0, "rostered_site": 2.453488372093023, "sites_appr": 39, "sites_handled": 85, "sites_plan": 52, "sites_run": 86, "sites_serving": 86, "sites_sug": 41, "sug": 100, "sug_site": 1.1627906976744187}}, {"d": "2026-10-02", "f": {"appr": "100", "appr_site": "1.16", "avg_appr": "2.4", "avg_sug": "2.5", "fc": "5,363", "handled": "5,056", "handled_site": "58.8", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.3", "sites_appr": "42", "sites_handled": "81", "sites_plan": "57", "sites_run": "86", "sites_serving": "86", "sites_sug": "43", "sug": "106", "sug_site": "1.23"}, "few": false, "v": {"appr": 100, "appr_site": 1.1627906976744187, "avg_appr": 2.380952380952381, "avg_sug": 2.4651162790697674, "fc": 5363.2, "handled": 5056, "handled_site": 58.7906976744186, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.3372093023255816, "sites_appr": 42, "sites_handled": 81, "sites_plan": 57, "sites_run": 86, "sites_serving": 86, "sites_sug": 43, "sug": 106, "sug_site": 1.2325581395348837}}, {"d": "2026-10-03", "f": {"appr": "6", "appr_site": "0.07", "avg_appr": "2.0", "avg_sug": "2.0", "fc": "3,264", "handled": "2,907", "handled_site": "33.8", "no_agents": "10", "no_agents_pct": "12", "rostered_site": "1.4", "sites_appr": "3", "sites_handled": "75", "sites_plan": "4", "sites_run": "86", "sites_serving": "86", "sites_sug": "3", "sug": "6", "sug_site": "0.07"}, "few": true, "v": {"appr": 6, "appr_site": 0.06976744186046512, "avg_appr": 2.0, "avg_sug": 2.0, "fc": 3263.7, "handled": 2907, "handled_site": 33.80232558139535, "no_agents": 10, "no_agents_pct": 11.627906976744185, "rostered_site": 1.3953488372093024, "sites_appr": 3, "sites_handled": 75, "sites_plan": 4, "sites_run": 86, "sites_serving": 86, "sites_sug": 3, "sug": 6, "sug_site": 0.06976744186046512}}, {"d": "2026-10-04", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,886", "handled": "1,666", "handled_site": "19.4", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "54", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2886.5, "handled": 1666, "handled_site": 19.372093023255815, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 54, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-10-05", "f": {"appr": "102", "appr_site": "1.19", "avg_appr": "2.5", "avg_sug": "2.3", "fc": "7,058", "handled": "6,790", "handled_site": "79.0", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "3.2", "sites_appr": "41", "sites_handled": "81", "sites_plan": "51", "sites_run": "86", "sites_serving": "86", "sites_sug": "47", "sug": "106", "sug_site": "1.23"}, "few": false, "v": {"appr": 102, "appr_site": 1.186046511627907, "avg_appr": 2.4878048780487805, "avg_sug": 2.25531914893617, "fc": 7058.2, "handled": 6790, "handled_site": 78.95348837209302, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 3.1511627906976742, "sites_appr": 41, "sites_handled": 81, "sites_plan": 51, "sites_run": 86, "sites_serving": 86, "sites_sug": 47, "sug": 106, "sug_site": 1.2325581395348837}}, {"d": "2026-10-06", "f": {"appr": "86", "appr_site": "1.00", "avg_appr": "2.3", "avg_sug": "2.2", "fc": "5,617", "handled": "5,599", "handled_site": "65.1", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.7", "sites_appr": "38", "sites_handled": "85", "sites_plan": "55", "sites_run": "86", "sites_serving": "86", "sites_sug": "40", "sug": "90", "sug_site": "1.05"}, "few": false, "v": {"appr": 86, "appr_site": 1.0, "avg_appr": 2.263157894736842, "avg_sug": 2.25, "fc": 5617.3, "handled": 5599, "handled_site": 65.1046511627907, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.6744186046511627, "sites_appr": 38, "sites_handled": 85, "sites_plan": 55, "sites_run": 86, "sites_serving": 86, "sites_sug": 40, "sug": 90, "sug_site": 1.0465116279069768}}, {"d": "2026-10-07", "f": {"appr": "102", "appr_site": "1.19", "avg_appr": "2.3", "avg_sug": "2.2", "fc": "5,351", "handled": "5,262", "handled_site": "61.2", "no_agents": "3", "no_agents_pct": "3", "rostered_site": "2.4", "sites_appr": "45", "sites_handled": "82", "sites_plan": "61", "sites_run": "86", "sites_serving": "86", "sites_sug": "46", "sug": "100", "sug_site": "1.16"}, "few": false, "v": {"appr": 102, "appr_site": 1.186046511627907, "avg_appr": 2.2666666666666666, "avg_sug": 2.1739130434782608, "fc": 5350.8, "handled": 5262, "handled_site": 61.18604651162791, "no_agents": 3, "no_agents_pct": 3.488372093023256, "rostered_site": 2.372093023255814, "sites_appr": 45, "sites_handled": 82, "sites_plan": 61, "sites_run": 86, "sites_serving": 86, "sites_sug": 46, "sug": 100, "sug_site": 1.1627906976744187}}, {"d": "2026-10-08", "f": {"appr": "98", "appr_site": "1.14", "avg_appr": "2.5", "avg_sug": "2.3", "fc": "5,081", "handled": "5,164", "handled_site": "60.0", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.3", "sites_appr": "40", "sites_handled": "85", "sites_plan": "56", "sites_run": "86", "sites_serving": "86", "sites_sug": "43", "sug": "100", "sug_site": "1.16"}, "few": false, "v": {"appr": 98, "appr_site": 1.1395348837209303, "avg_appr": 2.45, "avg_sug": 2.3255813953488373, "fc": 5081.4, "handled": 5164, "handled_site": 60.04651162790697, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.255813953488372, "sites_appr": 40, "sites_handled": 85, "sites_plan": 56, "sites_run": 86, "sites_serving": 86, "sites_sug": 43, "sug": 100, "sug_site": 1.1627906976744187}}, {"d": "2026-10-09", "f": {"appr": "118", "appr_site": "1.37", "avg_appr": "2.4", "avg_sug": "2.4", "fc": "5,717", "handled": "5,329", "handled_site": "62.0", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.2", "sites_appr": "49", "sites_handled": "85", "sites_plan": "59", "sites_run": "86", "sites_serving": "86", "sites_sug": "48", "sug": "114", "sug_site": "1.33"}, "few": false, "v": {"appr": 118, "appr_site": 1.372093023255814, "avg_appr": 2.4081632653061225, "avg_sug": 2.375, "fc": 5717.4, "handled": 5329, "handled_site": 61.96511627906977, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.2325581395348837, "sites_appr": 49, "sites_handled": 85, "sites_plan": 59, "sites_run": 86, "sites_serving": 86, "sites_sug": 48, "sug": 114, "sug_site": 1.3255813953488371}}, {"d": "2026-10-10", "f": {"appr": "10", "appr_site": "0.12", "avg_appr": "2.0", "avg_sug": "2.0", "fc": "3,330", "handled": "3,166", "handled_site": "36.8", "no_agents": "8", "no_agents_pct": "9", "rostered_site": "1.5", "sites_appr": "5", "sites_handled": "75", "sites_plan": "6", "sites_run": "86", "sites_serving": "86", "sites_sug": "4", "sug": "8", "sug_site": "0.09"}, "few": true, "v": {"appr": 10, "appr_site": 0.11627906976744186, "avg_appr": 2.0, "avg_sug": 2.0, "fc": 3330.3, "handled": 3166, "handled_site": 36.81395348837209, "no_agents": 8, "no_agents_pct": 9.30232558139535, "rostered_site": 1.4767441860465116, "sites_appr": 5, "sites_handled": 75, "sites_plan": 6, "sites_run": 86, "sites_serving": 86, "sites_sug": 4, "sug": 8, "sug_site": 0.09302325581395349}}, {"d": "2026-10-11", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,717", "handled": "1,832", "handled_site": "21.3", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "57", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2717.1, "handled": 1832, "handled_site": 21.302325581395348, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 57, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-10-12", "f": {"appr": "118", "appr_site": "1.37", "avg_appr": "2.7", "avg_sug": "2.6", "fc": "6,990", "handled": "6,209", "handled_site": "72.2", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.9", "sites_appr": "43", "sites_handled": "82", "sites_plan": "56", "sites_run": "86", "sites_serving": "86", "sites_sug": "47", "sug": "124", "sug_site": "1.44"}, "few": false, "v": {"appr": 118, "appr_site": 1.372093023255814, "avg_appr": 2.744186046511628, "avg_sug": 2.6382978723404253, "fc": 6990.2, "handled": 6209, "handled_site": 72.19767441860465, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.9186046511627906, "sites_appr": 43, "sites_handled": 82, "sites_plan": 56, "sites_run": 86, "sites_serving": 86, "sites_sug": 47, "sug": 124, "sug_site": 1.441860465116279}}, {"d": "2026-10-13", "f": {"appr": "120", "appr_site": "1.40", "avg_appr": "2.5", "avg_sug": "2.3", "fc": "6,126", "handled": "5,792", "handled_site": "67.3", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.5", "sites_appr": "48", "sites_handled": "85", "sites_plan": "59", "sites_run": "86", "sites_serving": "86", "sites_sug": "49", "sug": "114", "sug_site": "1.33"}, "few": false, "v": {"appr": 120, "appr_site": 1.3953488372093024, "avg_appr": 2.5, "avg_sug": 2.326530612244898, "fc": 6126.1, "handled": 5792, "handled_site": 67.34883720930233, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.453488372093023, "sites_appr": 48, "sites_handled": 85, "sites_plan": 59, "sites_run": 86, "sites_serving": 86, "sites_sug": 49, "sug": 114, "sug_site": 1.3255813953488371}}, {"d": "2026-10-14", "f": {"appr": "120", "appr_site": "1.40", "avg_appr": "2.6", "avg_sug": "2.5", "fc": "5,756", "handled": "5,716", "handled_site": "66.5", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.3", "sites_appr": "46", "sites_handled": "86", "sites_plan": "65", "sites_run": "86", "sites_serving": "86", "sites_sug": "53", "sug": "132", "sug_site": "1.53"}, "few": false, "v": {"appr": 120, "appr_site": 1.3953488372093024, "avg_appr": 2.608695652173913, "avg_sug": 2.490566037735849, "fc": 5755.5, "handled": 5716, "handled_site": 66.46511627906976, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.302325581395349, "sites_appr": 46, "sites_handled": 86, "sites_plan": 65, "sites_run": 86, "sites_serving": 86, "sites_sug": 53, "sug": 132, "sug_site": 1.5348837209302326}}, {"d": "2026-10-15", "f": {"appr": "80", "appr_site": "0.93", "avg_appr": "2.2", "avg_sug": "2.2", "fc": "5,133", "handled": "5,422", "handled_site": "63.0", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.5", "sites_appr": "37", "sites_handled": "85", "sites_plan": "52", "sites_run": "86", "sites_serving": "86", "sites_sug": "40", "sug": "88", "sug_site": "1.02"}, "few": false, "v": {"appr": 80, "appr_site": 0.9302325581395349, "avg_appr": 2.1621621621621623, "avg_sug": 2.2, "fc": 5132.7, "handled": 5422, "handled_site": 63.04651162790697, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.4651162790697674, "sites_appr": 37, "sites_handled": 85, "sites_plan": 52, "sites_run": 86, "sites_serving": 86, "sites_sug": 40, "sug": 88, "sug_site": 1.0232558139534884}}, {"d": "2026-10-16", "f": {"appr": "102", "appr_site": "1.19", "avg_appr": "2.4", "avg_sug": "2.5", "fc": "5,949", "handled": "5,664", "handled_site": "65.9", "no_agents": "0", "no_agents_pct": "0", "rostered_site": "2.5", "sites_appr": "42", "sites_handled": "84", "sites_plan": "58", "sites_run": "86", "sites_serving": "86", "sites_sug": "42", "sug": "106", "sug_site": "1.23"}, "few": false, "v": {"appr": 102, "appr_site": 1.186046511627907, "avg_appr": 2.4285714285714284, "avg_sug": 2.5238095238095237, "fc": 5948.8, "handled": 5664, "handled_site": 65.86046511627907, "no_agents": 0, "no_agents_pct": 0.0, "rostered_site": 2.4767441860465116, "sites_appr": 42, "sites_handled": 84, "sites_plan": 58, "sites_run": 86, "sites_serving": 86, "sites_sug": 42, "sug": 106, "sug_site": 1.2325581395348837}}, {"d": "2026-10-17", "f": {"appr": "10", "appr_site": "0.12", "avg_appr": "2.0", "avg_sug": "2.0", "fc": "3,480", "handled": "3,170", "handled_site": "36.9", "no_agents": "13", "no_agents_pct": "15", "rostered_site": "1.4", "sites_appr": "5", "sites_handled": "77", "sites_plan": "8", "sites_run": "86", "sites_serving": "86", "sites_sug": "6", "sug": "12", "sug_site": "0.14"}, "few": true, "v": {"appr": 10, "appr_site": 0.11627906976744186, "avg_appr": 2.0, "avg_sug": 2.0, "fc": 3480.3, "handled": 3170, "handled_site": 36.86046511627907, "no_agents": 13, "no_agents_pct": 15.11627906976744, "rostered_site": 1.4186046511627908, "sites_appr": 5, "sites_handled": 77, "sites_plan": 8, "sites_run": 86, "sites_serving": 86, "sites_sug": 6, "sug": 12, "sug_site": 0.13953488372093023}}, {"d": "2026-10-18", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,569", "handled": "1,882", "handled_site": "21.9", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "63", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2568.7, "handled": 1882, "handled_site": 21.88372093023256, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 63, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-10-19", "f": {"appr": "112", "appr_site": "1.30", "avg_appr": "2.4", "avg_sug": "2.2", "fc": "6,984", "handled": "6,225", "handled_site": "72.4", "no_agents": "0", "no_agents_pct": "0", "rostered_site": "2.9", "sites_appr": "46", "sites_handled": "84", "sites_plan": "63", "sites_run": "86", "sites_serving": "86", "sites_sug": "51", "sug": "114", "sug_site": "1.33"}, "few": false, "v": {"appr": 112, "appr_site": 1.302325581395349, "avg_appr": 2.4347826086956523, "avg_sug": 2.235294117647059, "fc": 6984.2, "handled": 6225, "handled_site": 72.38372093023256, "no_agents": 0, "no_agents_pct": 0.0, "rostered_site": 2.895348837209302, "sites_appr": 46, "sites_handled": 84, "sites_plan": 63, "sites_run": 86, "sites_serving": 86, "sites_sug": 51, "sug": 114, "sug_site": 1.3255813953488371}}, {"d": "2026-10-20", "f": {"appr": "128", "appr_site": "1.49", "avg_appr": "2.5", "avg_sug": "2.5", "fc": "6,659", "handled": "5,759", "handled_site": "67.0", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.4", "sites_appr": "52", "sites_handled": "84", "sites_plan": "67", "sites_run": "86", "sites_serving": "86", "sites_sug": "60", "sug": "148", "sug_site": "1.72"}, "few": false, "v": {"appr": 128, "appr_site": 1.4883720930232558, "avg_appr": 2.4615384615384617, "avg_sug": 2.466666666666667, "fc": 6658.7, "handled": 5759, "handled_site": 66.96511627906976, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.383720930232558, "sites_appr": 52, "sites_handled": 84, "sites_plan": 67, "sites_run": 86, "sites_serving": 86, "sites_sug": 60, "sug": 148, "sug_site": 1.7209302325581395}}, {"d": "2026-10-21", "f": {"appr": "92", "appr_site": "1.07", "avg_appr": "2.3", "avg_sug": "2.3", "fc": "5,758", "handled": "5,688", "handled_site": "66.1", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.4", "sites_appr": "40", "sites_handled": "85", "sites_plan": "57", "sites_run": "86", "sites_serving": "86", "sites_sug": "44", "sug": "100", "sug_site": "1.16"}, "few": false, "v": {"appr": 92, "appr_site": 1.069767441860465, "avg_appr": 2.3, "avg_sug": 2.272727272727273, "fc": 5758.0, "handled": 5688, "handled_site": 66.13953488372093, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.36046511627907, "sites_appr": 40, "sites_handled": 85, "sites_plan": 57, "sites_run": 86, "sites_serving": 86, "sites_sug": 44, "sug": 100, "sug_site": 1.1627906976744187}}, {"d": "2026-10-22", "f": {"appr": "104", "appr_site": "1.21", "avg_appr": "2.6", "avg_sug": "2.3", "fc": "5,769", "handled": "5,387", "handled_site": "62.6", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.4", "sites_appr": "40", "sites_handled": "84", "sites_plan": "58", "sites_run": "86", "sites_serving": "86", "sites_sug": "47", "sug": "108", "sug_site": "1.26"}, "few": false, "v": {"appr": 104, "appr_site": 1.2093023255813953, "avg_appr": 2.6, "avg_sug": 2.297872340425532, "fc": 5768.8, "handled": 5387, "handled_site": 62.63953488372093, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.383720930232558, "sites_appr": 40, "sites_handled": 84, "sites_plan": 58, "sites_run": 86, "sites_serving": 86, "sites_sug": 47, "sug": 108, "sug_site": 1.255813953488372}}, {"d": "2026-10-23", "f": {"appr": "114", "appr_site": "1.33", "avg_appr": "2.4", "avg_sug": "2.3", "fc": "5,977", "handled": "5,592", "handled_site": "65.0", "no_agents": "0", "no_agents_pct": "0", "rostered_site": "2.5", "sites_appr": "47", "sites_handled": "86", "sites_plan": "59", "sites_run": "86", "sites_serving": "86", "sites_sug": "52", "sug": "120", "sug_site": "1.40"}, "few": false, "v": {"appr": 114, "appr_site": 1.3255813953488371, "avg_appr": 2.425531914893617, "avg_sug": 2.3076923076923075, "fc": 5976.6, "handled": 5592, "handled_site": 65.02325581395348, "no_agents": 0, "no_agents_pct": 0.0, "rostered_site": 2.511627906976744, "sites_appr": 47, "sites_handled": 86, "sites_plan": 59, "sites_run": 86, "sites_serving": 86, "sites_sug": 52, "sug": 120, "sug_site": 1.3953488372093024}}, {"d": "2026-10-24", "f": {"appr": "0", "appr_site": "0.00", "avg_appr": "–", "avg_sug": "2.0", "fc": "3,311", "handled": "3,067", "handled_site": "35.7", "no_agents": "7", "no_agents_pct": "8", "rostered_site": "1.4", "sites_appr": "0", "sites_handled": "78", "sites_plan": "2", "sites_run": "86", "sites_serving": "86", "sites_sug": "2", "sug": "4", "sug_site": "0.05"}, "few": true, "v": {"appr": 0, "appr_site": 0.0, "avg_appr": null, "avg_sug": 2.0, "fc": 3311.4, "handled": 3067, "handled_site": 35.66279069767442, "no_agents": 7, "no_agents_pct": 8.13953488372093, "rostered_site": 1.4186046511627908, "sites_appr": 0, "sites_handled": 78, "sites_plan": 2, "sites_run": 86, "sites_serving": 86, "sites_sug": 2, "sug": 4, "sug_site": 0.046511627906976744}}, {"d": "2026-10-25", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,667", "handled": "1,687", "handled_site": "19.6", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "56", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2666.8, "handled": 1687, "handled_site": 19.61627906976744, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 56, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-10-26", "f": {"appr": "132", "appr_site": "1.53", "avg_appr": "2.5", "avg_sug": "2.4", "fc": "7,672", "handled": "6,733", "handled_site": "78.3", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.9", "sites_appr": "53", "sites_handled": "85", "sites_plan": "62", "sites_run": "86", "sites_serving": "86", "sites_sug": "54", "sug": "132", "sug_site": "1.53"}, "few": false, "v": {"appr": 132, "appr_site": 1.5348837209302326, "avg_appr": 2.490566037735849, "avg_sug": 2.4444444444444446, "fc": 7672.5, "handled": 6733, "handled_site": 78.29069767441861, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.883720930232558, "sites_appr": 53, "sites_handled": 85, "sites_plan": 62, "sites_run": 86, "sites_serving": 86, "sites_sug": 54, "sug": 132, "sug_site": 1.5348837209302326}}, {"d": "2026-10-27", "f": {"appr": "110", "appr_site": "1.28", "avg_appr": "2.4", "avg_sug": "2.5", "fc": "6,160", "handled": "6,084", "handled_site": "70.7", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.5", "sites_appr": "45", "sites_handled": "85", "sites_plan": "60", "sites_run": "86", "sites_serving": "86", "sites_sug": "53", "sug": "130", "sug_site": "1.51"}, "few": false, "v": {"appr": 110, "appr_site": 1.2790697674418605, "avg_appr": 2.4444444444444446, "avg_sug": 2.452830188679245, "fc": 6159.7, "handled": 6084, "handled_site": 70.74418604651163, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.546511627906977, "sites_appr": 45, "sites_handled": 85, "sites_plan": 60, "sites_run": 86, "sites_serving": 86, "sites_sug": 53, "sug": 130, "sug_site": 1.5116279069767442}}, {"d": "2026-10-28", "f": {"appr": "118", "appr_site": "1.37", "avg_appr": "2.4", "avg_sug": "2.3", "fc": "6,026", "handled": "5,631", "handled_site": "65.5", "no_agents": "2", "no_agents_pct": "2", "rostered_site": "2.5", "sites_appr": "50", "sites_handled": "85", "sites_plan": "61", "sites_run": "86", "sites_serving": "86", "sites_sug": "52", "sug": "122", "sug_site": "1.42"}, "few": false, "v": {"appr": 118, "appr_site": 1.372093023255814, "avg_appr": 2.36, "avg_sug": 2.3461538461538463, "fc": 6026.1, "handled": 5631, "handled_site": 65.47674418604652, "no_agents": 2, "no_agents_pct": 2.3255813953488373, "rostered_site": 2.5, "sites_appr": 50, "sites_handled": 85, "sites_plan": 61, "sites_run": 86, "sites_serving": 86, "sites_sug": 52, "sug": 122, "sug_site": 1.4186046511627908}}, {"d": "2026-10-29", "f": {"appr": "120", "appr_site": "1.40", "avg_appr": "2.7", "avg_sug": "2.4", "fc": "5,784", "handled": "5,530", "handled_site": "64.3", "no_agents": "3", "no_agents_pct": "3", "rostered_site": "2.2", "sites_appr": "44", "sites_handled": "85", "sites_plan": "62", "sites_run": "86", "sites_serving": "86", "sites_sug": "51", "sug": "122", "sug_site": "1.42"}, "few": false, "v": {"appr": 120, "appr_site": 1.3953488372093024, "avg_appr": 2.727272727272727, "avg_sug": 2.392156862745098, "fc": 5783.8, "handled": 5530, "handled_site": 64.30232558139535, "no_agents": 3, "no_agents_pct": 3.488372093023256, "rostered_site": 2.244186046511628, "sites_appr": 44, "sites_handled": 85, "sites_plan": 62, "sites_run": 86, "sites_serving": 86, "sites_sug": 51, "sug": 122, "sug_site": 1.4186046511627908}}, {"d": "2026-10-30", "f": {"appr": "82", "appr_site": "0.95", "avg_appr": "2.2", "avg_sug": "2.2", "fc": "5,546", "handled": "5,405", "handled_site": "62.8", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.3", "sites_appr": "37", "sites_handled": "83", "sites_plan": "54", "sites_run": "86", "sites_serving": "86", "sites_sug": "44", "sug": "96", "sug_site": "1.12"}, "few": false, "v": {"appr": 82, "appr_site": 0.9534883720930233, "avg_appr": 2.2162162162162162, "avg_sug": 2.1818181818181817, "fc": 5545.5, "handled": 5405, "handled_site": 62.848837209302324, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.3488372093023258, "sites_appr": 37, "sites_handled": 83, "sites_plan": 54, "sites_run": 86, "sites_serving": 86, "sites_sug": 44, "sug": 96, "sug_site": 1.1162790697674418}}, {"d": "2026-10-31", "f": {"appr": "10", "appr_site": "0.12", "avg_appr": "2.0", "avg_sug": "2.0", "fc": "3,430", "handled": "2,857", "handled_site": "33.2", "no_agents": "7", "no_agents_pct": "8", "rostered_site": "1.6", "sites_appr": "5", "sites_handled": "71", "sites_plan": "9", "sites_run": "86", "sites_serving": "86", "sites_sug": "6", "sug": "12", "sug_site": "0.14"}, "few": true, "v": {"appr": 10, "appr_site": 0.11627906976744186, "avg_appr": 2.0, "avg_sug": 2.0, "fc": 3430.2, "handled": 2857, "handled_site": 33.22093023255814, "no_agents": 7, "no_agents_pct": 8.13953488372093, "rostered_site": 1.558139534883721, "sites_appr": 5, "sites_handled": 71, "sites_plan": 9, "sites_run": 86, "sites_serving": 86, "sites_sug": 6, "sug": 12, "sug_site": 0.13953488372093023}}, {"d": "2026-11-01", "f": {"appr": "–", "appr_site": "–", "avg_appr": "–", "avg_sug": "–", "fc": "2,824", "handled": "1,874", "handled_site": "21.8", "no_agents": "0", "no_agents_pct": "–", "rostered_site": "–", "sites_appr": "–", "sites_handled": "56", "sites_plan": "0", "sites_run": "0", "sites_serving": "86", "sites_sug": "–", "sug": "–", "sug_site": "–"}, "few": true, "v": {"appr": null, "appr_site": null, "avg_appr": null, "avg_sug": null, "fc": 2824.3, "handled": 1874, "handled_site": 21.790697674418606, "no_agents": 0, "no_agents_pct": null, "rostered_site": null, "sites_appr": null, "sites_handled": 56, "sites_plan": 0, "sites_run": 0, "sites_serving": 86, "sites_sug": null, "sug": null, "sug_site": null}}, {"d": "2026-11-02", "f": {"appr": "120", "appr_site": "1.40", "avg_appr": "2.6", "avg_sug": "2.5", "fc": "6,913", "handled": "6,331", "handled_site": "73.6", "no_agents": "1", "no_agents_pct": "1", "rostered_site": "2.9", "sites_appr": "47", "sites_handled": "85", "sites_plan": "59", "sites_run": "86", "sites_serving": "86", "sites_sug": "48", "sug": "118", "sug_site": "1.37"}, "few": false, "v": {"appr": 120, "appr_site": 1.3953488372093024, "avg_appr": 2.5531914893617023, "avg_sug": 2.4583333333333335, "fc": 6912.8, "handled": 6331, "handled_site": 73.61627906976744, "no_agents": 1, "no_agents_pct": 1.1627906976744187, "rostered_site": 2.895348837209302, "sites_appr": 47, "sites_handled": 85, "sites_plan": 59, "sites_run": 86, "sites_serving": 86, "sites_sug": 48, "sug": 118, "sug_site": 1.372093023255814}}, {"d": "2026-11-03", "f": {"appr": "114", "appr_site": "1.33", "avg_appr": "2.3", "avg_sug": "2.3", "fc": "6,272", "handled": "5,851", "handled_site": "68.0", "no_agents": "3", "no_agents_pct": "3", "rostered_site": "2.6", "sites_appr": "49", "sites_handled": "82", "sites_plan": "58", "sites_run": "86", "sites_serving": "86", "sites_sug": "46", "sug": "104", "sug_site": "1.21"}, "few": false, "v": {"appr": 114, "appr_site": 1.3255813953488371, "avg_appr": 2.326530612244898, "avg_sug": 2.260869565217391, "fc": 6271.7, "handled": 5851, "handled_site": 68.03488372093024, "no_agents": 3, "no_agents_pct": 3.488372093023256, "rostered_site": 2.63953488372093, "sites_appr": 49, "sites_handled": 82, "sites_plan": 58, "sites_run": 86, "sites_serving": 86, "sites_sug": 46, "sug": 104, "sug_site": 1.2093023255813953}}, {"d": "2026-11-04", "f": {"appr": "110", "appr_site": "1.28", "avg_appr": "2.4", "avg_sug": "2.2", "fc": "5,564", "handled": "5,254", "handled_site": "61.1", "no_agents": "4", "no_agents_pct": "5", "rostered_site": "2.3", "sites_appr": "46", "sites_handled": "82", "sites_plan": "62", "sites_run": "86", "sites_serving": "86", "sites_sug": "53", "sug": "118", "sug_site": "1.37"}, "few": false, "v": {"appr": 110, "appr_site": 1.2790697674418605, "avg_appr": 2.391304347826087, "avg_sug": 2.2264150943396226, "fc": 5563.5, "handled": 5254, "handled_site": 61.093023255813954, "no_agents": 4, "no_agents_pct": 4.651162790697675, "rostered_site": 2.302325581395349, "sites_appr": 46, "sites_handled": 82, "sites_plan": 62, "sites_run": 86, "sites_serving": 86, "sites_sug": 53, "sug": 118, "sug_site": 1.372093023255814}}, {"d": "2026-11-05", "f": {"appr": "114", "appr_site": "1.33", "avg_appr": "2.3", "avg_sug": "2.4", "fc": "5,948", "handled": "5,585", "handled_site": "64.9", "no_agents": "3", "no_agents_pct": "3", "rostered_site": "2.3", "sites_appr": "50", "sites_handled": "83", "sites_plan": "68", "sites_run": "86", "sites_serving": "86", "sites_sug": "57", "sug": "134", "sug_site": "1.56"}, "few": false, "v": {"appr": 114, "appr_site": 1.3255813953488371, "avg_appr": 2.28, "avg_sug": 2.3508771929824563, "fc": 5947.7, "handled": 5585, "handled_site": 64.94186046511628, "no_agents": 3, "no_agents_pct": 3.488372093023256, "rostered_site": 2.3488372093023258, "sites_appr": 50, "sites_handled": 83, "sites_plan": 68, "sites_run": 86, "sites_serving": 86, "sites_sug": 57, "sug": 134, "sug_site": 1.558139534883721}}, {"d": "2026-11-06", "f": {"appr": "108", "appr_site": "1.26", "avg_appr": "2.3", "avg_sug": "2.3", "fc": "5,758", "handled": "5,448", "handled_site": "63.3", "no_agents": "0", "no_agents_pct": "0", "rostered_site": "2.3", "sites_appr": "47", "sites_handled": "85", "sites_plan": "58", "sites_run": "86", "sites_serving": "86", "sites_sug": "51", "sug": "118", "sug_site": "1.37"}, "few": false, "v": {"appr": 108, "appr_site": 1.255813953488372, "avg_appr": 2.297872340425532, "avg_sug": 2.3137254901960786, "fc": 5758.1, "handled": 5448, "handled_site": 63.348837209302324, "no_agents": 0, "no_agents_pct": 0.0, "rostered_site": 2.2674418604651163, "sites_appr": 47, "sites_handled": 85, "sites_plan": 58, "sites_run": 86, "sites_serving": 86, "sites_sug": 51, "sug": 118, "sug_site": 1.372093023255814}}], "empty": "", "queue": "4788", "summary": [{"rows": [["Engine suggestions in plans", "3,766 agents"], ["Approved by team leads", "3,586 agents"], ["Handled", "215,713 contacts"], ["Serving this queue (average)", "86 sites"]], "t": "Total in the period"}, {"rows": [["Engine suggestions, agents (plan days)", "91 → 101"], ["Approved by team leads, agents", "84 → 96"], ["Contacts handled", "4,686 → 4,743"], ["Engine forecast, contacts", "4,924 → 5,244"]], "t": "First → last week, per day"}, {"rows": [["Rostered per site", "2.3 → 2.3 agents"], ["Sites with nobody rostered", "3% → 3%"], ["Avg suggestion at a site with one", "2.4 → 2.3 agents"], ["Avg approval at a site that approved", "2.4 → 2.4 agents"]], "t": "Per site, first → last week"}], "tiles": [{"c": "week 1: 91 agents", "d": "▲ 11%", "t": "Suggested / day", "tip": "Extra agents the engine suggested across all plans, on average per day with plans.", "tone": "up", "v": "101 agents"}, {"c": "week 1: 84 agents", "d": "▲ 15%", "t": "Approved / day", "tip": "Extra agents team leads approved, on average per day with plans.", "tone": "up", "v": "96 agents"}, {"c": "week 1: 4,686", "d": "▲ 1%", "t": "Contacts / day", "tip": "Contacts the network handled, on average per day.", "tone": "flat", "v": "4,743"}, {"c": "week 1: 2.3 agents", "d": "▲ 2%", "t": "Rostered per site", "tip": "Average morning roster at a site that had an engine run.", "tone": "flat", "v": "2.3 agents"}, {"c": "week 1: 3%", "d": "= 0%", "t": "Sites with nobody rostered", "tip": "Share of sites with a run that started the morning with nobody on the queue.", "tone": "flat", "v": "3%"}, {"c": "week 1: 2.4 agents", "d": "▼ 3%", "t": "Avg suggestion at a site", "tip": "Average extra agents suggested to a site that got any suggestion.", "tone": "flat", "v": "2.3 agents"}], "weeks": [["W39 · 23 Sep to 27 Sep", "310", "292", "20,900", "4,417", "32", "2.4", "2.4", "2.1", "5%"], ["W40 · 28 Sep to 4 Oct", "562", "540", "31,828", "4,929", "40", "2.4", "2.4", "2.3", "3%"], ["W41 · 5 Oct to 11 Oct", "518", "516", "33,142", "4,982", "38", "2.3", "2.4", "2.4", "3%"], ["W42 · 12 Oct to 18 Oct", "576", "550", "33,855", "5,143", "40", "2.4", "2.5", "2.3", "4%"], ["W43 · 19 Oct to 25 Oct", "594", "550", "33,405", "5,304", "43", "2.3", "2.4", "2.3", "2%"], ["W44 · 26 Oct to 1 Nov", "614", "572", "34,114", "5,349", "43", "2.4", "2.4", "2.3", "3%"], ["W45 · 2 Nov to 6 Nov", "592", "566", "28,469", "6,091", "51", "2.3", "2.4", "2.5", "3%"]]}</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const nf = (v, d=1) => v == null || isNaN(v) ? '–' : Number(v).toLocaleString('en-GB',
+  {minimumFractionDigits: d, maximumFractionDigits: d});
+const pct = (v, d=1) => v == null ? '–' : nf(v, d) + '%';
+const int = v => v == null ? '–' : Math.round(v).toLocaleString('en-GB');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = (s, r=document) => r.querySelector(s), $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dm = iso => `${+iso.slice(8, 10)} ${MONTHS[+iso.slice(5, 7) - 1]}`;
+const dmy = iso => `${dm(iso)} ${iso.slice(0, 4)}`;
+const tip = document.getElementById('tip');
+let tipFor = null;
+function showTip(el, x, y) {
+  tip.innerHTML = el.dataset.tip; tip.style.display = 'block'; tipFor = el;
+  const w = tip.offsetWidth, h = tip.offsetHeight, vw = innerWidth;
+  tip.style.left = Math.max(8, Math.min(vw - w - 8, x - w / 2)) + 'px';
+  tip.style.top = (y - h - 14 < 8 ? y + 18 : y - h - 14) + 'px';
+}
+function hideTip() { tip.style.display = 'none'; tipFor = null; }
+document.addEventListener('pointermove', ev => {
+  if (ev.pointerType !== 'mouse') return;
+  const el = ev.target.closest('[data-tip]');
+  el ? showTip(el, ev.clientX, ev.clientY) : hideTip();
+});
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-tip]');
+  if (el && (ev.pointerType !== 'mouse' || !ev.pointerType)) {
+    if (tipFor === el) hideTip(); else showTip(el, ev.clientX, ev.clientY);
+  } else if (!el) hideTip();
+});
+addEventListener('scroll', hideTip, {passive: true});
+// a small copy icon next to every site and queue number; a sandboxed viewer may refuse navigator.clipboard, then the old
+// execCommand path runs from the same tap
+const CP_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
+// data-tip goes through the attribute's decoding and then into innerHTML, so a value there is escaped twice
+const tipEsc = s => esc(esc(s));
+const cp = v => `<button class="cp" type="button" data-copy="${esc(v)}" title="Copy ${esc(v)}" aria-label="Copy ${esc(v)}">${CP_ICON}</button>`;
+function copyText(txt) {
+  const old = () => { const area = document.createElement('textarea'); area.value = txt; area.style.position = 'fixed'; area.style.opacity = '0';
+    document.body.appendChild(area); area.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (err) {} area.remove(); return ok; };
+  try { if (navigator.clipboard) return navigator.clipboard.writeText(txt).then(() => true, () => old()); } catch (err) {}
+  return Promise.resolve(old());
+}
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('[data-copy]'); if (!btn) return;
+  ev.stopPropagation(); ev.preventDefault();
+  copyText(btn.dataset.copy).then(ok => {
+    const box = document.getElementById('toast'); box.textContent = ok ? `Copied ${btn.dataset.copy}` : 'Could not copy';
+    box.style.display = 'block'; btn.classList.add('ok'); clearTimeout(box._h);
+    box._h = setTimeout(() => { box.style.display = 'none'; btn.classList.remove('ok'); }, 1400);
+  });
+}, true);
+document.querySelectorAll('[data-cp]').forEach(el => el.insertAdjacentHTML('beforeend', cp(el.dataset.cp)));
+// The new-forecasts boundary on every time chart; it stays visible when the whole visible range is before or after it.
+// opt.since = 'YYYY-MM-DD HH:MM' or ''; first / last = ISO days of the range; x = its position or null; left / right / top / bot = the plot box.
+function forecastMark(opt) {
+  if (!opt.since) return '';
+  const day = opt.since.slice(0, 10), lab = esc(dmy(day)), fs = opt.mob ? 10.5 : 11.5;
+  const badge = (txt, fill, ink) => { const w = txt.length * fs * 0.56 + 16;
+    return `<rect x="${opt.left + 4}" y="${opt.top + 4}" width="${w}" height="${fs + 9}" rx="${(fs + 9) / 2}" fill="${fill}" opacity=".92"/>`
+      + `<text x="${opt.left + 12}" y="${opt.top + fs + 7}" font-size="${fs}" font-weight="700" fill="${ink}">${esc(txt)}</text>`; };
+  if (day <= opt.first) return `<rect x="${opt.left}" y="${opt.top}" width="${opt.right - opt.left}" height="${opt.bot - opt.top}" fill="#0d732f" opacity=".05"/>`
+    + badge(`whole range on the new forecasts (since ${lab})`, '#e8f5ec', '#0d732f');
+  if (day > opt.last || opt.x == null) return badge(`whole range on the old forecasts · new since ${lab}`, '#eef1f3', '#4a4a4a');
+  const right = opt.x > opt.right - (opt.mob ? 120 : 170);
+  return `<rect x="${opt.x}" y="${opt.top}" width="${Math.max(0, opt.right - opt.x)}" height="${opt.bot - opt.top}" fill="#0d732f" opacity=".05"/>`
+    + `<line x1="${opt.x}" x2="${opt.x}" y1="${opt.top - 4}" y2="${opt.bot}" stroke="#0d732f" stroke-width="2" stroke-dasharray="6 4"/>`
+    + `<text x="${opt.x + (right ? -6 : 6)}" y="${opt.top + fs + 2}" font-size="${fs}" font-weight="700" fill="#0d732f" text-anchor="${right ? 'end' : 'start'}">new forecasts · ${lab}</text>`;
+}
+const forecastBand = opt => forecastMark(opt).replace(/<text[\s\S]*?<\/text>/g, '').replace(/<rect[^>]*\brx=[^>]*\/>/g, '');
+function tabs(root, onChange) {
+  $$('button', root).forEach(btn => btn.addEventListener('click', () => {
+    $$('button', root).forEach(other => other.classList.toggle('on', other === btn)); onChange(btn.dataset.k);
+  }));
+}
+
+
+const fx = (v, d=0) => v == null || isNaN(v) ? '–' : Number(v).toLocaleString('en-GB', {minimumFractionDigits: d, maximumFractionDigits: d});
+// a top whose quarters are round numbers (the grid has five lines)
+const niceMax = raw => { raw = Math.max(raw, 1e-9); const mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 1.2, 1.6, 2, 2.4, 3.2, 4, 4.8, 6, 8, 10].find(m => m * mag >= raw) * mag; };
+function dayChart(box, opt) {
+  // opt: {days: [{d, shade}], panels: [{title, h, hm, ser: [{k, c, t: 'bar'|'line', dash}]}], val(i, k), off: Set, hover, pick(i), mark(...)}
+  const W = Math.max(260, box.clientWidth), mob = W < 560, n = opt.days.length;
+  const panels = opt.panels.map(pan => {
+    const ser = pan.ser.filter(one => !opt.off.has(one.k));
+    const vals = []; opt.days.forEach((_, i) => ser.forEach(one => { const v = opt.val(i, one.k); if (v != null) vals.push(v); }));
+    const max = niceMax(Math.max(0, ...vals)), q = max / 4, whole = v => Math.abs(v - Math.round(v)) < 1e-6;
+    const dg = whole(q) ? 0 : whole(q * 10) ? 1 : 2;
+    return {...pan, ser, max, dg};
+  });
+  const lab = Math.max(...panels.map(pan => fx(pan.max, pan.dg).length));
+  const L = 10 + lab * (mob ? 5.6 : 6.2), R = 8, step = (W - L - R) / n, x = i => L + step * (i + .5);
+  let y0 = 0, svg = '';
+  opt.days.forEach((day, i) => { if (day.shade) svg += `<rect x="${L + step * i}" y="0" width="${step}" height="__H__" fill="#f3f5f7"/>`; });
+  panels.forEach((pan, pi) => {
+    const lift = opt.mark && !pi ? 18 : 0, h = mob ? pan.hm : pan.h, top = y0 + 24 + lift, bot = y0 + h - 8 + (lift ? 12 : 0), y = v => bot - v / pan.max * (bot - top);
+    svg += `<text x="${L}" y="${y0 + 13}" font-size="11.5" font-weight="600" fill="#5c5c5c">${esc(pan.title)}</text>`;
+    [0, .25, .5, .75, 1].forEach(f => { const v = pan.max * f, yy = y(v);
+      svg += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="${f ? '#eef0f2' : '#d5d9de'}"/>`;
+      if (!mob || f % .5 === 0) svg += `<text x="${L - 5}" y="${yy + 3.5}" font-size="10" fill="#8a8a8a" text-anchor="end">${fx(v, pan.dg)}</text>`; });
+    if (opt.mark) svg += opt.mark({pi, left: L, right: W - R, top, bot, mob, step});
+    const bars = pan.ser.filter(one => one.t === 'bar'), bw = Math.max(1, step * .78 / Math.max(1, bars.length));
+    bars.forEach((one, j) => opt.days.forEach((_, i) => { const v = opt.val(i, one.k); if (!v) return;
+      svg += `<rect x="${(x(i) - step * .39 + j * bw).toFixed(1)}" y="${y(Math.max(v, 0)).toFixed(1)}" width="${Math.max(.8, bw - (bw > 4 ? 1 : 0)).toFixed(1)}" height="${Math.abs(y(v) - y(0)).toFixed(1)}" rx="${bw > 6 ? 1.5 : 0}" fill="${one.c}"/>`; }));
+    pan.ser.filter(one => one.t === 'line').forEach(one => {
+      let path = '', pen = false, dots = '';
+      opt.days.forEach((_, i) => { const v = opt.val(i, one.k); if (v == null) { pen = false; return; }
+        path += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true;
+        if (n <= 45 || opt.hover === i) dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${opt.hover === i ? 4 : 2.2}" fill="${opt.hover === i ? one.c : '#fff'}" stroke="${one.c}" stroke-width="1.6"/>`; });
+      svg += `<path d="${path}" fill="none" stroke="${one.c}" stroke-width="2.2" stroke-linejoin="round" ${one.dash ? 'stroke-dasharray="6 4"' : ''}/>` + dots;
+    });
+    y0 += h + (lift ? 12 : 0);
+  });
+  const every = Math.ceil(n / (mob ? 6 : 12));
+  opt.days.forEach((day, i) => { if ((n - 1 - i) % every === 0) svg += `<text x="${x(i)}" y="${y0 + 13}" font-size="10" fill="#8a8a8a" text-anchor="${x(i) > W - R - 16 ? 'end' : x(i) < L + 16 ? 'start' : 'middle'}">${dm(day.d)}</text>`; });
+  if (opt.hover != null && opt.hover < n) svg += `<rect x="${L + step * opt.hover}" y="0" width="${step}" height="${y0}" fill="#123326" fill-opacity=".04" stroke="#123326" stroke-opacity=".45" stroke-width="1" rx="3"/>`;
+  svg = svg.replaceAll('__H__', y0);
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${y0 + 18}" height="${y0 + 18}" role="img">${svg}<rect class="hit" x="${L}" y="0" width="${W - L - R}" height="${y0}" fill="transparent"/></svg>`;
+  const hit = $('.hit', box), pick = ev => { const rc = hit.getBoundingClientRect();
+    opt.pick(Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - rc.left) / (rc.width / n))))); };
+  hit.addEventListener('pointermove', ev => { if (ev.pointerType === 'mouse') pick(ev); });
+  hit.addEventListener('pointerdown', pick);
+}
+function legendButtons(root, ser, off, redraw) {
+  root.innerHTML = ser.map(one => `<button data-s="${esc(one.k)}" class="${off.has(one.k) ? 'off' : ''}"><span class="sw${one.t === 'line' ? ' ln' : ''}${one.dash ? ' dash' : ''}" style="background:${one.c};color:${one.c}"></span>${esc(one.l)}</button>`).join('');
+  $$('button', root).forEach(btn => btn.addEventListener('click', () => {
+    off.has(btn.dataset.s) ? off.delete(btn.dataset.s) : off.add(btn.dataset.s); btn.classList.toggle('off'); redraw(); }));
+}
+function sortableTable(root, head, rows, opts={}) {
+  // head: [{l, sub, k}] (k = sort key index in rows[i].s or null), rows: [{c: [cells html], s: [sort values], cls}]
+  let sk = opts.sk ?? null, dir = opts.dir ?? 1;
+  const draw = () => {
+    const rr = sk == null ? rows : [...rows].sort((a, b) => { const x = a.s[sk], y = b.s[sk];
+      return (x == null) - (y == null) || (x < y ? -1 : x > y ? 1 : 0) * dir; });
+    root.innerHTML = '<table class="t"><thead><tr>' + head.map((hd, i) => `<th class="${hd.k != null ? 's' : ''}${hd.k != null && hd.k === sk ? (dir > 0 ? ' asc' : ' desc') : ''}" data-i="${i}">${esc(hd.l)}${hd.k != null ? '<i class="ar"></i>' : ''}${hd.sub ? `<small>${esc(hd.sub)}</small>` : ''}</th>`).join('')
+      + '</tr></thead><tbody>' + rr.map(row => `<tr class="${row.cls || ''}">${row.c.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
+    $$('th.s', root).forEach(th => th.addEventListener('click', () => { const k = head[+th.dataset.i].k;
+      if (sk === k) dir = -dir; else { sk = k; dir = k === 0 ? 1 : -1; } draw(); }));
+  };
+  draw();
+}
+
+const C = D.c, DD = D.days;
+if (D.empty) $('#notice').innerHTML = `<div class="warn">${esc(D.empty)}</div>`;
+$('#tiles').innerHTML = D.tiles.map(tl => `<div class="kpi" data-tip="<b>${tipEsc(tl.t)}</b><br>${tipEsc(tl.tip)}"><div class="t">${esc(tl.t)}</div>
+  <div class="v num">${esc(tl.v)}</div><div class="d ${tl.tone}">${esc(tl.d)}</div><div class="c">${esc(tl.c)}</div></div>`).join('');
+const kv = rows => '<dl class="kv">' + rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('') + '</dl>';
+$('#sum').innerHTML = D.summary.map(bl => `<div class="card"><h3>${esc(bl.t)}</h3>${kv(bl.rows)}</div>`).join('');
+
+// the chart: three views, each a set of panels; the readout lists the view's numbers of the tapped day
+const VIEWS = {
+  total: {hint: 'Across the whole network. Upper chart: extra agents the engine suggested and what team leads approved (plan days only). Lower chart: contacts handled and the engine forecast for the day.',
+    panels: [{title: 'Extra agents, network total', h: 170, hm: 140, ser: [
+      {k: 'sug', l: 'Engine suggestion in plan', c: C.grey, t: 'bar'}, {k: 'appr', l: 'Approved by team leads', c: C.blue, t: 'bar'}]},
+      {title: 'Contacts, network total', h: 170, hm: 140, ser: [
+      {k: 'handled', l: 'Contacts handled', c: C.green, t: 'line'}, {k: 'fc', l: 'Engine forecast for the day', c: C.fc, t: 'line', dash: 1}]}],
+    extra: [['sites_serving', 'Sites serving it'], ['sites_plan', 'Sites that filed a plan']]},
+  site: {hint: 'Average per site serving the queue (roster: per site with an engine run). It compares days whatever the number of sites.',
+    panels: [{title: 'Extra agents per site', h: 150, hm: 130, ser: [
+      {k: 'sug_site', l: 'Suggested / site', c: C.grey, t: 'line'}, {k: 'appr_site', l: 'Approved / site', c: C.blue, t: 'line'}]},
+      {title: 'Contacts per site', h: 130, hm: 110, ser: [{k: 'handled_site', l: 'Handled / site', c: C.green, t: 'line'}]},
+      {title: 'Morning roster per site (agents)', h: 130, hm: 110, ser: [{k: 'rostered_site', l: 'Rostered per site', c: C.rostered, t: 'line', dash: 1}]}],
+    extra: [['avg_sug', 'Avg suggestion at a site with one'], ['avg_appr', 'Avg approval at a site that approved'], ['no_agents_pct', 'Sites with nobody rostered (%)']]},
+  sites: {hint: 'How many sites got a suggestion, approved extra agents, handled contacts, and started the morning with nobody rostered. Below: average agents at a site with a suggestion or an approval.',
+    panels: [{title: 'Number of sites', h: 220, hm: 180, ser: [
+      {k: 'sites_sug', l: 'With a suggestion', c: C.grey, t: 'line'}, {k: 'sites_appr', l: 'Approved', c: C.blue, t: 'line'},
+      {k: 'sites_handled', l: 'With contacts', c: C.green, t: 'line'}, {k: 'no_agents', l: 'Nobody rostered in the morning', c: C.red, t: 'line', dash: 1}]},
+      {title: 'Average extra agents', h: 160, hm: 140, ser: [
+      {k: 'avg_sug', l: 'Avg suggestion at a site with one', c: C.grey, t: 'bar'}, {k: 'avg_appr', l: 'Avg approval at a site that approved', c: C.blue, t: 'bar'}]}],
+    extra: [['sites_serving', 'Sites serving it'], ['sites_run', 'Sites with an engine run']]}};
+let view = 'total', days = DD.length, hover = null; const off = new Set();
+const RANGES = [[7, '7 days'], [14, '14 days'], [DD.length, `Whole period (${DD.length} days)`]].filter(([k], i, list) => k <= DD.length && (i === list.length - 1 || k < DD.length));
+$('#range').innerHTML = RANGES.map(([k, l]) => `<button data-k="${k}" class="${k === days ? 'on' : ''}">${esc(l)}</button>`).join('');
+const allSer = v => VIEWS[v].panels.flatMap(pan => pan.ser);
+function draw() {
+  const dd = DD.slice(-days), V = VIEWS[view];
+  if (!dd.length) { $('#chart').innerHTML = '<p class="hint">No days in this period.</p>'; return; }
+  dayChart($('#chart'), {days: dd.map(day => ({d: day.d, shade: day.few})), panels: V.panels, off, hover,
+    val: (i, k) => dd[i].v[k], pick: i => { hover = i; draw(); readout(dd[i]); }});
+}
+function readout(day) {
+  if (!day) { $('#ro').innerHTML = '<span class="muted">Tap the chart or hover over a day to see its numbers.</span>'; return; }
+  const V = VIEWS[view];
+  $('#ro').innerHTML = `<b>${esc(dmy(day.d))}</b>${day.few ? ' <span class="badge warning">few plans</span>' : ''}<div class="g">`
+    + allSer(view).map(one => `<span><span><span class="sw" style="background:${one.c}"></span>${esc(one.l)}</span><b>${esc(day.f[one.k])}</b></span>`).join('')
+    + V.extra.map(([k, l]) => `<span><span class="muted">${esc(l)}</span><b>${esc(day.f[k])}</b></span>`).join('') + '</div>';
+}
+function setView(v) {
+  view = v; hover = null; $('#v-hint').textContent = VIEWS[v].hint + (DD.some(day => day.few) ? ' A grey background marks a day with few plans (usually a weekend).' : '');
+  legendButtons($('#lg'), allSer(v), off, draw); readout(null); draw();
+}
+tabs($('#view'), setView); tabs($('#range'), k => { days = +k; hover = null; readout(null); draw(); });
+setView('total'); addEventListener('resize', draw);
+
+// the table: by week, or every day with sortable columns
+const WH = [['Week'], ['Suggested', 'agents'], ['Approved', 'agents'], ['Handled', 'contacts'], ['Forecast', 'contacts / day'],
+  ['Sites with suggestion', 'per day'], ['Avg suggestion', 'agents'], ['Avg approval', 'agents'], ['Rostered per site', 'agents'], ['Nobody rostered', '% of sites']];
+const DK = ['sug', 'appr', 'handled', 'fc', 'sites_sug', 'avg_sug', 'avg_appr', 'rostered_site', 'no_agents_pct'];
+function drawTab(k) {
+  if (k === 't') {
+    $('#t-hint').textContent = 'Weekly totals (suggestions, approvals, contacts) and daily averages; W + the week number.';
+    sortableTable($('#tab'), WH.map(([l, sub]) => ({l, sub, k: null})), D.weeks.map(row => ({c: row.map(esc)})));
+  } else {
+    $('#t-hint').textContent = 'Every day of the period. Tap a column heading to sort. Greyed out is a day with few plans.';
+    sortableTable($('#tab'), [{l: 'Day', k: 0}, ...WH.slice(1).map(([l, sub], i) => ({l, sub: i === 3 ? 'contacts' : i === 4 ? 'count' : sub, k: i + 1}))],
+      DD.map(day => ({cls: day.few ? 'few' : '', s: [day.d, ...DK.map(k => day.v[k])],
+        c: [esc(dm(day.d)), ...DK.map(k => esc(day.f[k]) + (k === 'no_agents_pct' && day.v[k] != null ? '%' : ''))]})), {sk: 0, dir: -1});
+  }
+}
+tabs($('#tbl'), drawTab); drawTab('t');
+</script></body></html>

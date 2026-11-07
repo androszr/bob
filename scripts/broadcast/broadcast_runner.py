@@ -135,6 +135,20 @@ def _section_label(header: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _team_only_on_outside_chat(job: dict) -> list[str]:
+    """The job's team-only groups, when its channel is a chat flagged kanal_fr in chat-config.json. The same rule a chat
+    reply follows; a channel that is not in chat-config.json has no flag to read (docs/snowflake-reports.md)."""
+    import roles  # noqa: PLC0415 -- on the path once the teams_agent imports above have run
+
+    try:
+        chats = json.loads(_CHAT_CONFIG_FILE.read_text(encoding="utf-8")).get("chats", {})
+    except (OSError, ValueError, AttributeError):
+        chats = {}
+    channel = job.get("channel")
+    outside = any(isinstance(c, dict) and c.get("kanal_fr") and c.get("conv_id") == channel for c in chats.values())
+    return sorted(set(job.get("tools") or []) & roles.team_only(roles.load())) if outside else []
+
+
 def load_job(job_id: str) -> dict | None:
     """Load a job definition from jobs.json by id.
 
@@ -152,6 +166,15 @@ def load_job(job_id: str) -> dict | None:
             if not job.get("enabled", True):
                 print(
                     f"[broadcast] Job '{job_id}' jest wylaczony (enabled=false). Przerywam.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                sys.exit(1)
+            blocked = _team_only_on_outside_chat(job)
+            if blocked:
+                print(
+                    f"[broadcast] Job '{job_id}' uzywa grup tylko dla zespolu {blocked} "
+                    "na czacie z osobami z zewnatrz. Przerywam.",
                     file=sys.stderr,
                     flush=True,
                 )

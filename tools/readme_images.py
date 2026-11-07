@@ -1,6 +1,6 @@
 """Render and check the README pictures.
 
-    python3 tools/readme_images.py            # redraw all five from docs/images/src/
+    python3 tools/readme_images.py            # redraw all of them from docs/images/src/
     python3 tools/readme_images.py --only why-bob
     python3 tools/readme_images.py --check    # verify the committed pictures; no browser needed
 
@@ -10,6 +10,7 @@ Standard library plus Playwright (imported lazily, only when rendering).
 from __future__ import annotations
 
 import argparse
+import io
 import re
 import struct
 import sys
@@ -20,7 +21,8 @@ SRC = REPO / "docs" / "images" / "src"
 OUT = REPO / "docs" / "images"
 README = REPO / "README.md"
 
-SOURCES = ("hero-bob-in-teams", "why-bob", "a-day-with-bob", "architecture", "bob-panel")
+SOURCES = ("hero-bob-in-teams", "why-bob", "a-day-with-bob", "architecture", "bob-panel", "reports-gallery",
+           "snowflake-flow", "snowsight-rerun")
 CSS_WIDTH = 1200
 WIDTH = 2400
 MAX_BYTES = 600 * 1024
@@ -74,6 +76,21 @@ def strip_chunks(data: bytes) -> bytes:
     return b"".join(out)
 
 
+def fit(data: bytes) -> bytes:
+    """A picture over the size cap (the report gallery) goes down to a 256-colour palette; needs Pillow, only then."""
+    if len(data) <= MAX_BYTES:
+        return data
+    try:
+        from PIL import Image
+    except ImportError:
+        raise SystemExit("this picture is over the size cap: pip install pillow, then redraw") from None
+    out = io.BytesIO()
+    image = Image.open(io.BytesIO(data)).convert("RGB")
+    palette = image.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    palette.save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
 def render(stem: str) -> Path:
     from playwright.sync_api import sync_playwright
 
@@ -91,7 +108,7 @@ def render(stem: str) -> Path:
         finally:
             browser.close()
     target = OUT / f"{stem}.png"
-    target.write_bytes(strip_chunks(shot))
+    target.write_bytes(strip_chunks(fit(shot)))
     return target
 
 

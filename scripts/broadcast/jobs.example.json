@@ -68,5 +68,17 @@
       "TeamB"
     ],
     "description": "Powtorka 12:00 dla managerow (bez @tagow): kto ze wszystkich zespolow nie zalogowal czasu za poprzedni dzien roboczy i kto byl na urlopie. Bez AI."
+  },
+  {
+    "id": "morning-pulse",
+    "name": "Morning Pulse",
+    "schedule_type": "daily",
+    "channel": "19:00000000000000000000000000000002@thread.v2",
+    "enabled": false,
+    "description": "Poranny raport ze Snowflake: jak liderzy zespolow potraktowali wczorajsze podpowiedzi obsady.",
+    "tools": [
+      "snowflake"
+    ],
+    "prompt": "Wywolaj report_morning_pulse bez parametrow. Napisz jedno zdanie z najwazniejsza liczba z wyniku i podaj link do raportu. Jesli wynik zaczyna sie od DEMO:, napisz, ze to dane przykladowe. Jesli zaczyna sie od ERROR:, napisz krotko, ze raportu dzis nie ma."
   }
 ]

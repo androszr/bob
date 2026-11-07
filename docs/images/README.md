@@ -11,7 +11,8 @@ replies carry the `[Bob]` label), Priya Shah and Tom Becker - in four made-up ch
 three is a "Person NN" placeholder, and the 12:00 scheduled note goes to a made-up
 "Managers" chat. The panel picture (`bob-panel.png`) shows the owner Alex Morgan signed in, with the panel's tabs under the
 English names the README's panel table gives them (the page itself speaks Polish). Every word in a picture is English. Times are `HH:MM`, dates are written as "20 Oct". No real Teams
-screenshot is ever used, and no product logos are drawn.
+screenshot is ever used, and no product logos are drawn. The report pictures show the made-up contact-centre group from
+`scripts/snowflake_bob/demo_data.py`; its team leads are "Person NN" placeholders too, and the Snowsight worksheet is a drawing.
 
 | Picture | Source | Shows |
 |---|---|---|
@@ -20,6 +21,9 @@ screenshot is ever used, and no product logos are drawn.
 | `a-day-with-bob.png` | `src/a-day-with-bob.html` | six moments of one working day |
 | `architecture.png` | `src/architecture.html` | how the pieces connect |
 | `bob-panel.png` | `src/bob-panel.html` | the panel: tabs, status and recent conversations |
+| `reports-gallery.png` | `src/reports-gallery.html` | the real sample pages from `docs/reports/`, live in frames |
+| `snowflake-flow.png` | `src/snowflake-flow.html` | from a chat question through Snowflake to a report link |
+| `snowsight-rerun.png` | `src/snowsight-rerun.html` | a drawing of a SQL worksheet re-running a report's statement |
 | `app-icon.svg` | itself (hand-written vector) | the icon at the top of the README |
 
 The pictures share one dark terminal slide style - a 1200 x 1200 frame with a terminal
@@ -29,12 +33,13 @@ lives in `src/tokens.css` only; the shared frame is `src/base.css`.
 ## Redraw and check
 
 ```bash
-python3 tools/readme_images.py            # redraw all five (needs Playwright's Chromium, on a Mac)
+python3 tools/readme_images.py            # redraw all of them (needs Playwright's Chromium, on a Mac)
 python3 tools/readme_images.py --only why-bob
 python3 tools/readme_images.py --check    # verify the committed pictures; no browser needed
 ```
 
-Never edit a PNG by hand: change the source and redraw. Render on a Mac (the `[Bob]` chip
+The report gallery is the one picture that needs Pillow (`pip install pillow`): it goes down to a 256-colour palette to fit the
+size cap. Never edit a PNG by hand: change the source and redraw. Render on a Mac (the `[Bob]` chip
 uses the Apple colour emoji); a re-render on another machine changes bytes, which is why
 tests pin shape, size and chunks, never a digest.
 
@@ -51,7 +56,7 @@ tests pin shape, size and chunks, never a digest.
 1. Open `README.md` in a Markdown preview.
 2. Check the top: icon, title, three badges, a one-line pitch, then a chat picture.
 3. Say out loud what Bob is, why it exists, what a day looks like and how to start it.
-4. Open each of the five pictures at 200%.
+4. Open each of the pictures at 200%.
 5. Read every name, chat title, project key and number; expect only the made-up company and cast.
 6. Check nothing is cut off and every reply shows the `[Bob]` label.
 7. If anything is off, change the source and redraw.

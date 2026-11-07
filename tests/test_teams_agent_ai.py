@@ -182,6 +182,7 @@ def test_mcp_log_re_covers_known_server_prefixes():
         "md-to-mp3-bob":  "[md-to-mp3]",
         "urlopy-bob":     "[urlopy-mcp]",
         "datetime-bob":   "[datetime-mcp]",
+        "snowflake-bob":  "[snowflake-bob]",
     }
     for server, prefix in log_prefix_by_server.items():
         assert ai._MCP_LOG_RE.match(prefix), (

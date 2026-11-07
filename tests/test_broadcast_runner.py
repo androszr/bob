@@ -133,6 +133,23 @@ def test_load_job_returns_correct_job(runner, tmp_path):
     assert job["id"] == "planning-prep"
 
 
+def test_a_team_only_group_refuses_a_chat_with_outside_people(runner, tmp_path, capsys):
+    runner._CHAT_CONFIG_FILE = tmp_path / "chat-config.json"
+    runner._CHAT_CONFIG_FILE.write_text(json.dumps({"chats": {
+        "Clients": {"conv_id": "OUTSIDE", "kanal_fr": True}, "Team": {"conv_id": "TEAM"}}}), encoding="utf-8")
+    _write_jobs(runner.JOBS_FILE, [
+        {"id": "a", "channel": "OUTSIDE", "enabled": True, "tools": ["snowflake"], "prompt": "x"},
+        {"id": "b", "channel": "TEAM", "enabled": True, "tools": ["snowflake"], "prompt": "x"},
+        {"id": "c", "channel": "OUTSIDE", "enabled": True, "tools": ["datetime"], "prompt": "x"},
+        {"id": "d", "channel": "NOT-IN-CONFIG", "enabled": True, "tools": ["snowflake"], "prompt": "x"}])
+    with pytest.raises(SystemExit):
+        runner.load_job("a")
+    assert "snowflake" in capsys.readouterr().err
+    assert runner.load_job("b")["id"] == "b"
+    assert runner.load_job("c")["id"] == "c"
+    assert runner.load_job("d")["id"] == "d", "no flag to read, documented"
+
+
 def test_load_job_returns_none_for_missing_id(runner):
     _write_jobs(runner.JOBS_FILE, [{"id": "other", "enabled": True, "tools": [], "prompt": "x", "channel": "C"}])
     assert runner.load_job("nonexistent") is None

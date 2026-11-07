@@ -102,7 +102,7 @@ def svg_problems(root: ET.Element) -> list[str]:
     return problems
 
 
-def test_the_folder_holds_exactly_the_five_pictures():
+def test_the_folder_holds_exactly_the_listed_pictures():
     assert sorted(p.name for p in IMAGES.glob("*.png")) == NAMES
 
 

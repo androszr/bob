@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>From a chat question to a report</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="base.css">
+<style>
+.flow { display: grid; grid-template-columns: 580px 1fr; column-gap: 36px; }
+.node { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 15px 18px; }
+.node-head { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.node-body { margin-top: 5px; font-family: var(--mono); font-size: 15px; color: var(--muted); line-height: 1.45; }
+.node-key { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.link { height: 56px; display: flex; align-items: center; gap: 12px; padding-left: 30px; font-family: var(--mono); font-size: 15px; color: var(--muted); }
+.link-line { color: var(--accent); font-size: 22px; }
+.aside { display: flex; flex-direction: column; justify-content: center; }
+.aside-row { display: grid; grid-template-columns: 32px 1fr; gap: 12px; font-size: 19px; line-height: 1.36; color: var(--muted); margin-bottom: 22px; }
+.aside-row b { color: var(--text); font-weight: 600; }
+</style></head>
+<body><div id="frame">
+  <div class="kicker">bob@teams-agent:~$ <b>cat docs/snowflake-reports.md</b></div>
+  <div class="headline">Ask in chat. <em>Get a page.</em></div>
+  <p class="sub">Bob never writes SQL. The model picks a report and its values; <b>the statement is fixed and read-only.</b></p>
+  <div class="stage">
+    <div class="flow">
+      <div>
+        <div class="node"><div class="node-head"><span class="n">1</span>A question in a team chat</div>
+          <div class="node-body">"Bob, how is queue 4788 doing across the network?"</div></div>
+        <div class="link"><span class="link-line">↓</span>this chat's role allows the report tools</div>
+        <div class="node node-key"><div class="node-head"><span class="n">2</span>A predefined query</div>
+          <div class="node-body">report_network_panorama(queue, days, end)<br>values checked, then passed as parameters</div></div>
+        <div class="link"><span class="link-line">↓</span>read-only role · two-minute limit</div>
+        <div class="node"><div class="node-head"><span class="n">3</span>Snowflake</div>
+          <div class="node-body">the official connector: SSO or a key pair<br>or the demo database, no account needed</div></div>
+        <div class="link"><span class="link-line">↓</span>rows</div>
+        <div class="node"><div class="node-head"><span class="n">4</span>Three files</div>
+          <div class="node-body">report.html · report.sql · report.csv</div></div>
+        <div class="link"><span class="link-line">↓</span>SharePoint upload</div>
+        <div class="node"><div class="node-head"><span class="n">5</span>A link back in the chat</div>
+          <div class="node-body">[Bob] one line with the number, one link</div></div>
+      </div>
+      <div class="aside">
+        <div class="aside-row"><span class="n">1</span><span><b>Team chats only.</b> The tools are opt-in and never reach a chat you flagged as having outside people.</span></div>
+        <div class="aside-row"><span class="n">2</span><span><b>No free-form SQL.</b> No tool has a parameter a statement could travel in.</span></div>
+        <div class="aside-row"><span class="n">3</span><span><b>No password setting.</b> Sign-in is SSO in a browser or a key pair.</span></div>
+        <div class="aside-row"><span class="n">4</span><span><b>Check the answer.</b> Paste the .sql into a Snowsight worksheet and get the same rows.</span></div>
+        <div class="aside-row"><span class="n">5</span><span><b>Labelled as ever.</b> Made-up demo data says so on the page and in the reply.</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span class="brand"><b>BOB</b> TEAMS AGENT</span>
+    <span class="foot-note">chat → query → Snowflake → page → chat</span>
+  </div>
+</div></body></html>

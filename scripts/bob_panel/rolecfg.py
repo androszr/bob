@@ -85,7 +85,7 @@ def groups() -> tuple[list[str], list[str]]:
     known = data._mcp_groups()
     try:
         src = AI_PY.read_text(encoding="utf-8")
-        m = re.search(r"_OPT_IN_GROUPS = frozenset\(\{(.*?)\}\)", src, re.S)
+        m = re.search(r"_OPT_IN_GROUPS(?::[^=\n]*)? = frozenset\(\{(.*?)\}\)", src, re.S)
         opt_in = set(re.findall(r'"([a-z0-9_]+)"', m.group(1))) if m else set()
     except OSError:
         opt_in = set()

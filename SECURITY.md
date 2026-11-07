@@ -35,6 +35,13 @@ Knowing this helps you judge whether something is a vulnerability.
   GIF search phrase). Web search is off by default; per chat you can turn it on for
   yourself only (`only_me`) or for everyone in the chat (`all`). Fetching a page is never
   offered when the reply also loads data tools (Jira, the leave sheet, to-dos).
+- **Snowflake, only if you set it up.** Reports run predefined read-only statements with your own sign-in (SSO or a key
+  pair; there is no password setting). The model cannot send SQL. The report files hold real numbers and are written
+  owner-only to `user-data/reports/`. With an upload folder set they also go to SharePoint, where that folder's own
+  access rules apply and a link can be forwarded. Named site contacts stay out of real reports unless you set
+  `BOB_REPORT_CONTACTS=1`. Any member of a chat with the group runs reports under your Snowflake sign-in, so give it
+  to chats whose members may see that data. Numbers from a report also reach
+  the model provider, like any other tool result.
 - **It stores everything locally, inside the clone:** `.env` (your tokens), the browser
   session and Teams tokens (written `0600`), chat history and per-person data under
   `user-data/`. Outside the clone: `~/.bob/` (the tool daemons' bearer token and

@@ -21,6 +21,10 @@
     },
     "md_to_mp3": {
       "opis": "Zamiana notatek na audio"
+    },
+    "snowflake": {
+      "opis": "Raporty ze Snowflake (predefiniowane zapytania, interaktywne strony)",
+      "tylko_zespol": true
     }
   },
   "role": {
@@ -28,7 +32,15 @@
       "nazwa": "Asystent",
       "emoji": "🧑‍💻",
       "opis": "Bob jako ogolny asystent: Jira, zadania, urlopy, data, notatki audio.",
-      "dostep": ["jira", "jira_write", "jira_hypercare", "todos", "datetime", "urlopy", "md_to_mp3"],
+      "dostep": [
+        "jira",
+        "jira_write",
+        "jira_hypercare",
+        "todos",
+        "datetime",
+        "urlopy",
+        "md_to_mp3"
+      ],
       "umiejetnosci": [
         {
           "nazwa": "Odpowiedzi na czatach",
@@ -56,7 +68,11 @@
       "nazwa": "Project manager",
       "emoji": "📋",
       "opis": "Prowadzenie zgloszen projektu: czytanie i zapisy w Jirze, daty.",
-      "dostep": ["jira", "jira_write", "datetime"],
+      "dostep": [
+        "jira",
+        "jira_write",
+        "datetime"
+      ],
       "umiejetnosci": [
         {
           "nazwa": "Zgloszenia w Jirze",
@@ -71,7 +87,11 @@
       "nazwa": "Notatki",
       "emoji": "📝",
       "opis": "Zadania i notatki: lista zadan, audio z notatek, daty.",
-      "dostep": ["todos", "md_to_mp3", "datetime"],
+      "dostep": [
+        "todos",
+        "md_to_mp3",
+        "datetime"
+      ],
       "umiejetnosci": [
         {
           "nazwa": "Lista zadan",
@@ -81,6 +101,25 @@
       ],
       "wiedza": [],
       "obraz": "bob-eureka"
+    },
+    "data_analyst": {
+      "nazwa": "Analityk danych",
+      "emoji": "📊",
+      "opis": "Raporty ze Snowflake i odpowiedzi na zgloszenia o prognozach. Nigdy na czacie z osobami z zewnatrz.",
+      "dostep": [
+        "snowflake",
+        "jira",
+        "datetime"
+      ],
+      "umiejetnosci": [
+        {
+          "nazwa": "Raporty ze Snowflake",
+          "opis": "Cztery interaktywne raporty z predefiniowanych zapytan",
+          "gdzie": "scripts/snowflake_bob"
+        }
+      ],
+      "wiedza": [],
+      "obraz": "bob-working-thinking"
     }
   }
 }

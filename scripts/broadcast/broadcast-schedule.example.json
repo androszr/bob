@@ -14,5 +14,8 @@
   },
   "worklog-missing-recap": {
     "generate_send": "12:00"
+  },
+  "morning-pulse": {
+    "generate_send": "07:30"
   }
 }
