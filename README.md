@@ -14,7 +14,7 @@
 
 <p align="center"><img src="docs/images/hero-bob-in-teams.png" alt="A chat where Bob answers a question about open Jira tickets and then says it is an AI when asked." width="880"></p>
 
-<p align="center"><sub>The shipped prompts are in Polish; the persona can be rewritten in any language. Every example here uses a made-up company.</sub></p>
+<p align="center"><sub>The shipped prompts are in English and Bob replies in the language each person writes in; the persona can be rewritten freely. Every example here uses a made-up company.</sub></p>
 
 ## Why Bob
 
@@ -61,13 +61,13 @@ Full detail: [docs/setup.md](docs/setup.md).
 
 | Tab | What it shows |
 |---|---|
-| Dashboard (Pulpit) | Whether Bob and the Teams session are alive, what to do next, a live 24-hour view of the chats, cost and reply times |
-| Approvals (Zgody) | Yes-or-no requests from Bob, Claude Code or scripts; answer them here or in the control chat |
-| Conversations (Rozmowy) | The latest messages Bob reacted to and what he answered |
-| Logs (Logi i problemy) | Bob's log, parsed: problems of the last day first, routine noise hidden |
-| Chats (Kanały) | Add, change, switch on and off the chats Bob watches, with a diff before every save |
-| Roles (Role) | The roles, what they may use and know, and edits to their knowledge through an approval |
-| Schedule (Harmonogram) | Scheduled posts and the background loops |
+| Dashboard | Whether Bob and the Teams session are alive, what to do next, a live 24-hour view of the chats, cost and reply times |
+| Approvals | Yes-or-no requests from Bob, Claude Code or scripts; answer them here or in the control chat |
+| Conversations | The latest messages Bob reacted to and what he answered |
+| Logs | Bob's log, parsed: problems of the last day first, routine noise hidden |
+| Chats | Add, change, switch on and off the chats Bob watches, with a diff before every save |
+| Roles | The roles, what they may use and know, and edits to their knowledge through an approval |
+| Schedule | Scheduled posts and the background loops |
 
 It listens on `127.0.0.1` only and every change must come from the page itself (an Origin and Host check), so another website in your browser cannot drive Bob. Starting Bob the old way (`python3 scripts/teams_agent/cli.py`) still works unchanged. To have the panel start at login, run `./bob install`. More: [docs/panel.md](docs/panel.md).
 
@@ -118,10 +118,10 @@ Setup, your own tables and loading the demo data into a trial account: [docs/sno
 A chat can wear one or more **roles** instead of a hand-written `mcp` list. A role is a named bundle: the tool groups it may use, what it can do, and the knowledge files it reads. Copy `roles.example.json` to `roles.json` (git ignores it), then in `chat-config.json`:
 
 ```json
-"Project channel": { "role": ["project_manager"], "dodatkowo": ["todos"] }
+"Project channel": { "roles": ["project_manager"], "add_groups": ["todos"] }
 ```
 
-`dodatkowo` adds groups for that chat, `bez` removes some. The role `asystent` means every default group, exactly what `"mcp": null` meant, and a chat without `role` keeps its own `mcp` list. Bob reads the file on every reply, so an edit applies from the next message. Details: [docs/running.md](docs/running.md#roles).
+`add_groups` adds groups for that chat, `remove_groups` removes some. The role `assistant` means every default group, exactly what `"mcp": null` meant, and a chat without `roles` keeps its own `mcp` list. (A config written by an older build, with `role`, `dodatkowo`, `bez` or `asystent`, is still accepted.) Bob reads the file on every reply, so an edit applies from the next message. Details: [docs/running.md](docs/running.md#roles).
 
 ## What it can do
 
@@ -216,7 +216,7 @@ The LaunchAgents under `~/Library/LaunchAgents/` are removed by the script in st
 - [MCP servers and ports](docs/mcp-servers.md)
 - [Snowflake reports](docs/snowflake-reports.md) and [the sample pages](docs/reports/index.html)
 - [Architecture](docs/architecture.md)
-- [Product spec (PRD, in Polish)](PRD.md)
+- [Product spec (PRD)](PRD.md)
 - [Agent module notes](scripts/teams_agent/README.md) and [MCP admin notes](scripts/mcp_admin/README.md)
 - [How the pictures are made](docs/images/README.md)
 

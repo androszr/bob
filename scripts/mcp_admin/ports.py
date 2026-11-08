@@ -14,7 +14,7 @@ MCP_PORTS: dict[str, int] = {
     "jira-bob":                7101,
     "todos-bob":               7103,
     "md-to-mp3-bob":           7110,
-    "urlopy-bob":              7112,
+    "leave-bob":               7112,
     "datetime-bob":            7113,
     "jira-read-bob":           7126,
     "snowflake-bob":           7132,

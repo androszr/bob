@@ -54,33 +54,36 @@ The owner can pause, disable and resume Bob from the control chat: `Bob pause 30
 ## Roles
 
 A chat can have one or more **roles** instead of a hand-written `mcp` list. A role is a named bundle of
-tool groups (`dostep`), skills and knowledge (`wiedza`), kept in `roles.json` (copy `roles.example.json`;
+tool groups (`access`), skills and knowledge (`knowledge`), kept in `roles.json` (copy `roles.example.json`;
 the path can be moved with `BOB_ROLES_FILE`). In `chat-config.json`:
 
 ```json
-"Project channel": { "role": ["project_manager"], "dodatkowo": ["todos"], "bez": ["jira_write"] }
+"Project channel": { "roles": ["project_manager"], "add_groups": ["todos"], "remove_groups": ["jira_write"] }
 ```
 
-- the chat's tools are the union of its roles' `dostep`, plus `dodatkowo`, minus `bez`;
-- the role `asystent` is required and means **every default group** - exactly what `"mcp": null` meant, so a
-  chat on `["asystent"]` gets the same prompt and tools as before;
-- a chat **without** `role` keeps its own `mcp` / `mcp_extra`; an explicit `Bob chat NAME mcp ...` from the
+- the chat's tools are the union of its roles' `access`, plus `add_groups`, minus `remove_groups`;
+- the role `assistant` is required and means **every default group** - exactly what `"mcp": null` meant, so a
+  chat on `["assistant"]` gets the same prompt and tools as before;
+- a chat **without** `roles` keeps its own `mcp` / `mcp_extra`; an explicit `Bob chat NAME mcp ...` from the
   control chat puts a role chat back on a hand-written list;
-- a group marked `"tylko_zespol": true` (team only) never reaches a chat flagged `"kanal_fr": true`, the flag
+- a group marked `"team_only": true` never reaches a chat flagged `"external_chat": true`, the flag
   for a channel with users outside your team, whatever its roles say;
-- knowledge entries with `"wpiecie": "prompt"` are appended to the system prompt of the chats that have the
-  role (a missing or too-long file is cut or skipped, never a failed reply); `"narzedzie"` and `"kod"` entries
+- knowledge entries with `"wiring": "prompt"` are appended to the system prompt of the chats that have the
+  role (a missing or too-long file is cut or skipped, never a failed reply); `"tool"` and `"code"` entries
   are described only;
 - the file is read on every reply, so an edit applies from the next message. A broken `roles.json` is reported
-  on stderr and the role chats lose their tools until it is fixed.
+  on stderr and the role chats lose their tools until it is fixed;
+- files written by an older build, with the Polish keys (`role`, `dodatkowo`, `bez`, `kanal_fr`, and in
+  `roles.json` `grupy`, `dostep`, `wiedza`, `wpiecie`, `tylko_zespol`, role `asystent`, group `urlopy`), are still
+  accepted; when both forms are present the English one wins, and the panel saves English keys only.
 
 The panel's Roles tab edits this file, with a backup and a check before every save.
 
 Before rolling back to an older build, put the chats' hand-written `mcp` lists back (without team-only groups on
-`kanal_fr` chats) and remove `ingest_only`: older builds ignore `role`, `kanal_fr` and `ingest_only`, so a role chat
-would get every default group and a listen-only chat would be answered.
+`external_chat` chats) and remove `ingest_only`: older builds ignore `roles`, `external_chat` and `ingest_only`, so a
+role chat would get every default group and a listen-only chat would be answered.
 
-If `roles.json` is missing or broken, any chat that has `role` or `kanal_fr` gets no tools at all (the failure is
+If `roles.json` is missing or broken, any chat that has `roles` or `external_chat` gets no tools at all (the failure is
 printed on stderr); chats with neither keep working as before.
 
 ## Receive-only chats
@@ -93,7 +96,7 @@ scripts.
 ## Reactions
 
 When someone only acknowledges ("ok", "thanks, we'll talk Monday") Bob answers with the token
-`[BOB-REAKCJA]` and the agent puts a thumbs-up on that message instead of writing a reply. The token can also
+`[BOB-REACT]` and the agent puts a thumbs-up on that message instead of writing a reply. The token can also
 sit next to a short text.
 
 ## Long jobs
@@ -105,8 +108,8 @@ how long it took.
 ## Approvals from the control chat
 
 Yes-or-no requests opened in the panel (by you, Claude Code or a script) are announced once in your notes chat
-(`48:notes`, the control chat of the example config) with an id. Answer there with "Bob, zatwierdzam apr-0123456789" or "Bob, odrzucam apr-0123456789: not now";
-when exactly one request waits, "Bob, zatwierdzam" is enough. Only the owner can decide, and only from the
+(`48:notes`, the control chat of the example config) with an id. Answer there with "Bob, approve apr-0123456789" or "Bob, reject apr-0123456789: not now";
+when exactly one request waits, "Bob, approve" is enough (the older "Bob, zatwierdzam" / "Bob, odrzucam" still work). Only the owner can decide, and only from the
 control chat.
 
 ## Self-healing sign-in
@@ -120,7 +123,7 @@ terminal, Bob exits with code 4 and asks you to sign in from the panel.
 
 ## Memory of the files Bob sent
 
-Every text file Bob sends (`[WYSLIJ_PLIK]`) is also kept under `user-data/bob-files/` with a small registry.
+Every text file Bob sends (`[SEND_FILE]`) is also kept under `user-data/bob-files/` with a small registry.
 When someone later links it, quotes Bob's message or mentions its name, the file's content is given to Bob as a
 note, so "fix that file" works. A file is only read back in the chat it was sent to.
 
@@ -136,9 +139,9 @@ label and emoji, and its own trigger word. An entry in `chat-config.json`:
 The repository holds one template persona:
 [`scripts/teams_agent/prompts/example_persona.md`](../scripts/teams_agent/prompts/example_persona.md)
 (its own label and a light-bulb emoji). It shows the two tokens handled in `cli.py`:
-`[EXAMPLE-POMYSL: title | body]` (an idea saved to `user-data/example/pomysly.jsonl`) and
-`[EXAMPLE-UCZY-SIE: title | body]` (learning - saved **only** when the owner sent the
-message, checked by MRI). A new persona is a prompt in `prompts/`, an entry in
+`[EXAMPLE-IDEA: title | body]` (an idea saved to `user-data/example/ideas.jsonl`) and
+`[EXAMPLE-LEARN: title | body]` (learning, saved to `user-data/example/learning/` **only** when the owner sent the
+message, checked by MRI). The older Polish tags `[EXAMPLE-POMYSL]` / `[EXAMPLE-UCZY-SIE]` are still accepted. A new persona is a prompt in `prompts/`, an entry in
 `ai._PERSONA_PROMPTS` and a label in `api_client.AGENT_LABELS` / `_AGENT_EMOJI`.
 
 The Bob mascot GIFs (`[BOB_GIF: mood]`) are **not included in the repository**. Set

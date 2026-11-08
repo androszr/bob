@@ -7,6 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_servers.sh
 source "$SCRIPT_DIR/_servers.sh"
+retire_legacy_servers
 
 started=0
 for entry in "${MCP_SERVERS[@]}"; do

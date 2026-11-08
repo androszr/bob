@@ -4,7 +4,7 @@ Usage:
     python scripts/teams_agent/stats.py [--log LOG] [--since YYYY-MM-DD]
     python scripts/teams_agent/stats.py --post [--since today]
 
---post:  post to Teams Notatki chat (or edit the existing pinned message).
+--post:  post to the owner's notes chat ("Notes") or edit the existing pinned message.
          Requires cli.py already running (Bearer token must be set in api_client).
          State (message ID) is saved to stats-state.json.
 """
@@ -20,14 +20,19 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps na stdout/stderr
+import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps on stdout/stderr
 
 _LOG_FILE = Path(__file__).parent / "log.jsonl"
 _PERF_LOG = Path(__file__).parent / "perf-metrics.jsonl"
 _OTEL_LOG = Path(__file__).parent.parent / "otel" / "otel-spans.jsonl"
 _CHAT_CONFIG = Path(__file__).resolve().parents[2] / "chat-config.json"
 _STATS_STATE = Path(__file__).parent / "stats-state.json"
-_CET = ZoneInfo("Europe/Warsaw")   # was a fixed +2: wrong "today" and times from the winter time change on
+try:
+    import org_config as _org_config
+except Exception:  # noqa: BLE001
+    _org_config = None
+# Was a fixed +2: wrong "today" and times from the winter time change on.
+_CET = ZoneInfo(getattr(_org_config, "TIMEZONE", "Europe/Warsaw"))
 _NOTATKI_CONV_ID = "48:notes"
 
 
@@ -364,7 +369,7 @@ def render(stats: dict, configured_chats: list[str]) -> str:
     lines = [
         f"BOB STATS -- {now}",
         "=" * 68,
-        f"{'Chat':<28} {'Wysl':>5} {'Pom':>4} {'~Inp':>6} {'~Out':>6} {'Ostatnia'}",
+        f"{'Chat':<28} {'Sent':>5} {'Skip':>4} {'~Inp':>6} {'~Out':>6} {'Last'}",
         "-" * 68,
     ]
 
@@ -391,11 +396,11 @@ def render(stats: dict, configured_chats: list[str]) -> str:
 
     lines.append("-" * 68)
     lines.append(
-        f"{'SUMA':<28} {total_sent:>5} {total_skip:>4} "
+        f"{'TOTAL':<28} {total_sent:>5} {total_skip:>4} "
         f"{_fmt_tokens(total_inp):>6} {_fmt_tokens(total_out):>6}"
     )
     lines.append("")
-    lines.append("* tokeny szacowane: 1 token ~ 4 znaki. Nie uwzglednia sys-prompt/knowledge.")
+    lines.append("* tokens estimated: 1 token ~ 4 chars. Excludes the system prompt and knowledge.")
     return "\n".join(lines)
 
 
@@ -407,12 +412,12 @@ def _e(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-# The daily Notatki message: read on a phone - one line of headline numbers, what needs attention,
-# one channel table, a 7-day trend. Tokens / latency percentiles / OTEL tables moved to the panel (Pulpit).
-_KIND = {"watch_send": "odpowiedz", "catchup_send": "odpowiedz", "watch_skip_silent_sentinel": "milczenie",
-         "watch_skip_answered": "juz_odpowiedziane"}
+# The daily notes-chat message: read on a phone - one line of headline numbers, what needs attention,
+# one channel table, a 7-day trend. Tokens / latency percentiles / OTEL tables moved to the panel (Dashboard).
+_KIND = {"watch_send": "replied", "catchup_send": "replied", "watch_skip_silent_sentinel": "silent",
+         "watch_skip_answered": "already_answered"}
 _PANEL_URL = f"http://localhost:{os.environ.get('BOB_PANEL_PORT') or '3006'}"
-_WD = ("pon.", "wt.", "śr.", "czw.", "pt.", "sob.", "niedz.")
+_WD = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def channel_activity(log_path: Path, since: datetime) -> dict[str, dict]:
@@ -432,11 +437,11 @@ def channel_activity(log_path: Path, since: datetime) -> dict[str, dict]:
         ts = _parse_ts(r.get("ts", ""))
         if not kind or not isinstance(chat, str) or ts is None or ts < since:
             continue
-        if kind == "odpowiedz" and not r.get("send_ok", True):
+        if kind == "replied" and not r.get("send_ok", True):
             continue
-        c = out.setdefault(chat, {"wiadomosci": 0, "odpowiedz": 0, "milczenie": 0, "juz_odpowiedziane": 0,
+        c = out.setdefault(chat, {"messages": 0, "replied": 0, "silent": 0, "already_answered": 0,
                                   "last_ts": None})
-        c["wiadomosci"] += 1
+        c["messages"] += 1
         c[kind] += 1
         if c["last_ts"] is None or ts > c["last_ts"]:
             c["last_ts"] = ts
@@ -476,7 +481,7 @@ def daily_costs(perf_path: Path, days: int = 7, now: datetime | None = None) -> 
 
 
 def _usd(v: Decimal | float) -> str:
-    return f"{v:,.2f} $".replace(",", " ").replace(".", ",")
+    return f"${v:,.2f}"
 
 
 def render_html(  # noqa: PLR0912, PLR0915
@@ -488,22 +493,22 @@ def render_html(  # noqa: PLR0912, PLR0915
     activity: dict | None = None,
     costs: dict | None = None,
 ) -> str:
-    """The daily Notatki message: headline numbers, notes, channels, trend (Teams HTML, phone-first)."""
+    """The daily notes-chat message: headline numbers, notes, channels, trend (Teams HTML, phone-first)."""
     now = _cet_now()
-    head = (f"<p><strong>&#128202; Bob - dziś</strong> &nbsp;<span style='color:#888'>"
-            f"{_WD[now.weekday()]} {now:%d.%m}, stan na {now:%H:%M}</span></p>")
+    head = (f"<p><strong>&#128202; Bob - today</strong> &nbsp;<span style='color:#888'>"
+            f"{_WD[now.weekday()]} {now:%d.%m}, as of {now:%H:%M}</span></p>")
     activity = activity or {}
     perf_ok = bool(perf and perf.get("available"))
     t = (perf or {}).get("total", {}) if perf_ok else {}
     per_chat_p = (perf or {}).get("per_chat", {}) if perf_ok else {}
 
-    n_msg = sum(c["wiadomosci"] for c in activity.values())
-    n_rep = sum(c["odpowiedz"] for c in activity.values())
-    n_sil = sum(c["milczenie"] for c in activity.values())
-    n_ans = sum(c["juz_odpowiedziane"] for c in activity.values())
-    lines = [f"&#128172; <strong>{n_msg}</strong> wiadomości do Boba &middot; &#9989; <strong>{n_rep}</strong> "
-             f"odpowiedzi &middot; &#129323; <strong>{n_sil}</strong> bez odpowiedzi"
-             + (f" &middot; &#128101; {n_ans} odpowiedział ktoś inny" if n_ans else "")]
+    n_msg = sum(c["messages"] for c in activity.values())
+    n_rep = sum(c["replied"] for c in activity.values())
+    n_sil = sum(c["silent"] for c in activity.values())
+    n_ans = sum(c["already_answered"] for c in activity.values())
+    lines = [f"&#128172; <strong>{n_msg}</strong> messages to Bob &middot; &#9989; <strong>{n_rep}</strong> "
+             f"replied &middot; &#129323; <strong>{n_sil}</strong> unanswered"
+             + (f" &middot; &#128101; {n_ans} answered by someone else" if n_ans else "")]
     if perf_ok:
         cost = Decimal(str(t.get("total_cost_usd", 0.0)))
         yday = (costs or {}).get("yday_so_far")
@@ -511,15 +516,15 @@ def render_html(  # noqa: PLR0912, PLR0915
         if yday:
             diff = (cost - yday) / yday * 100
             arrow = "&#9650;" if diff > 0 else "&#9660;"
-            cmp = f" <span style='color:#888'>({arrow} {abs(diff):.0f}% wobec wczoraj o tej porze: {_usd(yday)})</span>"
+            cmp = f" <span style='color:#888'>({arrow} {abs(diff):.0f}% vs yesterday at this time: {_usd(yday)})</span>"
         p50, p95 = t.get("p50_duration_ms") or 0, t.get("p95_duration_ms") or 0
-        lines.append(f"&#128176; <strong>{_usd(cost)}</strong> koszt Claude{cmp}")
+        lines.append(f"&#128176; <strong>{_usd(cost)}</strong> Claude cost{cmp}")
         if p50:
-            sec = lambda ms: f"{ms / 1000:.1f}".replace(".", ",")  # noqa: E731
-            lines.append(f"&#9201; odpowiedź zwykle w <strong>{sec(p50)} s</strong>"
-                         f" <span style='color:#888'>(najdłuższe {sec(p95)} s)</span>")
+            sec = lambda ms: f"{ms / 1000:.1f}"  # noqa: E731
+            lines.append(f"&#9201; reply usually in <strong>{sec(p50)} s</strong>"
+                         f" <span style='color:#888'>(longest {sec(p95)} s)</span>")
     else:
-        lines.append("<span style='color:#888'>brak danych o koszcie i czasie (czekam na perf-metrics.jsonl)</span>")
+        lines.append("<span style='color:#888'>no cost or timing data yet (waiting for perf-metrics.jsonl)</span>")
     body = f"<p>{'<br>'.join(lines)}</p>"
 
     # what needs attention - at most three plain-language notes
@@ -529,33 +534,33 @@ def render_html(  # noqa: PLR0912, PLR0915
         share = top.get("total_cost_usd", 0) / t["total_cost_usd"]
         a = activity.get(top_chat, {})
         if share >= 0.5 and top_chat:
-            silent = f", {a['milczenie']} z {a['wiadomosci']} wiadomości bez odpowiedzi" if a.get("milczenie") else ""
-            notes.append(f"<strong>{_e(top_chat)}</strong> to {share:.0%} dzisiejszego kosztu{silent}.")
+            silent = f", {a['silent']} of {a['messages']} messages unanswered" if a.get("silent") else ""
+            notes.append(f"<strong>{_e(top_chat)}</strong> is {share:.0%} of today's cost{silent}.")
         hit = t.get("cache_hit_rate", 0.0)
         if t.get("count", 0) >= 5 and hit < 0.6:
-            notes.append(f"Tylko {hit:.0%} treści szło z pamięci podręcznej (cache) - reszta była wysyłana od nowa "
-                         "i liczona drożej.")
+            notes.append(f"Only {hit:.0%} of the input came from the cache - the rest was sent afresh "
+                         "and billed at the higher rate.")
         if p95 and p95 > 60_000:
-            notes.append(f"Najdłuższe odpowiedzi trwały ponad {p95 / 60000:.0f} min - analizy albo przeciążenie.")
+            notes.append(f"The longest replies took over {p95 / 60000:.0f} min - long analyses or overload.")
     if notes:
-        body += "<p><strong>Warto wiedzieć</strong><br>" + "<br>".join(f"&#8226; {n}" for n in notes[:3]) + "</p>"
+        body += "<p><strong>Worth knowing</strong><br>" + "<br>".join(f"&#8226; {n}" for n in notes[:3]) + "</p>"
 
     # channels: one table, most expensive first, then most active
     names = set(activity) | {c for c in per_chat_p if c}
     rows = sorted(names, key=lambda c: (-(per_chat_p.get(c, {}).get("total_cost_usd", 0)),
-                                        -(activity.get(c, {}).get("wiadomosci", 0))))
+                                        -(activity.get(c, {}).get("messages", 0))))
     if rows:
         td = "<td style='padding:3px 8px;border-bottom:1px solid #ddd;'>"
         tdr = "<td style='padding:3px 8px;border-bottom:1px solid #ddd;text-align:right;white-space:nowrap;'>"
         th = "<th style='padding:3px 8px;border-bottom:2px solid #999;text-align:{a};'>{t}</th>"
         trs = "".join(
-            f"<tr>{td}{_e(c)}</td>{tdr}{activity.get(c, {}).get('wiadomosci', 0)}</td>"
-            f"{tdr}{activity.get(c, {}).get('odpowiedz', 0)}</td>"
+            f"<tr>{td}{_e(c)}</td>{tdr}{activity.get(c, {}).get('messages', 0)}</td>"
+            f"{tdr}{activity.get(c, {}).get('replied', 0)}</td>"
             f"{tdr}{_usd(per_chat_p.get(c, {}).get('total_cost_usd', 0.0)) if perf_ok else '-'}</td></tr>"
             for c in rows)
-        body += ("<p><strong>Kanały</strong></p><table style='border-collapse:collapse;font-size:0.95em;'><tr>"
-                 + th.format(a="left", t="Kanał") + th.format(a="right", t="Wiad.")
-                 + th.format(a="right", t="Odp.") + th.format(a="right", t="Koszt") + f"</tr>{trs}</table>")
+        body += ("<p><strong>Channels</strong></p><table style='border-collapse:collapse;font-size:0.95em;'><tr>"
+                 + th.format(a="left", t="Channel") + th.format(a="right", t="Msgs")
+                 + th.format(a="right", t="Replies") + th.format(a="right", t="Cost") + f"</tr>{trs}</table>")
 
     # trend: one line, readable on a phone
     if costs and costs.get("days"):
@@ -563,18 +568,18 @@ def render_html(  # noqa: PLR0912, PLR0915
         vals = [v for _, v in days]
         avg = sum(vals[:-1]) / max(1, len(vals) - 1)
         top = max(vals) if vals else 0
-        cells = [(("dziś" if i == len(days) - 1 else _WD[d.weekday()].rstrip(".")), v) for i, (d, v) in enumerate(days)]
-        line = " &middot; ".join(f"<strong>{lab} {v:.0f} $</strong>" if v == top and top else f"{lab} {v:.0f} $"
+        cells = [(("today" if i == len(days) - 1 else _WD[d.weekday()]), v) for i, (d, v) in enumerate(days)]
+        line = " &middot; ".join(f"<strong>{lab} ${v:.0f}</strong>" if v == top and top else f"{lab} ${v:.0f}"
                                  for lab, v in cells)
-        body += (f"<p><strong>Koszt - ostatnie 7 dni</strong><br>{line}<br>"
-                 f"<span style='color:#888'>średnio {_usd(avg)} dziennie (bez dzisiaj)</span></p>")
+        body += (f"<p><strong>Cost - last 7 days</strong><br>{line}<br>"
+                 f"<span style='color:#888'>average {_usd(avg)} a day (excluding today)</span></p>")
     models = (perf or {}).get("per_model", {}) if perf_ok else {}
     if len(models) > 1:
-        body += ("<p style='color:#888;font-size:0.9em'>Modele: " + ", ".join(
+        body += ("<p style='color:#888;font-size:0.9em'>Models: " + ", ".join(
             f"{_e(m.replace('claude-', ''))} {b.get('count', 0)}× {_usd(b.get('total_cost_usd', 0.0))}"
             for m, b in sorted(models.items(), key=lambda kv: -kv[1].get("total_cost_usd", 0))) + "</p>")
-    foot = (f"<p style='color:#888;font-size:0.85em'>Szczegóły na żywo (mapa ciepła, logi): panel Boba "
-            f"{_PANEL_URL} na Macu &middot; odświeżane co 10 min</p>")
+    foot = (f"<p style='color:#888;font-size:0.85em'>Live details (heat map, logs): Bob's panel "
+            f"{_PANEL_URL} on the Mac &middot; refreshed every 10 min</p>")
     return head + body + foot
 
 
@@ -614,28 +619,28 @@ def post_or_edit(html: str, conv_id: str = _NOTATKI_CONV_ID) -> None:
         and posted_at.astimezone(_CET).date() == _cet_now().date()
     )
 
-    body = html.split("</p>", 1)[-1]                   # everything but the "stan na HH:MM" header
+    body = html.split("</p>", 1)[-1]                   # everything but the "as of HH:MM" header
     if existing_id and existing_id != "unknown" and same_day and state.get("body") == body:
-        print("[stats] bez zmian - nie edytuje", flush=True)
+        print("[stats] no change - not editing", flush=True)
         return
     if existing_id and existing_id != "unknown" and same_day:
         ok = api_client.edit_message(existing_id, html, conv_id)
         if ok:
-            print(f"[stats] wiadomosc edytowana (id={existing_id})", flush=True)
+            print(f"[stats] message edited (id={existing_id})", flush=True)
             state["updated_at"] = _cet_now().isoformat()
             state["body"] = body
             _save_state(state)
             return
-        print("[stats] edit nie powiodl sie -- probuje nowa wiadomosc", flush=True)
+        print("[stats] edit failed -- trying a new message", flush=True)
 
     msg_id = api_client.send_html_message(html, conv_id)
     if msg_id:
-        reason = "nowy dzien -- nowa" if (existing_id and not same_day) else "nowa"
-        print(f"[stats] {reason} wiadomosc wyslana (id={msg_id})", flush=True)
+        reason = "new day -- new" if (existing_id and not same_day) else "new"
+        print(f"[stats] {reason} message sent (id={msg_id})", flush=True)
         _save_state({"message_id": msg_id, "conv_id": conv_id,
                      "posted_at": _cet_now().isoformat(), "body": body})
     else:
-        print("[stats] BLAD: nie udalo sie wyslac wiadomosci", file=sys.stderr, flush=True)
+        print("[stats] ERROR: could not send the message", file=sys.stderr, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -646,15 +651,15 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Bob stats per chat")
     parser.add_argument("--log", default=str(_LOG_FILE))
     parser.add_argument("--since", default=None,
-                        help="Filtruj od daty YYYY-MM-DD lub 'today'. "
-                             "Np. --since 2026-05-26 albo --since today")
+                        help="Filter from a YYYY-MM-DD date or 'today'. "
+                             "E.g. --since 2026-05-26 or --since today")
     parser.add_argument("--post", action="store_true",
-                        help="Wyslij/edytuj wiadomosc HTML na Teams (Notatki).")
+                        help="Send/edit the HTML message on Teams (the notes chat).")
     args = parser.parse_args(argv)
 
     log_path = Path(args.log)
     if not log_path.exists():
-        print(f"Brak pliku logu: {log_path}", file=sys.stderr)
+        print(f"Log file not found: {log_path}", file=sys.stderr)
         sys.exit(1)
 
     since: datetime | None = None
@@ -669,7 +674,7 @@ def main(argv=None) -> None:
                 since = datetime.fromisoformat(args.since).replace(tzinfo=_CET)
                 since_label = args.since
             except ValueError:
-                print(f"Nieprawidlowy format daty: {args.since!r}", file=sys.stderr)
+                print(f"Invalid date format: {args.since!r}", file=sys.stderr)
                 sys.exit(1)
 
     # For perf aggregation, use midnight CET even if --since is not specified

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,12 +14,12 @@ try { const t = localStorage.getItem('bob-theme') || (matchMedia('(prefers-color
 <body>
 <div class="app">
   <aside class="ds-nav">
-    <div class="ds-nav-header"><h1>Bob · panel</h1><p id="owner-sub">asystent na Teams</p>
+    <div class="ds-nav-header"><h1>Bob · panel</h1><p id="owner-sub">assistant on Teams</p>
       <div class="state-pill"><span id="dot" class="dot"></span><span id="headline">…</span></div></div>
     <div id="nav"></div>
     <div class="nav-foot">
-      <a class="ds-link" id="theme" style="cursor:pointer">Tryb ciemny / jasny</a>
-      <span>Terminal: <code>./bob</code> otwiera ten panel</span>
+      <a class="ds-link" id="theme" style="cursor:pointer">Dark / light mode</a>
+      <span>Terminal: <code>./bob</code> opens this panel</span>
     </div>
   </aside>
   <main class="ds-main" id="main"></main>
@@ -29,22 +29,22 @@ try { const t = localStorage.getItem('bob-theme') || (matchMedia('(prefers-color
 <script>
 // ---- shared --------------------------------------------------------------------------------------
 const PAGES = [
-  ['Na co dzień', [['pulpit','Pulpit','dashboard'],['zgody','Zgody','tick'],['aktywnosc','Rozmowy','chatbubbles'],['logi','Logi i problemy','shield']]],
-  ['Ustawienia Boba', [['czaty','Kanały','settings'],['role','Role','user'],['harmonogram','Harmonogram','schedule']]],
+  ['Day to day', [['dashboard','Dashboard','dashboard'],['approvals','Approvals','tick'],['conversations','Conversations','chatbubbles'],['logs','Logs and problems','shield']]],
+  ["Bob's settings", [['chats','Chats','settings'],['roles','Roles','user'],['schedule','Schedule','schedule']]],
 ];
 const ALL = PAGES.flatMap(g=>g[1]);
-let tab = (location.hash||'#pulpit').slice(1); if(!ALL.some(t=>t[0]===tab)) tab='pulpit';
+let tab = (location.hash||'#dashboard').slice(1); if(!ALL.some(t=>t[0]===tab)) tab='dashboard';
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ic = n => `<span class="ic" style="--ic:url(/static/icons/${n}.svg)"></span>`;
-const ago = iso => { const s=(Date.now()-new Date(iso))/1000; return s<60?`${Math.round(s)} s`:s<3600?`${Math.round(s/60)} min`:s<86400?`${Math.round(s/3600)} h`:`${Math.round(s/86400)} dni`; };
+const ago = iso => { const s=(Date.now()-new Date(iso))/1000; return s<60?`${Math.round(s)} s`:s<3600?`${Math.round(s/60)} min`:s<86400?`${Math.round(s/3600)} h`:`${Math.round(s/86400)} d`; };
 const when = iso => { if(!iso) return '-'; const d = new Date(iso); if(isNaN(d)) return esc(iso);
-  return `${d.toLocaleString('pl-PL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} <span class="muted">(${ago(iso)} temu)</span>`; };
+  return `${d.toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} <span class="muted">(${ago(iso)} ago)</span>`; };
 const api = (p, body) => fetch(p, body===undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}).then(r=>r.json());
 const btn = (label, attrs='', kind='secondary') => `<button class="ds-btn ds-btn--sm ds-btn--${kind}" ${attrs}>${label}</button>`;
 const badge = (t, c='gray', title='') => `<span class="ds-badge ds-badge--md ds-badge--${c}" ${title?`title="${esc(title)}"`:''}>${t}</span>`;
 const callout = (kind, html) => `<div class="ds-callout ds-callout--${kind}">${ic({success:'tick',warning:'warning',danger:'cross',info:'info',neutral:'info'}[kind])}<div>${html}</div></div>`;
-const head = (title, desc, help='') => `<div class="page-head"><h1>${title}</h1><p>${desc}</p>${help?`<details class="help"><summary>Jak to działa?</summary><div>${help}</div></details>`:''}</div>`;
+const head = (title, desc, help='') => `<div class="page-head"><h1>${title}</h1><p>${desc}</p>${help?`<details class="help"><summary>How does it work?</summary><div>${help}</div></details>`:''}</div>`;
 const table = (cols, rows) => `<div class="ds-table-wrap"><table class="ds-table"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
 const bobImg = (name, cls='', id='') => `<img ${id?`id="${id}"`:''} class="${cls}" src="/static/bob/${esc(name||'bob-static-base')}.svg" alt="Bob">`;
 // which mascot stands for which situation (static/bob/README.md lists the whole set)
@@ -55,7 +55,7 @@ let pendingCount = 0, PROBLEMS = 0;
 
 function nav(){
   $('#nav').innerHTML = PAGES.map(([g, items]) => `<div class="ds-nav-section">${g}</div>` + items.map(([k,l,i]) =>
-    `<a class="${k===tab?'active':''}" data-t="${k}">${ic(i)}${l}${k==='zgody'&&pendingCount?`<span class="nav-count">${badge(pendingCount,'red')}</span>`:''}${k==='logi'&&PROBLEMS?`<span class="nav-count">${badge(PROBLEMS,'yellow')}</span>`:''}</a>`).join('')).join('');
+    `<a class="${k===tab?'active':''}" data-t="${k}">${ic(i)}${l}${k==='approvals'&&pendingCount?`<span class="nav-count">${badge(pendingCount,'red')}</span>`:''}${k==='logs'&&PROBLEMS?`<span class="nav-count">${badge(PROBLEMS,'yellow')}</span>`:''}</a>`).join('')).join('');
   document.querySelectorAll('#nav a').forEach(a=>a['onclick']=()=>go(a.dataset.t));
 }
 function go(t){ tab=t; location.hash=t; EDIT=null; RED=null; KN=null; window.scrollTo(0,0); return render(); }
@@ -64,213 +64,213 @@ async function header(){
   try { const [s, a] = await Promise.all([api('/api/status'), api('/api/approvals')]); pendingCount = a.pending.length;
     const ts = s.teams_session||{};
     $('#dot').className = 'dot ' + (!s.bob.running ? 'bad' : ts.login_needed||ts.warn ? 'warn' : 'ok');
-    $('#headline').innerHTML = s.bob.running ? `Bob działa · aktywność ${s.last_activity?ago(s.last_activity)+' temu':'-'}` : '<b>Bob nie działa</b>';
-    OWNER = s?.owner || ''; $('#owner-sub').textContent = OWNER ? `asystent: ${OWNER}` : 'asystent na Teams';
+    $('#headline').innerHTML = s.bob.running ? `Bob is running · activity ${s.last_activity?ago(s.last_activity)+' ago':'-'}` : '<b>Bob is not running</b>';
+    OWNER = s?.owner || ''; $('#owner-sub').textContent = OWNER ? `assistant: ${OWNER}` : 'assistant on Teams';
     nav(); return {s, a};
-  } catch(e){ $('#headline').textContent = 'panel nie odpowiada'; }
+  } catch(e){ $('#headline').textContent = 'panel not responding'; }
 }
 
 async function bobAction(kind, b){
-  const q = {restart:'Zrestartować Boba? Przez ~30 s nie będzie odpowiadał (wiadomości z tego czasu obsłuży po starcie).', stop:'Zatrzymać Boba? Nie będzie odpowiadał na żadnym kanale, dopóki go nie uruchomisz.'}[kind];
+  const q = {restart:'Restart Bob? He will not answer for about 30 s (messages from that time are handled after the start).', stop:'Stop Bob? He will not answer in any chat until you start him again.'}[kind];
   if(q && !confirm(q)) return;
   // after the re-render the clicked button is gone: show the result next to the first Bob control on the page
   const msg = () => document.querySelector('[data-bob]')?.parentElement.querySelector('.msg');
-  b['disabled'] = true; b.parentElement.querySelector('.msg').textContent = kind==='restart'?'Restartuję… (do 30 s)':'Chwila…';
+  b['disabled'] = true; b.parentElement.querySelector('.msg').textContent = kind==='restart'?'Restarting… (up to 30 s)':'One moment…';
   try { const r = await api(`/api/bob/${kind}`, {by:'panel'}); await render(); const m = msg(); if(m) m.textContent = r?.message || ''; }
   finally { b['disabled'] = false; }
 }
 
-// ---- Pulpit: what to do now -----------------------------------------------------------------------
+// ---- Dashboard: what to do now --------------------------------------------------------------------
 function nextStep(s, lg){
   const ts = s.teams_session||{};
-  if(lg.running) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Dokończ logowanie do Teams</h2>
-      <p>Na tym Macu otworzyło się okno przeglądarki.</p>
-      <ol class="steps"><li>Zaloguj się kontem swojej organizacji (SSO, potem MFA na telefonie).</li><li>Przy pytaniu „Czy pozostać zalogowanym?” wybierz <b>Tak</b> - sesja wytrzyma 7 dni.</li><li>Gdy zobaczysz Teams z listą czatów po lewej, kliknij poniżej.</li></ol>
-      <div class="row">${btn('Jestem zalogowany','id="b-login-ok"','primary')}<span class="msg" id="lmsg"></span></div>
-      ${(lg.log||[]).length?`<details class="help"><summary>Szczegóły logowania</summary><pre>${esc(lg.log.join('\n'))}</pre></details>`:''}</div></div>`;
-  if(ts.login_needed) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Zaloguj Boba do Teams</h2>
-      <p>Sesja Teams ${ts.exists?'wygasła':'nie istnieje'} (wystarcza na 7 dni). Bez niej Bob nie wstanie. Logowanie otworzy przeglądarkę na tym Macu i potrwa około minuty.</p>
-      ${lg.exit_code?callout('danger',`Ostatnie logowanie się nie udało (${when(lg.finished)}). Spróbuj jeszcze raz i kliknij „Jestem zalogowany” dopiero, gdy widać Teams.`):''}
-      <div class="row">${s.bob.running?'':btn('Zaloguj i uruchom Boba','id="b-login-start"','primary')}${btn('Tylko zaloguj','id="b-login"',s.bob.running?'primary':'secondary')}<span class="msg" id="lmsg"></span></div></div></div>`;
-  if(!s.bob.running) return `<div class="box hero">${bobImg('bob-disconnected')}<div><h2>Bob jest zatrzymany</h2>
-      <p>Nie odpowiada teraz na żadnym kanale i nie wysyła zaplanowanych wiadomości. Sesja Teams jest ważna, więc wystarczy go uruchomić.</p>
-      <div class="row">${btn('Uruchom Boba','data-bob="start"','primary')}<span class="msg"></span></div></div></div>`;
-  if(pendingCount) return `<div class="box hero">${bobImg('bob-working-thinking')}<div><h2>${pendingCount===1?'Jedna decyzja czeka':`Decyzje czekające na Ciebie: ${pendingCount}`}</h2>
-      <p>Bob, Claude Code albo automat pyta o zgodę - np. na wdrożenie zmiany albo zapisanie wiedzy. Dopóki nie zdecydujesz, sprawa stoi.</p>
-      <div class="row">${btn('Przejdź do zgód','data-go="zgody"','primary')}</div></div></div>`;
-  return `<div class="box hero">${bobImg('bob-happy')}<div><h2>Wszystko działa</h2>
-      <p>Bob odpowiada na kanałach, sesja Teams jest ważna jeszcze ${Math.max(0, Math.floor((ts.max_age_h-ts.age_h)/24))} dni, nic nie czeka na Twoją decyzję.${PROBLEMS?` W logach z ostatniej doby są błędy (${PROBLEMS} rodzajów) - <a class="ds-link" data-go="logi">zobacz</a>.`:''}</p></div></div>`;
+  if(lg.running) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Finish signing in to Teams</h2>
+      <p>A browser window has opened on this Mac.</p>
+      <ol class="steps"><li>Sign in with your organisation account (SSO, then MFA on your phone).</li><li>When asked "Stay signed in?", choose <b>Yes</b> - the session lasts 7 days.</li><li>When you see Teams with the chat list on the left, click below.</li></ol>
+      <div class="row">${btn('I\'m signed in','id="b-login-ok"','primary')}<span class="msg" id="lmsg"></span></div>
+      ${(lg.log||[]).length?`<details class="help"><summary>Sign-in details</summary><pre>${esc(lg.log.join('\n'))}</pre></details>`:''}</div></div>`;
+  if(ts.login_needed) return `<div class="box hero">${bobImg('bob-notification')}<div><h2>Sign Bob in to Teams</h2>
+      <p>The Teams session ${ts.exists?'has expired':'does not exist'} (it lasts 7 days). Bob cannot start without it. Signing in opens a browser on this Mac and takes about a minute.</p>
+      ${lg.exit_code?callout('danger',`The last sign-in failed (${when(lg.finished)}). Try again and click "I'm signed in" only once you can see Teams.`):''}
+      <div class="row">${s.bob.running?'':btn('Sign in and start Bob','id="b-login-start"','primary')}${btn('Sign in to Teams','id="b-login"',s.bob.running?'primary':'secondary')}<span class="msg" id="lmsg"></span></div></div></div>`;
+  if(!s.bob.running) return `<div class="box hero">${bobImg('bob-disconnected')}<div><h2>Bob is stopped</h2>
+      <p>He is not answering in any chat and not sending scheduled messages. The Teams session is valid, so just start him.</p>
+      <div class="row">${btn('Start Bob','data-bob="start"','primary')}<span class="msg"></span></div></div></div>`;
+  if(pendingCount) return `<div class="box hero">${bobImg('bob-working-thinking')}<div><h2>${pendingCount===1?'One decision is waiting':`Decisions waiting for you: ${pendingCount}`}</h2>
+      <p>Bob, Claude Code or an automation is asking for approval - e.g. to deploy a change or save knowledge. Nothing moves until you decide.</p>
+      <div class="row">${btn('Go to approvals','data-go="approvals"','primary')}</div></div></div>`;
+  return `<div class="box hero">${bobImg('bob-happy')}<div><h2>Everything works</h2>
+      <p>Bob is answering in chats, the Teams session is valid for another ${Math.max(0, Math.floor((ts.max_age_h-ts.age_h)/24))} days, nothing is waiting for your decision.${PROBLEMS?` The logs from the last day have errors (${PROBLEMS} kinds) - <a class="ds-link" data-go="logs">see them</a>.`:''}</p></div></div>`;
 }
 const VIEWS = {
-  async pulpit(){
+  async dashboard(){
     const {s} = await header() || {}; if(!s) return '';
     const lg = s?.login||{}, ts = s.teams_session||{}, sup = s?.supervisor||{};
     let D = null;
     try { const [l, d] = await Promise.all([api('/api/bob/logs?hours=24&level=warn'), api('/api/dashboard?hours=24')]); D = d;
       PROBLEMS = (l?.problems||[]).filter(p=>p?.level==='error').length; nav(); } catch(e){}
     const daysLeft = ts.exists ? Math.max(0,(ts.max_age_h-ts.age_h)/24) : 0;
-    return head('Pulpit', 'Stan Boba i to, co warto teraz zrobić. Jeśli coś wymaga Twojej uwagi, zobaczysz to na górze z instrukcją krok po kroku.',
-        'Bob to program na tym Macu, który czyta czaty Teams jako Ty i odpowiada na nich. Panel go uruchamia, zatrzymuje i loguje do Teams - terminal nie jest już potrzebny (<code>./bob</code> tylko otwiera panel). Panel startuje sam po zalogowaniu do Maca i podnosi Boba, jeśli przed restartem działał.')
+    return head('Dashboard', 'Bob\'s state and what is worth doing now. If something needs your attention, you will see it at the top with step-by-step instructions.',
+        'Bob is a program on this Mac that reads Teams chats as you and answers in them. The panel starts him, stops him and signs him in to Teams - you no longer need the terminal (<code>./bob</code> only opens the panel). The panel starts by itself when you log in to the Mac and brings Bob back up if he was running before the restart.')
       + nextStep(s, lg)
       + `<div class="grid">
-        <div class="ds-card ds-stat ${s.bob.running?'ds-stat--highlight':''}"><span class="ds-stat-label">Bob</span><span class="ds-stat-value ${s.bob.running?'ds-stat-value--success':'ds-stat-value--danger'}">${s.bob.running?'działa':'zatrzymany'}</span><span class="muted">${s.bob.running?`od ${esc(s.bob.started)}`:''}</span></div>
-        <div class="ds-card ds-stat"><span class="ds-stat-label">Sesja Teams</span><span class="ds-stat-value ${ts.login_needed?'ds-stat-value--danger':ts.warn?'ds-stat-value--warning':''}">${ts.login_needed?'wygasła':`jeszcze ${daysLeft.toFixed(1)} dni`}</span>
+        <div class="ds-card ds-stat ${s.bob.running?'ds-stat--highlight':''}"><span class="ds-stat-label">Bob</span><span class="ds-stat-value ${s.bob.running?'ds-stat-value--success':'ds-stat-value--danger'}">${s.bob.running?'running':'stopped'}</span><span class="muted">${s.bob.running?`since ${esc(s.bob.started)}`:''}</span></div>
+        <div class="ds-card ds-stat"><span class="ds-stat-label">Teams session</span><span class="ds-stat-value ${ts.login_needed?'ds-stat-value--danger':ts.warn?'ds-stat-value--warning':''}">${ts.login_needed?'expired':`${daysLeft.toFixed(1)} days left`}</span>
           <div class="ds-progress-track"><div class="ds-progress-fill ds-progress-fill--${ts.login_needed?'red':ts.warn?'yellow':'green'}" style="width:${Math.min(100,daysLeft/7*100)}%"></div></div></div>
-        <div class="ds-card ds-stat"><span class="ds-stat-label">Ostatnia aktywność na czatach</span><span class="ds-stat-value">${s.last_activity?ago(s.last_activity)+' temu':'-'}</span></div>
+        <div class="ds-card ds-stat"><span class="ds-stat-label">Last activity in chats</span><span class="ds-stat-value">${s.last_activity?ago(s.last_activity)+' ago':'-'}</span></div>
       </div>
       ${D?liveDashboard(D):''}
-      <div class="box"><h2>Sterowanie</h2><p class="sub">Restart pomaga, gdy Bob przestał odpowiadać albo po zmianie jego kodu. Zatrzymaj go, jeśli ma milczeć dłużej (na krótko wystarczy „Bob pause 30 min” w Notatkach). Restart jest wstrzymany, gdy sesja Teams wygasła - najpierw logowanie.</p>
-        <div class="row">${s.bob.running?btn('Restartuj Boba','data-bob="restart"','primary')+btn('Zatrzymaj','data-bob="stop"'):btn('Uruchom Boba','data-bob="start"','primary')}${lg.running||ts.login_needed?'':btn('Zaloguj ponownie do Teams','id="b-login"','tertiary')}<span class="msg"></span></div>
-        <p class="muted" style="margin-top:var(--space-12)">Ostatni restart z panelu: ${when(sup.last_restart)} ${esc(sup.last_restart_by||'')}${s.bob.running?` · ${s.bob.managed?'uruchomiony z panelu':'uruchomiony w terminalu'} · pid ${esc(s.bob.pid)}`:''}</p></div>`;
+      <div class="box"><h2>Controls</h2><p class="sub">A restart helps when Bob has stopped answering or after his code changed. Stop him if he should stay quiet for longer (for a short while "Bob pause 30 min" in Notes is enough). Restart is blocked while the Teams session is expired - sign in first.</p>
+        <div class="row">${s.bob.running?btn('Restart Bob','data-bob="restart"','primary')+btn('Stop','data-bob="stop"'):btn('Start Bob','data-bob="start"','primary')}${lg.running||ts.login_needed?'':btn('Sign in to Teams again','id="b-login"','tertiary')}<span class="msg"></span></div>
+        <p class="muted" style="margin-top:var(--space-12)">Last restart from the panel: ${when(sup.last_restart)} ${esc(sup.last_restart_by||'')}${s.bob.running?` · ${s.bob.managed?'started from the panel':'started in a terminal'} · pid ${esc(s.bob.pid)}`:''}</p></div>`;
   },
 
-  // ---- Zgody --------------------------------------------------------------------------------------
-  async zgody(){
+  // ---- Approvals ----------------------------------------------------------------------------------
+  async approvals(){
     const a = await api('/api/approvals'); pendingCount = a.pending.length; nav();
     const card = r => `<div class="apr" data-id="${esc(r.id)}"><h3>${esc(r?.title)}</h3>
       <div class="muted">${esc(r?.source||'')} · ${when(r.created_at)} · <code>${esc(r.id)}</code></div>
-      ${r.details?`<details ${r.details.length<400?'open':''}><summary>Szczegóły i różnice</summary><pre>${esc(r?.details)}</pre></details>`:''}
-      <label class="lbl">Notatka do decyzji (opcjonalnie)<textarea class="ds-input"></textarea></label>
-      <div class="row">${btn('Zatwierdź','data-a="1"','primary')}${btn('Odrzuć','data-a="0"','danger')}<span class="msg"></span></div></div>`;
-    const done = a.done.map(r=>`<tr><td>${when(r.decided_at)}</td><td>${esc(r?.title)}</td><td>${r.status==='approved'?badge('zatwierdzone','green'):badge('odrzucone','red')}</td><td>${esc(r?.note||'')}</td></tr>`).join('');
-    return head('Zgody', 'Tu Bob, Claude Code i automaty pytają Cię o zgodę, zanim zrobią coś ważnego: wdrożą zmianę skryptu, zapiszą nową wiedzę, opublikują zmianę. Nic się nie dzieje, dopóki nie zdecydujesz.',
-        'Każda nowa prośba trafia też do Notatek na Teams. Gdy nie siedzisz przy komputerze, odpisz tam „Bob, zatwierdzam apr-…” albo „Bob, odrzucam apr-…” (po dwukropku możesz dodać notatkę). Gdy czeka tylko jedna decyzja, wystarczy „Bob, zatwierdzam”.')
-      + `<div class="box"><h2>Czeka na Twoją decyzję (${a.pending.length})</h2>${a.pending.map(card).join('')||empty('good-vibe','Nic nie czeka','Gdy coś będzie potrzebowało Twojej zgody, pojawi się tutaj i w Notatkach.')}</div>
-      <div class="box"><h2>Ostatnie decyzje</h2>${done?table(['Kiedy','Co','Decyzja','Notatka'], done):'<span class="muted">Brak.</span>'}</div>`;
+      ${r.details?`<details ${r.details.length<400?'open':''}><summary>Details and differences</summary><pre>${esc(r?.details)}</pre></details>`:''}
+      <label class="lbl">Note for the decision (optional)<textarea class="ds-input"></textarea></label>
+      <div class="row">${btn('Approve','data-a="1"','primary')}${btn('Reject','data-a="0"','danger')}<span class="msg"></span></div></div>`;
+    const done = a.done.map(r=>`<tr><td>${when(r.decided_at)}</td><td>${esc(r?.title)}</td><td>${r.status==='approved'?badge('approved','green'):badge('rejected','red')}</td><td>${esc(r?.note||'')}</td></tr>`).join('');
+    return head('Approvals', 'Here Bob, Claude Code and automations ask for your approval before doing something important: deploying a script change, saving new knowledge, publishing a change. Nothing happens until you decide.',
+        'Every new request also goes to Notes on Teams. When you are away from the computer, reply there "Bob, approve apr-…" or "Bob, reject apr-…" (after a colon you can add a note). When only one decision is waiting, "Bob, approve" is enough.')
+      + `<div class="box"><h2>Waiting for your decision (${a.pending.length})</h2>${a.pending.map(card).join('')||empty('good-vibe','Nothing waiting','When something needs your approval, it will show up here and in Notes.')}</div>
+      <div class="box"><h2>Recent decisions</h2>${done?table(['When','What','Decision','Note'], done):'<span class="muted">None.</span>'}</div>`;
   },
 
-  // ---- Rozmowy (log.jsonl) --------------------------------------------------------------------------
-  async aktywnosc(){
+  // ---- Conversations (log.jsonl) --------------------------------------------------------------------
+  async conversations(){
     const t = await api('/api/tasks?limit=150');
     const chats = [...new Set(t.map(e=>e?.chat).filter(Boolean))].sort();
     const shown = t.filter(e=>(e?.text||e?.reply) && (!ACHAT || e?.chat===ACHAT));
-    return head('Rozmowy', 'Ostatnie wiadomości, na które Bob zareagował: kto pisał, na jakim kanale i co Bob odpowiedział. Techniczne zdarzenia (odpytywanie, pominięte puste wiadomości) są ukryte - pełny zapis jest w „Logach”.')
-      + `<div class="box"><div class="row between"><h2>Ostatnie rozmowy</h2><label class="row" style="flex-wrap:nowrap">Kanał <select class="ds-input" id="achat" style="height:32px;width:260px"><option value="">wszystkie</option>${chats.map(c=>`<option ${c===ACHAT?'selected':''}>${esc(c)}</option>`).join('')}</select></label></div>
-      ${shown.length?table(['Kiedy','Kanał','Kto','Wiadomość','Odpowiedź Boba'], shown.map(e=>`<tr><td style="white-space:nowrap">${when(e.ts)}</td><td>${badge(esc(e?.chat||'-'))}</td><td>${esc(e?.sender||'')}</td><td>${esc(e?.text)}</td><td class="muted">${e.reply==='<silent/>'||!e?.reply?badge('bez odpowiedzi'):esc(e?.reply)}</td></tr>`).join('')):empty('chat','Brak rozmów','Na wybranym kanale nie było ostatnio wiadomości do Boba.')}</div>`;
+    return head('Conversations', 'Recent messages Bob reacted to: who wrote, in which chat and what Bob answered. Technical events (polling, skipped empty messages) are hidden - the full record is in "Logs".')
+      + `<div class="box"><div class="row between"><h2>Recent conversations</h2><label class="row" style="flex-wrap:nowrap">Chat <select class="ds-input" id="achat" style="height:32px;width:260px"><option value="">all</option>${chats.map(c=>`<option ${c===ACHAT?'selected':''}>${esc(c)}</option>`).join('')}</select></label></div>
+      ${shown.length?table(['When','Chat','Who','Message','Bob\'s reply'], shown.map(e=>`<tr><td style="white-space:nowrap">${when(e.ts)}</td><td>${badge(esc(e?.chat||'-'))}</td><td>${esc(e?.sender||'')}</td><td>${esc(e?.text)}</td><td class="muted">${e.reply==='<silent/>'||!e?.reply?badge('no reply'):esc(e?.reply)}</td></tr>`).join('')):empty('chat','No conversations','There have been no recent messages to Bob in the selected chat.')}</div>`;
   },
 
-  // ---- Logi -----------------------------------------------------------------------------------------
-  async logi(){
+  // ---- Logs -----------------------------------------------------------------------------------------
+  async logs(){
     const l = await api('/api/bob/logs?'+new URLSearchParams(LOGF).toString());
     PROBLEMS = (l?.problems||[]).filter(p=>p?.level==='error').length; nav();
-    const lvl = {error:['błąd','red'], warn:['uwaga','yellow'], info:['info','gray'], debug:['rutyna','gray']};
+    const lvl = {error:['error','red'], warn:['warning','yellow'], info:['info','gray'], debug:['routine','gray']};
     const seg = (key, opts) => `<div class="ds-segmented">${opts.map(([v,lab])=>`<button class="ds-segment ${String(LOGF[key])===String(v)?'active':''}" data-lf="${key}" data-v="${v}">${lab}</button>`).join('')}</div>`;
     const lab = s => esc((l?.labels||{})[s]||s);
     const probs = (l?.problems||[]).map(p=>callout(p?.level==='error'?'danger':'warning',
-      `<b>${lab(p?.source)}</b>: ${esc(p.text.slice(0,220))}<br><span class="muted">${p.count>1?`${p.count} razy, ostatnio `:''}${when(p?.last)}</span>`)).join('');
+      `<b>${lab(p?.source)}</b>: ${esc(p.text.slice(0,220))}<br><span class="muted">${p.count>1?`${p.count} times, last `:''}${when(p?.last)}</span>`)).join('');
     const lines = (l?.entries||[]).slice().reverse().map(e=>`<div class="logline"><span class="t">${esc(e.ts.slice(11,19))}</span><span>${badge(lvl[e?.level][0], lvl[e?.level][1])}</span><span>${badge(lab(e?.source),'blue')}</span>
-      <span class="x">${esc(e?.text)}${e.count>1?' '+badge('×'+e?.count,'violet',`do ${e.last.slice(11,19)}`):''}${e.extra.length?`<details><summary class="muted">szczegóły (${e.extra.length})</summary><pre>${esc(e.extra.join('\n'))}</pre></details>`:''}</span></div>`).join('');
-    return head('Logi i problemy', 'Co Bob robił i co poszło nie tak. Na górze problemy z ostatniej doby (zgrupowane), niżej przebieg - powtarzające się wpisy są zwinięte (×N), a rutynowe (odpytywanie czatów, odświeżanie tokenu, kontrole zdrowia) ukryte.',
-        'Pojedyncze „get_messages blad” (timeout Teams) są normalne - Bob ponawia sam. Niepokojące są: powtarzające się błędy wysyłki, „claude CLI timeout”, wygasła sesja, a także brak aktywności, gdy na czatach coś się dzieje. Wtedy pomaga restart na Pulpicie.')
-      + `<div class="box"><h2>Problemy z ostatniej doby</h2>${probs||callout('success','Brak błędów i ostrzeżeń w ostatniej dobie.')}</div>
+      <span class="x">${esc(e?.text)}${e.count>1?' '+badge('×'+e?.count,'violet',`until ${e.last.slice(11,19)}`):''}${e.extra.length?`<details><summary class="muted">details (${e.extra.length})</summary><pre>${esc(e.extra.join('\n'))}</pre></details>`:''}</span></div>`).join('');
+    return head('Logs and problems', 'What Bob did and what went wrong. At the top, problems from the last day (grouped); below, the timeline - repeated entries are collapsed (×N) and routine ones (chat polling, token refresh, health checks) are hidden.',
+        'A single "get_messages error" (Teams timeout) is normal - Bob retries by himself. Worrying signs are: repeated send errors, "claude CLI timeout", an expired session, and no activity while something is happening in the chats. A restart on the Dashboard helps then.')
+      + `<div class="box"><h2>Problems in the last day</h2>${probs||callout('success','No errors or warnings in the last day.')}</div>
       <div class="box"><div class="row" style="margin-bottom:var(--space-12)">
-        ${seg('level',[['warn','Tylko problemy'],['info','Ważne'],['debug','Wszystko']])}${seg('hours',[[1,'1 h'],[6,'6 h'],[24,'24 h']])}
-        <select class="ds-input" id="lsrc" style="height:32px;width:auto"><option value="">wszystkie źródła</option>${Object.entries(l?.sources||{}).map(([k,n])=>`<option value="${esc(k)}" ${k===LOGF.source?'selected':''}>${lab(k)} (${n})</option>`).join('')}</select>
-        <input class="ds-input" id="lq" placeholder="Szukaj w logu (Enter)…" value="${esc(LOGF.q)}" style="height:32px;width:220px"></div>
-        <p class="muted">W oknie: ${l.total||0} wpisów - błędy ${l.counts?.error||0}, uwagi ${l.counts?.warn||0}, ważne ${l.counts?.info||0}, rutyna ${l.counts?.debug||0}. Najnowsze na górze.</p>
-        ${lines||'<span class="muted">Brak wpisów dla tych filtrów.</span>'}
-        <details class="help"><summary>Surowy log (ostatnie 300 linii, jak w terminalu)</summary><pre id="rawlog">…</pre></details></div>`;
+        ${seg('level',[['warn','Problems only'],['info','Important'],['debug','Everything']])}${seg('hours',[[1,'1 h'],[6,'6 h'],[24,'24 h']])}
+        <select class="ds-input" id="lsrc" style="height:32px;width:auto"><option value="">all sources</option>${Object.entries(l?.sources||{}).map(([k,n])=>`<option value="${esc(k)}" ${k===LOGF.source?'selected':''}>${lab(k)} (${n})</option>`).join('')}</select>
+        <input class="ds-input" id="lq" placeholder="Search the log (Enter)…" value="${esc(LOGF.q)}" style="height:32px;width:220px"></div>
+        <p class="muted">In the window: ${l.total||0} entries - errors ${l.counts?.error||0}, warnings ${l.counts?.warn||0}, important ${l.counts?.info||0}, routine ${l.counts?.debug||0}. Newest at the top.</p>
+        ${lines||'<span class="muted">No entries for these filters.</span>'}
+        <details class="help"><summary>Raw log (last 300 lines, as in the terminal)</summary><pre id="rawlog">…</pre></details></div>`;
   },
 
-  // ---- Harmonogram ----------------------------------------------------------------------------------
-  async harmonogram(){
+  // ---- Schedule -------------------------------------------------------------------------------------
+  async schedule(){
     const s = await api('/api/schedule');
-    const fmtT = t => Object.entries(t||{}).map(([k,v])=>badge(`${esc(k.replace('generate_send','wysyłka').replace('generate','przygotowanie').replace('send','wysyłka'))} ${esc(v)}`,'brand')).join('');
-    const every = s => s>=3600?`co ${s/3600} h`:s>=60?`co ${s/60} min`:`co ${s} s`;
-    return head('Harmonogram', 'Wiadomości, które Bob wysyła sam o stałych porach (np. poranne wpisy czasu pracy zespołu), i pętle, którymi co chwilę sprawdza kolejki i źródła danych.')
-      + `<div class="box"><h2>Zaplanowane wiadomości</h2>${table(['Zadanie','Kiedy','Włączone','Ostatnio wysłane'], s.broadcasts.map(b=>`<tr><td><b>${esc(b?.name)}</b><br><span class="muted">${esc(b?.description)}</span></td><td>${fmtT(b?.times)}</td><td>${b.enabled===null?badge('?'):b?.enabled?badge('tak','green'):badge('nie')}${b.disabled_reason?`<br><span class="muted">${esc(b.disabled_reason)}</span>`:''}</td><td>${when(b.last_fired)}</td></tr>`).join(''))}</div>
-      <div class="box"><h2>Pętle w tle</h2><p class="sub">Co Bob sprawdza sam, bez pytania. Zmiana częstotliwości wymaga zmiany w kodzie (<code>scripts/teams_agent/cli.py</code>).</p>${table(['Pętla','Jak często','Co robi'], s.loops.map(l=>`<tr><td><code>${esc(l?.name)}</code></td><td>${every(l.every_s)}</td><td class="muted">${esc(l?.what)}</td></tr>`).join(''))}</div>`;
+    const fmtT = t => Object.entries(t||{}).map(([k,v])=>badge(`${esc(k.replace('generate_send','send').replace('generate','prepare'))} ${esc(v)}`,'brand')).join('');
+    const every = s => s>=3600?`every ${s/3600} h`:s>=60?`every ${s/60} min`:`every ${s} s`;
+    return head('Schedule', 'Messages Bob sends by himself at fixed times (e.g. the team\'s morning work-log posts), and the loops he uses to keep checking queues and data sources.')
+      + `<div class="box"><h2>Scheduled messages</h2>${table(['Job','When','Enabled','Last sent'], s.broadcasts.map(b=>`<tr><td><b>${esc(b?.name)}</b><br><span class="muted">${esc(b?.description)}</span></td><td>${fmtT(b?.times)}</td><td>${b.enabled===null?badge('?'):b?.enabled?badge('yes','green'):badge('no')}${b.disabled_reason?`<br><span class="muted">${esc(b.disabled_reason)}</span>`:''}</td><td>${when(b.last_fired)}</td></tr>`).join(''))}</div>
+      <div class="box"><h2>Background loops</h2><p class="sub">What Bob checks by himself, without being asked. Changing how often needs a code change (<code>scripts/teams_agent/cli.py</code>).</p>${table(['Loop','How often','What it does'], s.loops.map(l=>`<tr><td><code>${esc(l?.name)}</code></td><td>${every(l.every_s)}</td><td class="muted">${esc(l?.what)}</td></tr>`).join(''))}</div>`;
   },
 
-  // ---- Kanały ---------------------------------------------------------------------------------------
-  async czaty(){
+  // ---- Chats ----------------------------------------------------------------------------------------
+  async chats(){
     const [c, cfg, rl] = await Promise.all([api('/api/chats'), api('/api/chat-config'), api('/api/roles')]); CFG = cfg; ROLES = rl;
-    const rname = Object.fromEntries(rl.role.map(r=>[r.id, `${r.emoji||''} ${r.nazwa}`]));
+    const rname = Object.fromEntries(rl.roles.map(r=>[r.id, `${r.emoji||''} ${r.name}`]));
     const off = Object.fromEntries(cfg.chats.map(x=>[x?.name, x?.disabled]));
-    return head('Kanały', 'Czaty Teams, na których działa Bob. Każdy kanał ma role (co Bob tam robi i do jakich narzędzi ma dostęp), nazwę, pod którą Bob występuje, i to, kto może go wołać.',
-        'Dostęp kanału = narzędzia jego ról + korekty „dodatkowo / bez”. Na kanałach z użytkownikami zewnętrznymi (kanał „zewnętrzny”) Bob nigdy nie dostaje narzędzi oznaczonych 🔒 („tylko zespół”) - nawet jeśli rola je ma. Zmiana działa w kilka sekund; nowy kanał zaczyna być obserwowany po restarcie Boba. Wyłączenie kanału działa od razu i da się je cofnąć.')
-      + editor() + `<div class="box"><div class="row between"><h2>Kanały (${c.length})</h2>${btn('+ Dodaj kanał','data-edit=""','primary')}</div>
-      ${table(['Kanał','Role','Kto woła','Dostęp','Aktywność',''], c.map(x=>`<tr class="${off[x?.name]?'off':''}"><td><b>${esc(x?.name)}</b>${off[x?.name]?' '+badge('wyłączony','red'):''}<br><span class="muted">Bob występuje jako ${esc(x?.label||'Bob')}</span><br>${x.flags.map(f=>badge(esc(f))).join('')}</td>
-        <td>${x.roles?x.roles.map(r=>badge(esc(rname[r]||r),'brand')).join('')||'<span class="muted">brak</span>':'<span class="muted">ręczna lista</span>'}</td>
-        <td>${esc({all:'wszyscy',owner:'tylko właściciel',auto:'Bob decyduje'}[x?.caller]||x?.caller||'-')}</td>
-        <td>${x.all_groups?badge('wszystkie domyślne','green'):''}${x.groups.filter(g=>!x.all_groups||!(rl.domyslne||[]).includes(g)).map(g=>badge(grpLabel(g))).join('')}</td>
+    return head('Chats', 'The Teams chats Bob works in. Each chat has roles (what Bob does there and which tools he can use), the name Bob goes by, and who can call him.',
+        'A chat\'s access = the tools of its roles + the "add / remove" adjustments. In chats with external users (an "external" chat) Bob never gets tools marked 🔒 ("team only") - even if a role has them. A change takes effect within seconds; a new chat starts being watched after Bob restarts. Turning a chat off takes effect at once and can be undone.')
+      + editor() + `<div class="box"><div class="row between"><h2>Chats (${c.length})</h2>${btn('+ Add chat','data-edit=""','primary')}</div>
+      ${table(['Chat','Roles','Who calls','Access','Activity',''], c.map(x=>`<tr class="${off[x?.name]?'off':''}"><td><b>${esc(x?.name)}</b>${off[x?.name]?' '+badge('off','red'):''}<br><span class="muted">Bob goes by ${esc(x?.label||'Bob')}</span><br>${x.flags.map(f=>badge(esc(f))).join('')}</td>
+        <td>${x.roles?x.roles.map(r=>badge(esc(rname[r]||r),'brand')).join('')||'<span class="muted">none</span>':'<span class="muted">manual list</span>'}</td>
+        <td>${esc({all:'everyone',owner:'owner only',auto:'Bob decides'}[x?.caller]||x?.caller||'-')}</td>
+        <td>${x.all_groups?badge('all default','green'):''}${x.groups.filter(g=>!x.all_groups||!(rl.default_groups||[]).includes(g)).map(g=>badge(grpLabel(g))).join('')}</td>
         <td style="white-space:nowrap">${when(x.last_activity)}</td>
-        <td style="white-space:nowrap">${btn('Edytuj',`data-edit="${esc(x?.name)}"`)} ${x.name===cfg.control_chat?'':btn(off[x?.name]?'Włącz':'Wyłącz',`data-onoff="${esc(x?.name)}" data-on="${off[x?.name]?1:0}"`,'tertiary')}</td></tr>`).join(''))}</div>`;
+        <td style="white-space:nowrap">${btn('Edit',`data-edit="${esc(x?.name)}"`)} ${x.name===cfg.control_chat?'':btn(off[x?.name]?'Turn on':'Turn off',`data-onoff="${esc(x?.name)}" data-on="${off[x?.name]?1:0}"`,'tertiary')}</td></tr>`).join(''))}</div>`;
   },
 
-  // ---- Role -----------------------------------------------------------------------------------------
-  async role(){
+  // ---- Roles ----------------------------------------------------------------------------------------
+  async roles(){
     ROLES = await api('/api/roles');
-    if(ROLETAB!=='_grupy' && !ROLES.role.some(r=>r.id===ROLETAB)) ROLETAB = ROLES.role[0]?.id || '_grupy';
+    if(ROLETAB!=='_groups' && !ROLES.roles.some(r=>r.id===ROLETAB)) ROLETAB = ROLES.roles[0]?.id || '_groups';
     const rt = ROLETAB;
-    const jobs = (ROLES.zadania||[]).map(j=>`<tr><td>${when(j?.start)}</td><td>${esc(j?.nazwa)} <span class="muted">(${esc(j?.rola)})</span></td><td>${badge(esc(jobSt[j?.status]||j?.status), {applied:'green',failed:'red',awaiting:'yellow',rejected:'gray',running:'blue'}[j?.status]||'gray')}${j.error?`<br><span class="muted">${esc(j?.error)}</span>`:''}</td></tr>`).join('');
-    return head('Role Boba', 'Bob zakłada różne „kapelusze”: jest Asystentem, Project Managerem albo kimkolwiek, kogo opiszesz w pliku ról. Rola to dostęp do narzędzi, umiejętności i wiedza; na każdym kanale może nazywać się inaczej.',
-        'Wiedzę roli możesz przeglądać („Pokaż”) i zmieniać bez edytowania plików: „Edytuj z Claude” - opisz, co poprawić; „Dodaj wiedzę” - opisz, co ma się znaleźć. Claude przygotuje plik, a propozycja z różnicami trafi do „Zgód” - zapis następuje dopiero po Twoim zatwierdzeniu (poprzednia wersja zostaje w archiwum). Wiedza „w promptcie” trafia do Boba przy każdej wiadomości na kanałach z tą rolą, od razu.')
-      + (ROLES.brak_pliku ? callout('warning','Nie ma jeszcze pliku ról. Skopiuj <code>roles.example.json</code> do <code>roles.json</code> (w katalogu repozytorium) i odśwież stronę - albo ustaw ścieżkę w <code>BOB_ROLES_FILE</code>.') : '')
-      + `<div class="personas" role="tablist">${ROLES.role.map(r=>`<div class="persona ${r.id===rt?'active':''}" role="tab" aria-selected="${r.id===rt}" data-rtab="${esc(r.id)}">${bobImg(r?.obraz)}<b>${esc(r?.nazwa)}</b><span>${(r?.kanaly||[]).length} kanałów</span></div>`).join('')}
-          <div class="persona ${rt==='_grupy'?'active':''}" role="tab" data-rtab="_grupy"><div class="persona-ic">${ic('settings')}</div><b>Grupy narzędzi</b><span>opisy, 🔒, zmiany wiedzy</span></div></div>`
-      + `<div class="row" style="margin-bottom:var(--space-16)">${btn('+ Nowa rola','id="r-new"','primary')}${ROLES.bez_roli.length?`<span class="muted">Kanały bez ról (ręczna lista narzędzi): ${ROLES.bez_roli.map(esc).join(', ')}</span>`:''}</div>`
+    const jobs = (ROLES.jobs||[]).map(j=>`<tr><td>${when(j?.start)}</td><td>${esc(j?.name)} <span class="muted">(${esc(j?.role)})</span></td><td>${badge(esc(jobSt[j?.status]||j?.status), {applied:'green',failed:'red',awaiting:'yellow',rejected:'gray',running:'blue'}[j?.status]||'gray')}${j.error?`<br><span class="muted">${esc(j?.error)}</span>`:''}</td></tr>`).join('');
+    return head('Bob\'s roles', 'Bob wears different "hats": he is the Assistant, a Project Manager or anyone you describe in the roles file. A role is tool access, skills and knowledge; in each chat it can go by a different name.',
+        'You can browse a role\'s knowledge ("Show") and change it without editing files: "Edit with Claude" - describe what to fix; "Add knowledge" - describe what it should contain. Claude prepares the file and the proposal with its differences goes to "Approvals" - it is saved only after you approve (the previous version stays in the archive). Knowledge "in the prompt" reaches Bob with every message in chats with that role, right away.')
+      + (ROLES.no_file ? callout('warning','There is no roles file yet. Copy <code>roles.example.json</code> to <code>roles.json</code> (in the repository folder) and refresh the page - or set the path in <code>BOB_ROLES_FILE</code>.') : '')
+      + `<div class="personas" role="tablist">${ROLES.roles.map(r=>`<div class="persona ${r.id===rt?'active':''}" role="tab" aria-selected="${r.id===rt}" data-rtab="${esc(r.id)}">${bobImg(r?.image)}<b>${esc(r?.name)}</b><span>${(r?.channels||[]).length} chats</span></div>`).join('')}
+          <div class="persona ${rt==='_groups'?'active':''}" role="tab" data-rtab="_groups"><div class="persona-ic">${ic('settings')}</div><b>Tool groups</b><span>descriptions, 🔒, knowledge changes</span></div></div>`
+      + `<div class="row" style="margin-bottom:var(--space-16)">${btn('+ New role','id="r-new"','primary')}${ROLES.without_roles.length?`<span class="muted">Chats without roles (manual tool list): ${ROLES.without_roles.map(esc).join(', ')}</span>`:''}</div>`
       + roleEditor() + knBox()
-      + (rt==='_grupy'
-        ? (jobs?`<div class="box"><h2>Ostatnie zmiany wiedzy z Claude</h2>${table(['Kiedy','Wiedza','Stan'], jobs)}</div>`:'')
-          + `<div class="box"><h2>Grupy narzędzi</h2><p class="sub">Opis grup widać przy rolach i kanałach. 🔒 = tylko dla zespołu: nigdy na kanale z użytkownikami zewnętrznymi.</p>
-      ${table(['Grupa','Opis','🔒',''], ROLES.znane_grupy.map(g=>`<tr><td><code>${esc(g)}</code>${ROLES.domyslne.includes(g)?'':' '+badge('na życzenie')}</td><td><textarea class="ds-input g-opis" rows="2" style="min-height:48px;resize:vertical">${esc((ROLES.grupy[g]||{}).opis||'')}</textarea><div class="muted" style="font-size:var(--text-xs);margin-top:var(--space-4)">narzędzia: ${(ROLES.narzedzia[g]||[]).map(t=>`<code>${esc(t)}</code>`).join(', ')}</div></td><td><input type="checkbox" class="g-team" ${(ROLES.grupy[g]||{}).tylko_zespol?'checked':''}></td><td>${btn('Zapisz',`data-gsave="${esc(g)}"`,'tertiary')}</td></tr>`).join(''))}</div>`
-        : roleCard(ROLES.role.find(r=>r.id===rt)));
+      + (rt==='_groups'
+        ? (jobs?`<div class="box"><h2>Recent knowledge changes by Claude</h2>${table(['When','Knowledge','State'], jobs)}</div>`:'')
+          + `<div class="box"><h2>Tool groups</h2><p class="sub">Group descriptions show next to roles and chats. 🔒 = team only: never in a chat with external users.</p>
+      ${table(['Group','Description','🔒',''], ROLES.known_groups.map(g=>`<tr><td><code>${esc(g)}</code>${ROLES.default_groups.includes(g)?'':' '+badge('on request')}</td><td><textarea class="ds-input g-desc" rows="2" style="min-height:48px;resize:vertical">${esc((ROLES.groups[g]||{}).description||'')}</textarea><div class="muted" style="font-size:var(--text-xs);margin-top:var(--space-4)">tools: ${(ROLES.tools[g]||[]).map(t=>`<code>${esc(t)}</code>`).join(', ')}</div></td><td><input type="checkbox" class="g-team" ${(ROLES.groups[g]||{}).team_only?'checked':''}></td><td>${btn('Save',`data-gsave="${esc(g)}"`,'tertiary')}</td></tr>`).join(''))}</div>`
+        : roleCard(ROLES.roles.find(r=>r.id===rt)));
   },
 
 };
 let ACHAT = '', LOGF = {level:'info', hours:6, source:'', q:''};
 
-// ---- Kanał: editor --------------------------------------------------------------------------------
+// ---- Chat: editor ---------------------------------------------------------------------------------
 let CFG = null, EDIT = null, ROLES = null;   // EDIT: {name: '' (new) | chat name, diff, msg} while the chat editor is open
-const KNOWN = ['conv_id','caller','persona','internet','ingest_only','role','bez','dodatkowo','kanal_fr','trigger','mcp','mcp_extra'];
+const KNOWN = ['conv_id','caller','persona','internet','ingest_only','roles','remove_groups','add_groups','external_chat','trigger','mcp','mcp_extra'];
 const box = (cls, val, on, label) => `<label><input type="checkbox" class="${cls}" value="${esc(val)}" ${on?'checked':''}> ${label??esc(val)}</label>`;
 const sel = (id, opts, v) => `<select class="ds-input" id="${id}">${opts.map(([val,l])=>`<option value="${esc(val)}" ${String(v??'')===val?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
-const grpLabel = g => `${esc(g)}${(ROLES?.zespol||[]).includes(g)?' 🔒':''}`;
+const grpLabel = g => `${esc(g)}${(ROLES?.team_only||[]).includes(g)?' 🔒':''}`;
 function editor(){
   if(!EDIT || !CFG || !ROLES) return '';
   const isNew = EDIT.name === '';
   const cur = isNew ? {...CFG.new_chat} : (CFG.chats.find(x=>x?.name===EDIT.name)||{}).config || {};
   const rest = Object.fromEntries(Object.entries(cur).filter(([k])=>!KNOWN.includes(k)));
-  const legacy = !isNew && !('role' in cur);
+  const legacy = !isNew && !('roles' in cur);
   const trig = Array.isArray(cur.trigger) ? cur.trigger.join(', ') : (cur.trigger||'');
-  const label = p => (ROLES.etykiety||{})[p] || 'Bob';
-  return `<div class="box" id="ed"><h2>${isNew?'Nowy kanał':'Edycja: '+esc(EDIT.name)}</h2>
-    <p class="sub">Krok 1: ustaw pola. Krok 2: „Sprawdź zmiany” pokaże różnice i wynikowy dostęp Boba. Krok 3: „Zapisz”.</p>
-    ${legacy?callout('info',`Ten kanał ma jeszcze ręczną listę narzędzi (${esc(JSON.stringify(cur.mcp??'wszystkie'))}${cur.mcp_extra?' + '+esc(cur.mcp_extra.join(', ')):''}). Zapis przełączy go na role - sprawdź wynikowy dostęp.`):''}
+  const label = p => (ROLES.labels||{})[p] || 'Bob';
+  return `<div class="box" id="ed"><h2>${isNew?'New chat':'Editing: '+esc(EDIT.name)}</h2>
+    <p class="sub">Step 1: set the fields. Step 2: "Check changes" shows the differences and Bob's resulting access. Step 3: "Save".</p>
+    ${legacy?callout('info',`This chat still has a manual tool list (${esc(JSON.stringify(cur.mcp??'all'))}${cur.mcp_extra?' + '+esc(cur.mcp_extra.join(', ')):''}). Saving switches it to roles - check the resulting access.`):''}
     <div class="form">
-      <label>Nazwa czatu (dokładnie jak w Teams)<input class="ds-input" id="e-name" value="${esc(EDIT.name)}" ${EDIT.name===CFG.control_chat?'disabled':''}></label>
-      <label>Identyfikator czatu (opcjonalnie, 19:…@thread.v2)<input class="ds-input" id="e-conv" value="${esc(cur.conv_id||'')}"></label>
-      <label>Kto może wołać Boba${sel('e-caller', [['','(ustawienie globalne)'],['all','wszyscy'],['owner','tylko właściciel'],['auto','Bob sam decyduje, kiedy się odezwać']], cur.caller)}</label>
-      <label>Jak Bob nazywa się na tym kanale${sel('e-persona', [['','Bob'], ...CFG.personas.map(p=>[p,label(p)])], cur.persona)}</label>
-      <label>Słowa, na które reaguje (po przecinku)<input class="ds-input" id="e-trig" value="${esc(trig)}" placeholder="domyślnie: bob"></label>
-      <label>Wyszukiwanie w internecie${sel('e-net', [['','wyłączone'],['only_me','tylko dla właściciela'],['all','dla wszystkich']], cur.internet)}</label>
+      <label>Chat name (exactly as in Teams)<input class="ds-input" id="e-name" value="${esc(EDIT.name)}" ${EDIT.name===CFG.control_chat?'disabled':''}></label>
+      <label>Chat id (optional, 19:…@thread.v2)<input class="ds-input" id="e-conv" value="${esc(cur.conv_id||'')}"></label>
+      <label>Who can call Bob${sel('e-caller', [['','(global setting)'],['all','everyone'],['owner','owner only'],['auto','Bob decides when to speak up']], cur.caller)}</label>
+      <label>What Bob is called in this chat${sel('e-persona', [['','Bob'], ...CFG.personas.map(p=>[p,label(p)])], cur.persona)}</label>
+      <label>Words he reacts to (comma-separated)<input class="ds-input" id="e-trig" value="${esc(trig)}" placeholder="default: bob"></label>
+      <label>Web search${sel('e-net', [['','off'],['only_me','owner only'],['all','everyone']], cur.internet)}</label>
     </div>
-    <div class="checks"><label><input type="checkbox" id="e-fr" ${cur.kanal_fr?'checked':''}> kanał z użytkownikami zewnętrznymi (bez narzędzi 🔒)</label><label><input type="checkbox" id="e-ingest" ${cur.ingest_only?'checked':''}> tylko czytaj ten kanał (Bob nigdy w nim nie pisze) - po restarcie Boba</label></div>
-    <div class="lbl">Role - co Bob robi na tym kanale (szczegóły w zakładce „Role”)</div>
-    <div class="checks">${ROLES.role.map(r=>box('e-r', r.id, (cur.role||[]).includes(r.id), `${esc(r?.emoji||'')} ${esc(r?.nazwa)}`)).join('')}</div>
-    <details class="help" ${(cur.dodatkowo||cur.bez)?'open':''}><summary>Korekty dostępu tylko dla tego kanału</summary>
-      <div class="lbl">Dodatkowo (ponad role)</div><div class="checks">${CFG.groups.map(g=>box('e-x', g, (cur.dodatkowo||[]).includes(g), grpLabel(g))).join('')}</div>
-      <div class="lbl">Bez (mimo ról)</div><div class="checks">${CFG.groups.map(g=>box('e-b', g, (cur.bez||[]).includes(g), grpLabel(g))).join('')}</div></details>
-    <details class="help"><summary>Pozostałe ustawienia (JSON) - dla zaawansowanych</summary>
+    <div class="checks"><label><input type="checkbox" id="e-fr" ${cur.external_chat?'checked':''}> chat with external users (no 🔒 tools)</label><label><input type="checkbox" id="e-ingest" ${cur.ingest_only?'checked':''}> only read this chat (Bob never writes in it) - after Bob restarts</label></div>
+    <div class="lbl">Roles - what Bob does in this chat (details on the "Roles" tab)</div>
+    <div class="checks">${ROLES.roles.map(r=>box('e-r', r.id, (cur.roles||[]).includes(r.id), `${esc(r?.emoji||'')} ${esc(r?.name)}`)).join('')}</div>
+    <details class="help" ${(cur.add_groups||cur.remove_groups)?'open':''}><summary>Access adjustments for this chat only</summary>
+      <div class="lbl">Add (on top of the roles)</div><div class="checks">${CFG.groups.map(g=>box('e-x', g, (cur.add_groups||[]).includes(g), grpLabel(g))).join('')}</div>
+      <div class="lbl">Remove (despite the roles)</div><div class="checks">${CFG.groups.map(g=>box('e-b', g, (cur.remove_groups||[]).includes(g), grpLabel(g))).join('')}</div></details>
+    <details class="help"><summary>Other settings (JSON) - advanced</summary>
       <textarea class="ds-input" id="e-rest" style="font-family:ui-monospace,monospace;font-size:var(--text-xs)">${esc(JSON.stringify(rest, null, 2))}</textarea></details>
-    <div class="row" style="margin-top:var(--space-16)">${btn('Sprawdź zmiany','id="e-prev"','primary')}${btn('Zapisz',`id="e-save" ${EDIT.diff?'':'disabled'}`,'primary')}
-      ${!isNew && EDIT.name!==CFG.control_chat?btn('Usuń kanał','id="e-del"','danger'):''}${btn('Zamknij','id="e-cancel"','tertiary')}<span class="msg" id="e-msg">${esc(EDIT.msg||'')}</span></div>
-    ${EDIT.restart?callout('warning',`Zmiana zadziała po restarcie Boba. ${btn('Restartuj Boba teraz','id="e-restart"','primary')}`):''}
-    ${EDIT.eff!==undefined?callout('info',`<b>Bob będzie miał tu dostęp do:</b> ${esc(EDIT.eff)}`):''}
-    ${EDIT.diff?`<details open><summary>Różnice w konfiguracji</summary><pre>${esc(EDIT.diff)}</pre></details>`:''}</div>`;
+    <div class="row" style="margin-top:var(--space-16)">${btn('Check changes','id="e-prev"','primary')}${btn('Save',`id="e-save" ${EDIT.diff?'':'disabled'}`,'primary')}
+      ${!isNew && EDIT.name!==CFG.control_chat?btn('Remove chat','id="e-del"','danger'):''}${btn('Close','id="e-cancel"','tertiary')}<span class="msg" id="e-msg">${esc(EDIT.msg||'')}</span></div>
+    ${EDIT.restart?callout('warning',`The change takes effect after Bob restarts. ${btn('Restart Bob now','id="e-restart"','primary')}`):''}
+    ${EDIT.eff!==undefined?callout('info',`<b>Bob will have access here to:</b> ${esc(EDIT.eff)}`):''}
+    ${EDIT.diff?`<details open><summary>Configuration differences</summary><pre>${esc(EDIT.diff)}</pre></details>`:''}</div>`;
 }
 function formCfg(){
-  let rest; try { rest = JSON.parse($('#e-rest').value || '{}'); } catch(e){ throw new Error('Pozostałe ustawienia: niepoprawny JSON'); }
+  let rest; try { rest = JSON.parse($('#e-rest').value || '{}'); } catch(e){ throw new Error('Other settings: invalid JSON'); }
   const cfg = {...rest}, v = id => $(id).value, checked = cls => [...document.querySelectorAll(cls+':checked')].map(x=>x?.value);
   if(v('#e-conv').trim()) cfg.conv_id = v('#e-conv').trim();
   if(v('#e-caller')) cfg.caller = v('#e-caller');
   if(v('#e-persona')) cfg.persona = v('#e-persona');
   if(v('#e-net')) cfg.internet = v('#e-net');
   const t = v('#e-trig').split(',').map(x=>x.trim()).filter(Boolean); if(t?.length) cfg.trigger = t?.length===1 ? t[0] : t;
-  cfg.role = checked('.e-r');
-  const add = checked('.e-x'), cut = checked('.e-b'); if(add.length) cfg.dodatkowo = add; if(cut.length) cfg.bez = cut;
-  if($('#e-fr').checked) cfg.kanal_fr = true;
+  cfg.roles = checked('.e-r');
+  const add = checked('.e-x'), cut = checked('.e-b'); if(add.length) cfg.add_groups = add; if(cut.length) cfg.remove_groups = cut;
+  if($('#e-fr').checked) cfg.external_chat = true;
   if($('#e-ingest').checked) cfg.ingest_only = true;
   return cfg;
 }
@@ -280,119 +280,119 @@ function edBody(op){
   if(op!=='remove'){ b['config'] = formCfg(); if(EDIT.name!=='' && $('#e-name').value.trim() !== EDIT.name) b.new_name = $('#e-name').value.trim(); }
   return b;
 }
-function openChat(name){ tab='czaty'; location.hash='czaty'; RED=null; KN=null; EDIT={name}; render().then(()=>$('#ed')?.scrollIntoView()); }
+function openChat(name){ tab='chats'; location.hash='chats'; RED=null; KN=null; EDIT={name}; render().then(()=>$('#ed')?.scrollIntoView()); }
 function wireEditor(){
   document.querySelectorAll('[data-edit]').forEach(b=>b['onclick']=()=>openChat(b.dataset.edit));
   document.querySelectorAll('[data-onoff]').forEach(b=>b['onclick']=async()=>{ const on=b.dataset.on==='1';
-    if(!on && !confirm(`Wyłączyć „${b.dataset.onoff}”? Bob przestanie odpowiadać na tym kanale (da się włączyć z powrotem).`)) return;
+    if(!on && !confirm(`Turn off "${b.dataset.onoff}"? Bob will stop answering in this chat (you can turn it back on).`)) return;
     const r = await api('/api/chat-config/enable', {name:b.dataset.onoff, on, by:'panel'}); alert(r?.message||''); render(); });
   if(!$('#ed')) return;
-  $('#ed').querySelectorAll('input,select,textarea').forEach(el=>el.oninput=el.onchange=()=>{ if(EDIT.diff){ EDIT.diff=null; $('#e-save').disabled=true; $('#e-msg').textContent='Zmieniono - sprawdź zmiany jeszcze raz.'; } });
+  $('#ed').querySelectorAll('input,select,textarea').forEach(el=>el.oninput=el.onchange=()=>{ if(EDIT.diff){ EDIT.diff=null; $('#e-save').disabled=true; $('#e-msg').textContent='Changed - check the changes again.'; } });
   $('#e-cancel').onclick=()=>{ EDIT=null; render(); };
   $('#e-prev').onclick=async()=>{ try { const op = EDIT.name===''?'add':'save', body = edBody(op); const r = await api('/api/chat-config/preview', body);
-      EDIT = {...EDIT, diff: r.ok ? r?.diff : null, eff: r.ok ? r.effective_text : undefined, msg: r.ok ? 'Sprawdź różnice i dostęp, potem zapisz.' : r?.message, op, body}; }
+      EDIT = {...EDIT, diff: r.ok ? r?.diff : null, eff: r.ok ? r.effective_text : undefined, msg: r.ok ? 'Check the differences and the access, then save.' : r?.message, op, body}; }
     catch(e){ EDIT.msg = e?.message; } render(); };
   $('#e-save').onclick=async()=>{ const r = await api('/api/chat-config/apply', EDIT.body);
     const nm = EDIT.body.new_name || EDIT.body.name;
     EDIT = r.ok ? {name: nm, msg: r?.message, restart: r.restart_needed} : {...EDIT, msg: r.message}; render(); };
-  const del=$('#e-del'); if(del) del.onclick=async()=>{ if(!confirm(`Usunąć „${EDIT.name}” z konfiguracji Boba? Kopia zostaje w archiwum.`)) return;
+  const del=$('#e-del'); if(del) del.onclick=async()=>{ if(!confirm(`Remove "${EDIT.name}" from Bob's configuration? A copy stays in the archive.`)) return;
     const r = await api('/api/chat-config/apply', {op:'remove', name:EDIT.name, by:'panel'});
     if(r.ok){ alert(r?.message); EDIT=null; } else EDIT = {...EDIT, msg:r.message}; render(); };
-  const rs=$('#e-restart'); if(rs) rs.onclick=async()=>{ await go('pulpit'); const b=document.querySelector('[data-bob="restart"]'); if(b) bobAction('restart', b); };
+  const rs=$('#e-restart'); if(rs) rs.onclick=async()=>{ await go('dashboard'); const b=document.querySelector('[data-bob="restart"]'); if(b) bobAction('restart', b); };
 }
 
-// ---- Role: editors --------------------------------------------------------------------------------
-let RED = null, KN = null, MODAL = null, ROLETAB = (()=>{ try { return localStorage.getItem('bob-roletab')||''; } catch(e){ return ''; } })();   // RED: role editor {id ('' = new)}; KN: knowledge request {rola, wpis|null}
-const WPIECIE = {kod:'wpięta w kodzie Boba', prompt:'w promptcie kanałów z rolą', narzedzie:'czytana na żądanie'};
-const jobSt = {running:'Claude pracuje…', awaiting:'czeka w „Zgodach”', applied:'zapisane', rejected:'odrzucone', failed:'błąd'};
+// ---- Roles: editors -------------------------------------------------------------------------------
+let RED = null, KN = null, MODAL = null, ROLETAB = (()=>{ try { return localStorage.getItem('bob-roletab')||''; } catch(e){ return ''; } })();   // RED: role editor {id ('' = new)}; KN: knowledge request {role, entry|null}
+const WIRING = {code:'wired into Bob\'s code', prompt:'in the prompt of chats with the role', tool:'read on demand'};
+const jobSt = {running:'Claude is working…', awaiting:'waiting in "Approvals"', applied:'saved', rejected:'rejected', failed:'error'};
 function roleEditor(){
   if(!RED || !ROLES) return '';
   const isNew = RED.id === '';
-  const r = isNew ? {nazwa:'', emoji:'', opis:'', dostep:[], umiejetnosci:[], wiedza:[]} : ROLES.role.find(x=>x.id===RED.id) || {};
-  const skills = (r?.umiejetnosci||[]).map(u=>[u?.nazwa,u?.opis,u?.gdzie].join(' | ')).join('\n');
-  const kRow = (k,i) => `<tr data-k="${i}"><td><input class="ds-input k-nazwa" value="${esc(k?.nazwa||'')}" style="height:32px"></td><td><input class="ds-input k-plik" value="${esc(k?.plik||'')}" style="height:32px" placeholder="knowledge/…"></td>
-    <td><select class="ds-input k-wp" style="height:32px">${ROLES.wpiecia.map(w=>`<option value="${w}" ${k.wpiecie===w?'selected':''}>${esc(WPIECIE[w]||w)}</option>`).join('')}</select></td>
-    <td><input type="checkbox" class="k-team" ${k.tylko_zespol?'checked':''}></td><td><input class="ds-input k-opis" value="${esc(k?.opis||'')}" style="height:32px"><input type="hidden" class="k-id" value="${esc(k.id||'')}"></td>
-    <td><label class="row"><input type="checkbox" class="k-del"> usuń</label></td></tr>`;
-  return `<div class="box" id="red"><h2>${isNew?'Nowa rola':'Edycja roli: '+esc(r?.nazwa)}</h2>
+  const r = isNew ? {name:'', emoji:'', description:'', access:[], skills:[], knowledge:[]} : ROLES.roles.find(x=>x.id===RED.id) || {};
+  const skills = (r?.skills||[]).map(u=>[u?.name,u?.description,u?.where].join(' | ')).join('\n');
+  const kRow = (k,i) => `<tr data-k="${i}"><td><input class="ds-input k-name" value="${esc(k?.name||'')}" style="height:32px"></td><td><input class="ds-input k-file" value="${esc(k?.file||'')}" style="height:32px" placeholder="knowledge/…"></td>
+    <td><select class="ds-input k-wp" style="height:32px">${ROLES.wirings.map(w=>`<option value="${w}" ${k.wiring===w?'selected':''}>${esc(WIRING[w]||w)}</option>`).join('')}</select></td>
+    <td><input type="checkbox" class="k-team" ${k.team_only?'checked':''}></td><td><input class="ds-input k-desc" value="${esc(k?.description||'')}" style="height:32px"><input type="hidden" class="k-id" value="${esc(k.id||'')}"></td>
+    <td><label class="row"><input type="checkbox" class="k-del"> remove</label></td></tr>`;
+  return `<div class="box" id="red"><h2>${isNew?'New role':'Editing role: '+esc(r?.name)}</h2>
     <div class="form">
-      ${isNew?'<label>Identyfikator (małe litery, _)<input class="ds-input" id="r-id" placeholder="np. analityk"></label>':''}
-      <label>Nazwa<input class="ds-input" id="r-nazwa" value="${esc(r?.nazwa||'')}"></label>
+      ${isNew?'<label>Id (lowercase letters, _)<input class="ds-input" id="r-id" placeholder="e.g. analyst"></label>':''}
+      <label>Name<input class="ds-input" id="r-name" value="${esc(r?.name||'')}"></label>
       <label>Emoji<input class="ds-input" id="r-emoji" value="${esc(r?.emoji||'')}"></label>
     </div>
-    <div class="lbl">Bob tej roli - obrazek Boba</div>
-    <div class="bob-pick">${bobImg(r?.obraz,'','r-bob-prev')}<select class="ds-input" id="r-obraz" style="height:32px;width:280px"><option value="">(bez obrazka)</option>${(ROLES.obrazy||[]).map(o=>`<option ${o===r?.obraz?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
-    <label class="lbl">Opis - co Bob robi w tej roli<textarea class="ds-input" id="r-opis">${esc(r?.opis||'')}</textarea></label>
-    <div class="lbl">Dostęp do narzędzi${RED.id==='asystent'?' - Asystent ma zawsze wszystkie domyślne grupy':''}</div>
-    <div class="checks">${ROLES.znane_grupy.map(g=>box('r-g', g, (r?.dostep||[]).includes(g), `${grpLabel(g)} <span class="muted">${esc((ROLES.grupy[g]||{}).opis||'')}</span>`)).join('')}</div>
-    <label class="lbl">Umiejętności - jedna w linii: nazwa | opis | gdzie (plik albo katalog)<textarea class="ds-input" id="r-skills" style="min-height:90px">${esc(skills)}</textarea></label>
-    <div class="lbl">Wiedza - pliki z knowledge/ albo z promptów (nową treść łatwiej dodać przyciskiem „Dodaj wiedzę” na karcie roli)</div>
-    ${table(['Nazwa','Plik','Jak wpięta','🔒','Opis',''], (r?.wiedza||[]).map(kRow).join('')+kRow({wpiecie:'prompt'},'new')).replace('<table class="ds-table">','<table class="ds-table" id="r-k">')}
-    <div class="row" style="margin-top:var(--space-12)">${btn('Zapisz rolę','id="r-save"','primary')}${!isNew && RED.id!=='asystent'?btn('Usuń rolę','id="r-del"','danger'):''}${btn('Zamknij','id="r-cancel"','tertiary')}<span class="msg" id="r-msg">${esc(RED.msg||'')}</span></div></div>`;
+    <div class="lbl">This role's Bob - Bob picture</div>
+    <div class="bob-pick">${bobImg(r?.image,'','r-bob-prev')}<select class="ds-input" id="r-image" style="height:32px;width:280px"><option value="">(no picture)</option>${(ROLES.images||[]).map(o=>`<option ${o===r?.image?'selected':''}>${esc(o)}</option>`).join('')}</select></div>
+    <label class="lbl">Description - what Bob does in this role<textarea class="ds-input" id="r-desc">${esc(r?.description||'')}</textarea></label>
+    <div class="lbl">Tool access${RED.id==='assistant'?' - the Assistant always has all default groups':''}</div>
+    <div class="checks">${ROLES.known_groups.map(g=>box('r-g', g, (r?.access||[]).includes(g), `${grpLabel(g)} <span class="muted">${esc((ROLES.groups[g]||{}).description||'')}</span>`)).join('')}</div>
+    <label class="lbl">Skills - one per line: name | description | where (file or folder)<textarea class="ds-input" id="r-skills" style="min-height:90px">${esc(skills)}</textarea></label>
+    <div class="lbl">Knowledge - files from knowledge/ or from prompts (new content is easier to add with the "Add knowledge" button on the role card)</div>
+    ${table(['Name','File','How wired','🔒','Description',''], (r?.knowledge||[]).map(kRow).join('')+kRow({wiring:'prompt'},'new')).replace('<table class="ds-table">','<table class="ds-table" id="r-k">')}
+    <div class="row" style="margin-top:var(--space-12)">${btn('Save role','id="r-save"','primary')}${!isNew && RED.id!=='assistant'?btn('Delete role','id="r-del"','danger'):''}${btn('Close','id="r-cancel"','tertiary')}<span class="msg" id="r-msg">${esc(RED.msg||'')}</span></div></div>`;
 }
 function roleForm(){
-  const skills = $('#r-skills').value.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(x=>x[0]).map(([nazwa,opis,gdzie])=>({nazwa,opis:opis||'',gdzie:gdzie||''}));
-  const wiedza = [...document.querySelectorAll('#r-k tr[data-k]')].filter(tr=>!tr.querySelector('.k-del').checked && tr.querySelector('.k-plik').value.trim())
-    .map(tr=>{ const nazwa = tr.querySelector('.k-nazwa').value.trim(), plik = tr.querySelector('.k-plik').value.trim();
-      return {id: tr.querySelector('.k-id').value || (plik.split('/').pop().replace(/\.[a-z]+$/,'')), nazwa: nazwa||plik, plik,
-        wpiecie: tr.querySelector('.k-wp').value, tylko_zespol: tr.querySelector('.k-team').checked, opis: tr.querySelector('.k-opis').value}; });
-  return {nazwa:$('#r-nazwa').value, emoji:$('#r-emoji').value, opis:$('#r-opis').value, obraz:$('#r-obraz').value,
-          dostep:[...document.querySelectorAll('.r-g:checked')].map(x=>x?.value), umiejetnosci:skills, wiedza};
+  const skills = $('#r-skills').value.split('\n').map(l=>l.split('|').map(x=>x.trim())).filter(x=>x[0]).map(([name,description,where])=>({name,description:description||'',where:where||''}));
+  const knowledge = [...document.querySelectorAll('#r-k tr[data-k]')].filter(tr=>!tr.querySelector('.k-del').checked && tr.querySelector('.k-file').value.trim())
+    .map(tr=>{ const name = tr.querySelector('.k-name').value.trim(), file = tr.querySelector('.k-file').value.trim();
+      return {id: tr.querySelector('.k-id').value || (file.split('/').pop().replace(/\.[a-z]+$/,'')), name: name||file, file,
+        wiring: tr.querySelector('.k-wp').value, team_only: tr.querySelector('.k-team').checked, description: tr.querySelector('.k-desc').value}; });
+  return {name:$('#r-name').value, emoji:$('#r-emoji').value, description:$('#r-desc').value, image:$('#r-image').value,
+          access:[...document.querySelectorAll('.r-g:checked')].map(x=>x?.value), skills, knowledge};
 }
 function knBox(){
   if(!KN || !ROLES) return '';
-  const r = ROLES.role.find(x=>x.id===KN.rola)||{}, k = KN.wpis ? (r?.wiedza||[]).find(x=>x.id===KN.wpis) : null;
-  return `<div class="box" id="kn"><h2>${k?'Edycja wiedzy z Claude: '+esc(k?.nazwa):'Nowa wiedza dla roli '+esc(r?.nazwa)}</h2>
-    <p class="sub">${k?`Plik <code>${esc(k?.plik)}</code> (${esc(WPIECIE[k?.wpiecie]||k?.wpiecie)}). Opisz, co zmienić - Claude przepisze plik, a propozycja z różnicami trafi do „Zgód”.`:'Opisz, co ma się znaleźć w nowej wiedzy - Claude napisze plik, a propozycja trafi do „Zgód”. Po zatwierdzeniu wiedza dołączy do roli.'}</p>
+  const r = ROLES.roles.find(x=>x.id===KN.role)||{}, k = KN.entry ? (r?.knowledge||[]).find(x=>x.id===KN.entry) : null;
+  return `<div class="box" id="kn"><h2>${k?'Editing knowledge with Claude: '+esc(k?.name):'New knowledge for the role '+esc(r?.name)}</h2>
+    <p class="sub">${k?`File <code>${esc(k?.file)}</code> (${esc(WIRING[k?.wiring]||k?.wiring)}). Describe what to change - Claude rewrites the file and the proposal with its differences goes to "Approvals".`:'Describe what the new knowledge should contain - Claude writes the file and the proposal goes to "Approvals". Once approved, the knowledge joins the role.'}</p>
     ${k?'':`<div class="form">
-      <label>Nazwa<input class="ds-input" id="kn-nazwa" placeholder="np. Zasady odpowiedzi na kolejce"></label>
-      <label>Jak Bob ma z niej korzystać<select class="ds-input" id="kn-wp">${['prompt','narzedzie'].map(w=>`<option value="${w}">${esc(WPIECIE[w])}</option>`).join('')}</select></label>
-      <label>Krótki opis<input class="ds-input" id="kn-opis"></label></div>
-      <div class="checks"><label><input type="checkbox" id="kn-team"> tylko dla zespołu - nie na kanały z użytkownikami zewnętrznymi 🔒</label></div>`}
-    <label class="lbl">${k?'Co zmienić':'Co ma być w tej wiedzy'}<textarea class="ds-input" id="kn-txt" style="min-height:90px"></textarea></label>
-    <div class="row">${btn('Wyślij do Claude','id="kn-go"','primary')}${btn('Zamknij','id="kn-cancel"','tertiary')}<span class="msg" id="kn-msg">${esc(KN.msg||'')}</span></div></div>`;
+      <label>Name<input class="ds-input" id="kn-name" placeholder="e.g. Rules for answering on the queue"></label>
+      <label>How Bob should use it<select class="ds-input" id="kn-wp">${['prompt','tool'].map(w=>`<option value="${w}">${esc(WIRING[w])}</option>`).join('')}</select></label>
+      <label>Short description<input class="ds-input" id="kn-desc"></label></div>
+      <div class="checks"><label><input type="checkbox" id="kn-team"> team only - not in chats with external users 🔒</label></div>`}
+    <label class="lbl">${k?'What to change':'What this knowledge should contain'}<textarea class="ds-input" id="kn-txt" style="min-height:90px"></textarea></label>
+    <div class="row">${btn('Send to Claude','id="kn-go"','primary')}${btn('Close','id="kn-cancel"','tertiary')}<span class="msg" id="kn-msg">${esc(KN.msg||'')}</span></div></div>`;
 }
 function roleCard(r){
-  const kan = r?.kanaly||[];
-  return `<div class="box" id="rola-${esc(r.id)}"><div class="role-head">${bobImg(r?.obraz,'role-bob')}<div style="flex:1"><div class="row between"><h2>${esc(r?.emoji||'')} ${esc(r?.nazwa)}</h2>
-    <div class="row">${btn('Edytuj rolę',`data-redit="${esc(r.id)}"`)}${btn('Dodaj wiedzę (Claude)',`data-knew="${esc(r.id)}"`)}</div></div>
-    <p class="sub">${esc(r?.opis||'')}</p></div></div>
-    <div class="lbl">Dostęp do narzędzi</div><div>${(r.dostep_pelny||[]).map(g=>`<span data-tip="${esc(`${g}${(ROLES.grupy[g]||{}).tylko_zespol?' 🔒 tylko zespół':''}
-${(ROLES.grupy[g]||{}).opis||''}
-narzędzia: ${(ROLES.narzedzia[g]||[]).join(', ')}`)}">${badge(grpLabel(g))}</span>`).join('')||'<span class="muted">brak</span>'}</div>
-    <div class="lbl">Umiejętności</div><ul style="margin:0;padding-left:var(--space-20);line-height:1.6">${(r?.umiejetnosci||[]).map(u=>`<li><b>${esc(u?.nazwa)}</b> - ${esc(u?.opis||'')} <span class="muted"><code>${esc(u?.gdzie||'')}</code></span></li>`).join('')||'<li class="muted">brak</li>'}</ul>
-    <div class="lbl">Wiedza</div>
-    ${table(['Wiedza','Jak wpięta','Rozmiar',''], (r?.wiedza||[]).map(k=>`<tr><td><b>${esc(k?.nazwa)}</b>${k.tylko_zespol?' 🔒':''}<br><span class="muted"><code>${esc(k?.plik)}</code> ${esc(k?.opis||'')}</span>
-</td><td>${esc(WPIECIE[k?.wpiecie]||k?.wpiecie)}</td><td>${k.istnieje?`${k.znaki} zn.<br><span class="muted">${when(k?.zmieniony)}</span>`:badge('brak pliku','red')}</td>
-      <td style="white-space:nowrap">${k.istnieje?btn('Pokaż',`data-kshow="${esc(r.id)}|${esc(k.id)}"`)+' '+btn('Edytuj z Claude',`data-kedit="${esc(r.id)}|${esc(k.id)}"`,'tertiary'):''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">Brak wiedzy - dodaj ją przyciskiem „Dodaj wiedzę”.</td></tr>')}
-    <div class="lbl">Kanały i nazwa Boba na nich</div>
-    ${kan.length?table(['Kanał','Bob występuje jako','Reaguje na',''], kan.map(c=>`<tr><td>${esc(c?.chat)}${c.kanal_fr?' '+badge('kanał zewnętrzny','yellow'):''}</td><td><b>${esc(c?.nazwa)}</b></td><td>${(c?.trigger||[]).map(t=>badge(esc(t))).join('')||'<span class="muted">bob</span>'}</td><td>${btn('Edytuj kanał',`data-goedit="${esc(c?.chat)}"`,'tertiary')}</td></tr>`).join('')):'<span class="muted">Żaden kanał nie ma tej roli - dodaj ją w zakładce „Kanały”.</span>'}</div>`;
+  const chans = r?.channels||[];
+  return `<div class="box" id="role-${esc(r.id)}"><div class="role-head">${bobImg(r?.image,'role-bob')}<div style="flex:1"><div class="row between"><h2>${esc(r?.emoji||'')} ${esc(r?.name)}</h2>
+    <div class="row">${btn('Edit role',`data-redit="${esc(r.id)}"`)}${btn('Add knowledge (Claude)',`data-knew="${esc(r.id)}"`)}</div></div>
+    <p class="sub">${esc(r?.description||'')}</p></div></div>
+    <div class="lbl">Tool access</div><div>${(r.full_access||[]).map(g=>`<span data-tip="${esc(`${g}${(ROLES.groups[g]||{}).team_only?' 🔒 team only':''}
+${(ROLES.groups[g]||{}).description||''}
+tools: ${(ROLES.tools[g]||[]).join(', ')}`)}">${badge(grpLabel(g))}</span>`).join('')||'<span class="muted">none</span>'}</div>
+    <div class="lbl">Skills</div><ul style="margin:0;padding-left:var(--space-20);line-height:1.6">${(r?.skills||[]).map(u=>`<li><b>${esc(u?.name)}</b> - ${esc(u?.description||'')} <span class="muted"><code>${esc(u?.where||'')}</code></span></li>`).join('')||'<li class="muted">none</li>'}</ul>
+    <div class="lbl">Knowledge</div>
+    ${table(['Knowledge','How wired','Size',''], (r?.knowledge||[]).map(k=>`<tr><td><b>${esc(k?.name)}</b>${k.team_only?' 🔒':''}<br><span class="muted"><code>${esc(k?.file)}</code> ${esc(k?.description||'')}</span>
+</td><td>${esc(WIRING[k?.wiring]||k?.wiring)}</td><td>${k.exists?`${k.chars} chars<br><span class="muted">${when(k?.modified)}</span>`:badge('file missing','red')}</td>
+      <td style="white-space:nowrap">${k.exists?btn('Show',`data-kshow="${esc(r.id)}|${esc(k.id)}"`)+' '+btn('Edit with Claude',`data-kedit="${esc(r.id)}|${esc(k.id)}"`,'tertiary'):''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No knowledge - add it with the "Add knowledge" button.</td></tr>')}
+    <div class="lbl">Chats and Bob's name in them</div>
+    ${chans.length?table(['Chat','Bob goes by','Reacts to',''], chans.map(c=>`<tr><td>${esc(c?.chat)}${c.external_chat?' '+badge('external chat','yellow'):''}</td><td><b>${esc(c?.name)}</b></td><td>${(c?.trigger||[]).map(t=>badge(esc(t))).join('')||'<span class="muted">bob</span>'}</td><td>${btn('Edit chat',`data-goedit="${esc(c?.chat)}"`,'tertiary')}</td></tr>`).join('')):'<span class="muted">No chat has this role - add it on the "Chats" tab.</span>'}</div>`;
 }
 function wireRoles(){
   document.querySelectorAll('[data-redit]').forEach(b=>b['onclick']=()=>{ RED={id:b.dataset.redit}; KN=null; render().then(()=>$('#red')?.scrollIntoView()); });
-  document.querySelectorAll('[data-knew]').forEach(b=>b['onclick']=()=>{ KN={rola:b.dataset.knew, wpis:null}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
-  document.querySelectorAll('[data-kedit]').forEach(b=>b['onclick']=()=>{ const [rola,wpis]=b.dataset.kedit.split('|'); KN={rola,wpis}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
+  document.querySelectorAll('[data-knew]').forEach(b=>b['onclick']=()=>{ KN={role:b.dataset.knew, entry:null}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
+  document.querySelectorAll('[data-kedit]').forEach(b=>b['onclick']=()=>{ const [role,entry]=b.dataset.kedit.split('|'); KN={role,entry}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); });
   document.querySelectorAll('[data-goedit]').forEach(b=>b['onclick']=()=>openChat(b.dataset.goedit));
-  document.querySelectorAll('[data-kshow]').forEach(b=>b['onclick']=()=>{ const [rola,wpis]=b.dataset.kshow.split('|'); openKnowledge(rola, wpis); });
+  document.querySelectorAll('[data-kshow]').forEach(b=>b['onclick']=()=>{ const [role,entry]=b.dataset.kshow.split('|'); openKnowledge(role, entry); });
   document.querySelectorAll('[data-rtab]').forEach(d=>d['onclick']=()=>{ ROLETAB=d.dataset.rtab; RED=null; KN=null; try { localStorage.setItem('bob-roletab', ROLETAB); } catch(e){} render(); });
-  const ro=$('#r-obraz'); if(ro) ro.onchange=()=>{ $('#r-bob-prev').src=`/static/bob/${ro.value||'bob-static-base'}.svg`; };
+  const ro=$('#r-image'); if(ro) ro.onchange=()=>{ $('#r-bob-prev').src=`/static/bob/${ro.value||'bob-static-base'}.svg`; };
   const nr=$('#r-new'); if(nr) nr.onclick=()=>{ RED={id:''}; KN=null; render().then(()=>$('#red')?.scrollIntoView()); };
   document.querySelectorAll('[data-gsave]').forEach(b=>b['onclick']=async()=>{ const g=b.dataset.gsave, tr=b.closest('tr');
-    const r=await api('/api/roles/group',{group:g, opis:tr.querySelector('.g-opis').value, tylko_zespol:tr.querySelector('.g-team').checked, by:'panel'}); b.textContent=r.ok?'Zapisano':'Błąd'; if(!r.ok) alert(r?.message); });
+    const r=await api('/api/roles/group',{group:g, description:tr.querySelector('.g-desc').value, team_only:tr.querySelector('.g-team').checked, by:'panel'}); b.textContent=r.ok?'Saved':'Error'; if(!r.ok) alert(r?.message); });
   if($('#red')){
     $('#r-cancel').onclick=()=>{ RED=null; render(); };
     $('#r-save').onclick=async()=>{ const isNew = RED.id===''; const id = isNew ? $('#r-id').value.trim() : RED.id;
       const r = await api('/api/roles/save', {id, role: roleForm(), new: isNew, by:'panel'});
       if(r.ok) ROLETAB = id;
       RED = r.ok ? null : {...RED, msg:r.message}; if(r.ok) alert(r?.message); render(); };
-    const d=$('#r-del'); if(d) d['onclick']=async()=>{ if(!confirm('Usunąć tę rolę? Kopia zostaje w archiwum.')) return;
+    const d=$('#r-del'); if(d) d['onclick']=async()=>{ if(!confirm('Delete this role? A copy stays in the archive.')) return;
       const r = await api('/api/roles/delete', {id:RED.id, by:'panel'}); RED = r.ok ? null : {...RED, msg:r.message}; render(); };
   }
   if($('#kn')){
     $('#kn-cancel').onclick=()=>{ KN=null; render(); };
     $('#kn-go').onclick=async()=>{ const b=$('#kn-go'); b['disabled'] = true;
-      try { const body = {rola:KN.rola, polecenie:$('#kn-txt').value, by:'panel'};
-        if(KN.wpis) body.wpis = KN.wpis; else body.nowy = {nazwa:$('#kn-nazwa').value, opis:$('#kn-opis').value, wpiecie:$('#kn-wp').value, tylko_zespol:$('#kn-team').checked};
+      try { const body = {role:KN.role, instruction:$('#kn-txt').value, by:'panel'};
+        if(KN.entry) body.entry = KN.entry; else body.new = {name:$('#kn-name').value, description:$('#kn-desc').value, wiring:$('#kn-wp').value, team_only:$('#kn-team').checked};
         const r = await api('/api/roles/knowledge', body); KN = r.ok ? null : {...KN, msg:r.message}; if(r.ok) alert(r?.message); render(); }
       finally { b['disabled'] = false; } };
   }
@@ -400,14 +400,14 @@ function wireRoles(){
 
 
 
-// ---- live dashboard (Pulpit) ---------------------------------------------------------------------
-const KIND = {odpowiedz:['odpowiedź','green'], milczenie:['milczenie','gray'], juz_odpowiedziane:['ktoś już odpowiedział','blue']};
-const hh = iso => new Date(iso).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+// ---- live dashboard ------------------------------------------------------------------------------
+const KIND = {reply:['reply','green'], silent:['silent','gray'], already_answered:['someone already answered','blue']};
+const hh = iso => new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const heatBg = (v, max) => v ? `color-mix(in oklab, var(--brand-35) ${Math.round(18+82*v/max)}%, var(--body-quaternary-bg))` : '';
 function barChart(vals, hours, fmt, title, unit){
   const max = Math.max(...vals.map(v=>v||0), 0) || 1;
   const nice = (()=>{ const p = Math.pow(10, Math.floor(Math.log10(max))); return Math.ceil(max/p)*p; })();
-  return `<div class="box"><h2>${title}</h2><p class="sub" style="margin-bottom:0">razem ${fmt(vals.reduce((a,b)=>a+(b||0),0))}${unit} w 24 h · najaktywniej ${hh(hours[vals.indexOf(Math.max(...vals))])}</p>
+  return `<div class="box"><h2>${title}</h2><p class="sub" style="margin-bottom:0">total ${fmt(vals.reduce((a,b)=>a+(b||0),0))}${unit} in 24 h · busiest at ${hh(hours[vals.indexOf(Math.max(...vals))])}</p>
     <div class="bars"><div class="gl" style="bottom:100%"><span>${fmt(nice)}</span></div><div class="gl" style="bottom:50%"><span>${fmt(nice/2)}</span></div>
       ${vals.map((v,i)=>`<div class="b" data-tip="${esc(`${hh(hours[i])}–${hh(new Date(new Date(hours[i]).getTime()+3600e3).toISOString())}\n${fmt(v||0)}${unit}`)}"><i style="height:${(v||0)/nice*100}%"></i></div>`).join('')}</div>
     <div class="xlab">${hours.map((h,i)=>`<span>${i%3===0?hh(h).slice(0,2):''}</span>`).join('')}</div></div>`;
@@ -418,19 +418,19 @@ function liveDashboard(D){
   const cols = D.hours.length;
   const heat = D.chats.length ? `<div class="heat" style="grid-template-columns:minmax(140px,220px) repeat(${cols},minmax(10px,1fr)) auto">
       <span></span>${D.hours.map((h,i)=>`<span class="hx">${i%3===0?hh(h).slice(0,2):''}</span>`).join('')}<span></span>
-      ${D.chats.map(c=>`<span class="hn" data-chatedit="${esc(c?.name)}" title="Ustawienia kanału">${esc(c?.name)}</span>`
+      ${D.chats.map(c=>`<span class="hn" data-chatedit="${esc(c?.name)}" title="Chat settings">${esc(c?.name)}</span>`
         + c.cells.map((x,i)=>{ const v=x[0]+x[1]+x[2];
-            return `<span class="c" style="${v?`background:${heatBg(v,max)}`:''}" data-chatgo="${esc(c?.name)}" data-tip="${esc(`${c.name}\n${hh(D.hours[i])}: ${v} wiadomości do Boba\nodpowiedział ${x[0]} · milczał ${x[1]} · ktoś już odpowiedział ${x[2]}`)}"></span>`; }).join('')
-        + `<span class="tot" data-tip="${esc(`${c.name}: ${c.total} wiadomości, odpowiedzi ${c.odpowiedzi}, koszt Claude ${c.koszt.toFixed(2)} $`)}">${c.total} · ${c.koszt.toFixed(2)} $</span>`).join('')}</div>
-      <div class="scale">0 <i></i> ${max} wiadomości / h · kliknij komórkę, żeby zobaczyć rozmowy z kanału; nazwę - żeby otworzyć ustawienia kanału</div>`
-    : empty('chat','Cisza na kanałach','W ostatniej dobie nikt nie pisał do Boba.');
-  const feed = D.feed.length ? `<div class="feed">${D.feed.map(f=>`<a data-chatgo="${esc(f?.chat)}"><span class="t">${hh(f.ts)}</span><span>${badge(esc(f?.chat))}</span><span>${badge(...KIND[f?.kind])}</span><span class="x">${esc(f?.sender?f?.sender+': ':'')}${esc(f?.text||'')}${f.kind==='odpowiedz'&&f?.reply?' → '+esc(f?.reply):''}</span></a>`).join('')}</div>` : '<span class="muted">Brak akcji w ostatniej dobie.</span>';
-  return `<div class="row between" style="margin:var(--space-24) 0 var(--space-12)"><h2 style="margin:0;font-size:var(--text-xl)">Na żywo - ostatnie 24 h</h2><span class="muted">odświeża się co 15 s · najedź, żeby zobaczyć szczegóły; kliknij, żeby wejść głębiej</span></div>
-    <div class="kpis">${kpi(k?.obsluzone,'wiadomości do Boba','wszystkie wiadomości, na które Bob musiał zareagować (odpowiedział, zamilkł albo ktoś już odpowiedział)')}${kpi(k?.odpowiedzi,'odpowiedzi wysłane',k?.obsluzone?`${Math.round(k.odpowiedzi/k.obsluzone*100)}% wiadomości`:'')}${kpi(k?.wywolania,'wywołań Claude','każda odpowiedź, decyzja o milczeniu i analiza to wywołanie modelu')}
-      ${kpi(k.koszt.toFixed(2)+' $','koszt Claude','suma total_cost_usd z perf-metrics')}${kpi(k.czas_mediana!=null?k.czas_mediana+' s':'-','mediana czasu odpowiedzi')}${kpi(k?.kanaly,'aktywnych kanałów')}</div>
-    <div class="box"><h2>Gdzie i kiedy Bob działał</h2><p class="sub">Kanał × godzina - im ciemniej, tym więcej wiadomości do Boba. Po prawej: razem i koszt Claude na kanale.</p>${heat}</div>
-    <div class="charts">${barChart(D.load.calls, D.hours, v=>String(Math.round(v)), 'Obciążenie: wywołania Claude na godzinę', '')}${barChart(D.load.cost, D.hours, v=>v.toFixed(2), 'Koszt Claude na godzinę', ' $')}</div>
-    <div class="box"><div class="row between"><h2>Co się ostatnio działo</h2>${btn('Wszystkie rozmowy','data-go="aktywnosc"','tertiary')}</div>${feed}</div>`;
+            return `<span class="c" style="${v?`background:${heatBg(v,max)}`:''}" data-chatgo="${esc(c?.name)}" data-tip="${esc(`${c.name}\n${hh(D.hours[i])}: ${v} messages to Bob\nreplied ${x[0]} · stayed silent ${x[1]} · someone already answered ${x[2]}`)}"></span>`; }).join('')
+        + `<span class="tot" data-tip="${esc(`${c.name}: ${c.total} messages, replies ${c.replies}, Claude cost ${c.cost.toFixed(2)} $`)}">${c.total} · ${c.cost.toFixed(2)} $</span>`).join('')}</div>
+      <div class="scale">0 <i></i> ${max} messages / h · click a cell to see the chat's conversations; click the name to open the chat's settings</div>`
+    : empty('chat','Quiet in the chats','Nobody wrote to Bob in the last day.');
+  const feed = D.feed.length ? `<div class="feed">${D.feed.map(f=>`<a data-chatgo="${esc(f?.chat)}"><span class="t">${hh(f.ts)}</span><span>${badge(esc(f?.chat))}</span><span>${badge(...KIND[f?.kind])}</span><span class="x">${esc(f?.sender?f?.sender+': ':'')}${esc(f?.text||'')}${f.kind==='reply'&&f?.reply?' → '+esc(f?.reply):''}</span></a>`).join('')}</div>` : '<span class="muted">No actions in the last day.</span>';
+  return `<div class="row between" style="margin:var(--space-24) 0 var(--space-12)"><h2 style="margin:0;font-size:var(--text-xl)">Live - last 24 h</h2><span class="muted">refreshes every 15 s · hover to see details; click to dig deeper</span></div>
+    <div class="kpis">${kpi(k?.handled,'messages to Bob','all messages Bob had to react to (he replied, stayed silent, or someone already answered)')}${kpi(k?.replies,'replies sent',k?.handled?`${Math.round(k.replies/k.handled*100)}% of messages`:'')}${kpi(k?.calls,'Claude calls','every reply, decision to stay silent and analysis is a model call')}
+      ${kpi(k.cost.toFixed(2)+' $','Claude cost','sum of total_cost_usd from perf-metrics')}${kpi(k.median_s!=null?k.median_s+' s':'-','median reply time')}${kpi(k?.chats,'active chats')}</div>
+    <div class="box"><h2>Where and when Bob worked</h2><p class="sub">Chat × hour - the darker, the more messages to Bob. On the right: total and Claude cost per chat.</p>${heat}</div>
+    <div class="charts">${barChart(D.load.calls, D.hours, v=>String(Math.round(v)), 'Load: Claude calls per hour', '')}${barChart(D.load.cost, D.hours, v=>v.toFixed(2), 'Claude cost per hour', ' $')}</div>
+    <div class="box"><div class="row between"><h2>What happened recently</h2>${btn('All conversations','data-go="conversations"','tertiary')}</div>${feed}</div>`;
 }
 function wireTips(){
   const tip = $('#tip');
@@ -442,7 +442,7 @@ function wireTips(){
   });
   // the 15 s refresh replaces the hovered element without a pointerleave - never leave a stale tooltip behind
   window.onscroll = () => { tip.style.display='none'; };
-  document.querySelectorAll('[data-chatgo]').forEach(el=>el.onclick=()=>{ $('#tip').style.display='none'; ACHAT=el.dataset.chatgo; go('aktywnosc'); });
+  document.querySelectorAll('[data-chatgo]').forEach(el=>el.onclick=()=>{ $('#tip').style.display='none'; ACHAT=el.dataset.chatgo; go('conversations'); });
   document.querySelectorAll('[data-chatedit]').forEach(el=>el.onclick=()=>{ $('#tip').style.display='none'; openChat(el.dataset.chatedit); });
 }
 // ---- reader: a knowledge file in a modal, rendered markdown ------------------------------------
@@ -490,18 +490,18 @@ function renderModal(){
   else { const r = mdRender(M.text); body = `<div class="md">${r.html}</div>`; toc = r?.toc; }
   const words = (M.text||'').split(/\s+/).filter(Boolean).length;
   el.innerHTML = `<div class="reader-overlay" id="reader-ov"><div class="reader" role="dialog" aria-modal="true" aria-label="${esc(M.title)}">
-    <div class="reader-head"><div><h2>${esc(M.title)}</h2><div class="meta">${M.meta||''}${badge(`${words} słów · ok. ${Math.max(1,Math.round(words/200))} min czytania`)}${M.path?`<code>${esc(M.path)}</code>`:''}</div></div>
-      <div class="row" style="flex-wrap:nowrap"><input class="ds-input" id="reader-q" placeholder="Szukaj w tekście…" style="height:32px;width:200px"><button class="ds-modal-close" id="reader-x" aria-label="Zamknij">${ic('cross')}</button></div></div>
-    <div class="reader-main"><nav class="reader-toc">${toc.length?`<div class="lbl">Spis treści</div>${toc.map(h=>`<a class="l${h.lv}" data-to="${h.id}">${esc(h.t)}</a>`).join('')}`:'<span class="muted" style="padding:0 var(--space-8)">Brak nagłówków</span>'}</nav>
+    <div class="reader-head"><div><h2>${esc(M.title)}</h2><div class="meta">${M.meta||''}${badge(`${words} words · about ${Math.max(1,Math.round(words/200))} min read`)}${M.path?`<code>${esc(M.path)}</code>`:''}</div></div>
+      <div class="row" style="flex-wrap:nowrap"><input class="ds-input" id="reader-q" placeholder="Search the text…" style="height:32px;width:200px"><button class="ds-modal-close" id="reader-x" aria-label="Close">${ic('cross')}</button></div></div>
+    <div class="reader-main"><nav class="reader-toc">${toc.length?`<div class="lbl">Contents</div>${toc.map(h=>`<a class="l${h.lv}" data-to="${h.id}">${esc(h.t)}</a>`).join('')}`:'<span class="muted" style="padding:0 var(--space-8)">No headings</span>'}</nav>
       <div class="reader-body" id="reader-body">${body}</div></div>
-    <div class="reader-foot"><span class="msg" id="reader-msg"></span>${(M.actions||[]).map((a,k)=>btn(a?.label,`data-ract="${k}"`,a?.kind||'secondary')).join('')}${M.path?btn('Kopiuj ścieżkę','id="reader-copy"','tertiary'):''}${btn('Zamknij','id="reader-close"')}</div></div></div>`;
+    <div class="reader-foot"><span class="msg" id="reader-msg"></span>${(M.actions||[]).map((a,k)=>btn(a?.label,`data-ract="${k}"`,a?.kind||'secondary')).join('')}${M.path?btn('Copy path','id="reader-copy"','tertiary'):''}${btn('Close','id="reader-close"')}</div></div></div>`;
   document.body.style.overflow='hidden';
   const close = () => { MODAL=null; renderModal(); };
   $('#reader-x').onclick = close; $('#reader-close').onclick = close;
   $('#reader-ov').onclick = e => { if(e.target.id==='reader-ov') close(); };
   el.querySelectorAll('[data-to]').forEach(a=>a['onclick']=()=>document.getElementById(a.dataset.to)?.scrollIntoView({behavior:'smooth'}));
   el.querySelectorAll('[data-ract]').forEach(b=>b['onclick']=()=>M.actions[+b.dataset.ract].run());
-  const cp=$('#reader-copy'); if(cp) cp.onclick=async()=>{ try { await navigator.clipboard.writeText(M.path); $('#reader-msg').textContent='Ścieżka skopiowana.'; } catch(e){ $('#reader-msg').textContent=M.path; } };
+  const cp=$('#reader-copy'); if(cp) cp.onclick=async()=>{ try { await navigator.clipboard.writeText(M.path); $('#reader-msg').textContent='Path copied.'; } catch(e){ $('#reader-msg').textContent=M.path; } };
   const q=$('#reader-q'), original = $('#reader-body').innerHTML;
   q['oninput'] = () => { const v=q.value.trim(); const b=$('#reader-body'); b.innerHTML = original; if(v?.length<2){ $('#reader-msg').textContent=''; return; }
     const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT), hits=[], re = new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
@@ -510,18 +510,18 @@ function renderModal(){
     hits.forEach(t=>{ const frag=document.createDocumentFragment(), txt=t.nodeValue; let last=0, m;
       reg.lastIndex=0; while((m=reg.exec(txt))){ frag.append(txt.slice(last, m?.index)); const mk=document.createElement('mark'); mk.textContent=m[0]; frag.append(mk); last=m?.index+m[0].length; count++; }
       frag.append(txt.slice(last)); t.replaceWith(frag); });
-    const first=b.querySelector('mark'); if(first) first.scrollIntoView({block:'center'}); $('#reader-msg').textContent = count?`Znaleziono: ${count}.`:'Brak wyników.'; };
+    const first=b.querySelector('mark'); if(first) first.scrollIntoView({block:'center'}); $('#reader-msg').textContent = count?`Found: ${count}.`:'No results.'; };
   q.focus();
 }
 document.addEventListener('keydown', e=>{ if(e?.key==='Escape' && MODAL){ MODAL=null; renderModal(); } });
-async function openKnowledge(rola, wpis){
-  const r = (ROLES?.role||[]).find(x=>x.id===rola) || {}, k = (r?.wiedza||[]).find(x=>x.id===wpis);
+async function openKnowledge(role, entry){
+  const r = (ROLES?.roles||[]).find(x=>x.id===role) || {}, k = (r?.knowledge||[]).find(x=>x.id===entry);
   if(!k) return;
-  const res = await api('/api/roles/knowledge?plik='+encodeURIComponent(k?.plik));
-  if(res.error){ alert(res.message||'Nie udało się otworzyć pliku.'); return; }
-  MODAL = {title:k?.nazwa, path:k?.plik, text:res.tekst||'',
-    meta: badge(esc(`${r.emoji||''} ${r.nazwa}`),'brand') + badge(esc(WPIECIE[k?.wpiecie]||k?.wpiecie)) + (k.tylko_zespol?badge('tylko zespół 🔒','yellow'):'') + (k?.zmieniony?badge('zmieniony '+ago(k?.zmieniony)+' temu'):''),
-    actions:[{label:'Edytuj z Claude', kind:'primary', run:()=>{ MODAL=null; renderModal(); KN={rola, wpis}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); }}]};
+  const res = await api('/api/roles/knowledge?file='+encodeURIComponent(k?.file));
+  if(res.error){ alert(res.message||'Could not open the file.'); return; }
+  MODAL = {title:k?.name, path:k?.file, text:res.text||'',
+    meta: badge(esc(`${r.emoji||''} ${r.name}`),'brand') + badge(esc(WIRING[k?.wiring]||k?.wiring)) + (k.team_only?badge('team only 🔒','yellow'):'') + (k?.modified?badge('changed '+ago(k?.modified)+' ago'):''),
+    actions:[{label:'Edit with Claude', kind:'primary', run:()=>{ MODAL=null; renderModal(); KN={role, entry}; RED=null; render().then(()=>$('#kn')?.scrollIntoView()); }}]};
   renderModal();
 }
 // ---- wiring ---------------------------------------------------------------------------------------
@@ -535,13 +535,13 @@ function wireCommon(){
   document.querySelectorAll('.apr').forEach(el=>el.querySelectorAll('button[data-a]').forEach(b=>b['onclick']=async()=>{
     const approve = b.dataset.a==='1'; b['disabled']=true;
     try { const res = await api(`/api/approvals/${el.dataset.id}/decide`, {approve, note: el.querySelector('textarea').value});
-      el.querySelector('.msg').textContent = res.message || (res.ok?'Zapisane.':'Błąd'); setTimeout(render, 900); } finally { b['disabled']=false; }
+      el.querySelector('.msg').textContent = res.message || (res.ok?'Saved.':'Error'); setTimeout(render, 900); } finally { b['disabled']=false; }
   }));
   const ac=$('#achat'); if(ac) ac.onchange=()=>{ ACHAT=ac.value; render(); };
   document.querySelectorAll('[data-lf]').forEach(b=>b['onclick']=()=>{ LOGF[b.dataset.lf]=b.dataset.v; render(); });
   const lsrc=$('#lsrc'); if(lsrc) lsrc.onchange=()=>{ LOGF.source=lsrc.value; render(); };
   const lq=$('#lq'); if(lq) lq.onkeydown=e=>{ if(e?.key==='Enter'){ LOGF.q=lq.value; render(); } };
-  const raw=$('#rawlog'); if(raw) raw.closest('details').ontoggle=async e=>{ if(e.target.open){ const l=await api('/api/bob/log?lines=300'); raw.textContent=l.log||'(pusty - Bob nie był jeszcze uruchomiony z panelu)'; } };
+  const raw=$('#rawlog'); if(raw) raw.closest('details').ontoggle=async e=>{ if(e.target.open){ const l=await api('/api/bob/log?lines=300'); raw.textContent=l.log||'(empty - Bob has not been started from the panel yet)'; } };
 }
 let rendering = null, again = false;
 function render(){
@@ -554,12 +554,12 @@ async function renderOnce(){
   {
     nav();
     const tipEl = $('#tip'); if(tipEl) tipEl.style.display = 'none';
-    try { $('#main').innerHTML = await VIEWS[tab](); } catch(e){ $('#main').innerHTML = `<div class="box">${callout('danger','Błąd panelu: '+esc(e))}</div>`; }
-    if(tab!=='pulpit') header();
+    try { $('#main').innerHTML = await VIEWS[tab](); } catch(e){ $('#main').innerHTML = `<div class="box">${callout('danger','Panel error: '+esc(e))}</div>`; }
+    if(tab!=='dashboard') header();
     wireCommon();
     wireTips();
-    if(tab==='czaty') wireEditor();
-    if(tab==='role') wireRoles();
+    if(tab==='chats') wireEditor();
+    if(tab==='roles') wireRoles();
   }
 }
 $('#theme').onclick=()=>{ const t = document.documentElement.dataset.theme==='dark'?'light':'dark'; document.documentElement.dataset.theme=t; try { localStorage.setItem('bob-theme', t); } catch(e){} };

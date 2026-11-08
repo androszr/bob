@@ -1,5 +1,6 @@
 # Sensitive data — never commit
 .env
+knowledge/leave/leave.json
 knowledge/urlopy/urlopy.json
 scripts/teams_agent/session.json
 scripts/teams_agent/.auth-token
@@ -66,7 +67,7 @@ bob-private/
 # Migration archive
 migration.tar.gz
 
-# Audit log komentarzy wysylanych przez jira_comment (runtime)
+# Audit log of comments posted by jira_comment (runtime)
 scripts/jira/jira-comments.log.jsonl
 
 # Bob eval results (replies contain live Jira data)
@@ -91,6 +92,8 @@ scripts/teams_agent/timers-state.tmp
 scripts/broadcast/briefs/output/
 knowledge/risks/
 knowledge/role/
+knowledge/leave/
+# Leave data path written by older builds
 knowledge/urlopy/
 
 # Live config: copy from the *.example.* file next to it and fill in real values

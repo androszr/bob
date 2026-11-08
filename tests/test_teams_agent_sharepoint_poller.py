@@ -37,8 +37,8 @@ def test_xlsx_to_records_basic(tmp_path):
     )
     records = xlsx_to_records(xlsx)
     assert len(records) == 2
-    assert records[0] == {"Id": 1, "Name": "Alice", "Score": 99}
-    assert records[1] == {"Id": 2, "Name": "Bob", "Score": 88}
+    assert records[0] == {"Id": 1, "name": "Alice", "Score": 99}
+    assert records[1] == {"Id": 2, "name": "Bob", "Score": 88}
 
 
 def test_xlsx_to_records_datetime_isoformat(tmp_path):
@@ -47,15 +47,15 @@ def test_xlsx_to_records_datetime_isoformat(tmp_path):
     xlsx = _make_xlsx(
         tmp_path / "dates.xlsx",
         [
-            ["Id", "Start", "Name"],
-            [1, dt, "Urlop A"],
+            ["Id", "Start", "Note"],
+            [1, dt, "Leave A"],
         ],
     )
     records = xlsx_to_records(xlsx)
     assert len(records) == 1
     assert records[0]["Start"] == dt.isoformat()
     assert records[0]["Id"] == 1
-    assert records[0]["Name"] == "Urlop A"
+    assert records[0]["Note"] == "Leave A"
 
 
 def test_xlsx_to_records_empty_cell_is_none(tmp_path):
@@ -93,18 +93,41 @@ def test_xlsx_to_records_empty_workbook(tmp_path):
     assert records == []
 
 
-def test_xlsx_to_records_polish_column_names(tmp_path):
-    """Polish column names are preserved as-is (ensure_ascii=False irrelevant here)."""
+def test_xlsx_to_records_unknown_column_names_kept(tmp_path):
+    """Columns the poller does not know keep their header (non-ASCII included)."""
     xlsx = _make_xlsx(
-        tmp_path / "polish.xlsx",
+        tmp_path / "other.xlsx",
         [
-            ["Imie i nazwisko", "Adres e-mail"],
-            ["Jan Kowalski", "jan@example.com"],
+            ["Dział", "Telefon"],
+            ["IT", "123"],
         ],
     )
     records = xlsx_to_records(xlsx)
-    assert "Imie i nazwisko" in records[0]
-    assert records[0]["Imie i nazwisko"] == "Jan Kowalski"
+    assert records[0] == {"Dział": "IT", "Telefon": "123"}
+
+
+@pytest.mark.parametrize("header", ["Adres e-mail", "E-mail", "Email", "email address"])
+def test_xlsx_to_records_email_header_becomes_email(tmp_path, header):
+    xlsx = _make_xlsx(tmp_path / "mail.xlsx", [[header], ["jan@example.com"]])
+    assert xlsx_to_records(xlsx) == [{"email": "jan@example.com"}]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        ["Name", "First day", "Last day"],
+        ["Imię i nazwisko", "Pierwszy dzień urlopu", "Ostatni dzień urlopu"],
+        ["Imie i nazwisko", "Pierwszy  dzien urlopu ", "OSTATNI DZIEN URLOPU"],
+    ],
+)
+def test_xlsx_to_records_accepts_english_or_polish_leave_headers(tmp_path, headers):
+    """Either spreadsheet header maps to the English row keys."""
+    start, end = datetime(2026, 6, 1), datetime(2026, 6, 5)
+    xlsx = _make_xlsx(tmp_path / "leave.xlsx", [headers, ["Jan Kowalski", start, end]])
+    records = xlsx_to_records(xlsx)
+    assert records == [
+        {"name": "Jan Kowalski", "first_day": start.isoformat(), "last_day": end.isoformat()}
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +141,7 @@ def _set_dest(monkeypatch, dest: Path) -> None:
 
 def test_write_json_structure(tmp_path, monkeypatch):
     """write_json writes valid JSON with fetched_at, count, records."""
-    dest = tmp_path / "urlopy.json"
+    dest = tmp_path / "leave.json"
     _set_dest(monkeypatch, dest)
 
     records = [{"Id": 1, "Name": "Alice"}, {"Id": 2, "Name": "Bob"}]
@@ -135,7 +158,7 @@ def test_write_json_structure(tmp_path, monkeypatch):
 
 def test_write_json_ensure_ascii_false(tmp_path, monkeypatch):
     """Polish characters in records are written as UTF-8, not escaped."""
-    dest = tmp_path / "urlopy.json"
+    dest = tmp_path / "leave.json"
     _set_dest(monkeypatch, dest)
 
     write_json([{"Imie i nazwisko": "Jan Kowąlski"}])
@@ -147,7 +170,7 @@ def test_write_json_ensure_ascii_false(tmp_path, monkeypatch):
 
 def test_write_json_creates_parent_dirs(tmp_path, monkeypatch):
     """write_json creates missing parent directories."""
-    dest = tmp_path / "nested" / "deep" / "urlopy.json"
+    dest = tmp_path / "nested" / "deep" / "leave.json"
     _set_dest(monkeypatch, dest)
 
     write_json([{"Id": 1}])
@@ -156,7 +179,7 @@ def test_write_json_creates_parent_dirs(tmp_path, monkeypatch):
 
 def test_write_json_count_matches_records(tmp_path, monkeypatch):
     """count field always matches len(records)."""
-    dest = tmp_path / "urlopy.json"
+    dest = tmp_path / "leave.json"
     _set_dest(monkeypatch, dest)
 
     for n in (0, 1, 5):
@@ -167,30 +190,30 @@ def test_write_json_count_matches_records(tmp_path, monkeypatch):
 
 
 def test_write_json_writes_exactly_one_file(tmp_path, monkeypatch):
-    """Jeden plik wynikowy, bez kopii."""
-    dest = tmp_path / "urlopy" / "urlopy.json"
+    """One output file, no copies."""
+    dest = tmp_path / "leave" / "leave.json"
     _set_dest(monkeypatch, dest)
 
-    assert write_json([{"Id": 1, "Imie_i_nazwisko": "Ewa Nowak"}]) == 1
+    assert write_json([{"Id": 1, "name": "Ewa Nowak"}]) == 1
 
     written = [p for p in tmp_path.rglob("*") if p.is_file()]
     assert written == [dest]
     assert "Ewa Nowak" in dest.read_text(encoding="utf-8")
 
 
-def test_dest_points_at_knowledge_urlopy():
-    """DEST to knowledge/urlopy/urlopy.json (zrodlo urlopy-bob)."""
+def test_dest_points_at_knowledge_leave():
+    """DEST is knowledge/leave/leave.json (the source for leave-bob)."""
     from scripts.teams_agent import sharepoint_poller
 
-    assert sharepoint_poller.DEST.parts[-3:] == ("knowledge", "urlopy", "urlopy.json")
+    assert sharepoint_poller.DEST.parts[-3:] == ("knowledge", "leave", "leave.json")
     assert not hasattr(sharepoint_poller, "KNOWLEDGE_DEST")
 
 
 def test_write_json_is_atomic_and_leaves_no_tmp(tmp_path, monkeypatch):
-    """Nadpisanie istniejacego pliku idzie przez os.replace i nie zostawia *.tmp."""
+    """Overwriting an existing file goes through os.replace and leaves no *.tmp."""
     from scripts.teams_agent import sharepoint_poller
 
-    dest = tmp_path / "urlopy.json"
+    dest = tmp_path / "leave.json"
     dest.write_text('{"count": 0, "records": []}', encoding="utf-8")
     _set_dest(monkeypatch, dest)
 
@@ -215,16 +238,16 @@ def test_write_json_is_atomic_and_leaves_no_tmp(tmp_path, monkeypatch):
 
 
 def test_write_json_failure_keeps_old_file_and_cleans_tmp(tmp_path, monkeypatch):
-    """Blad w trakcie zapisu: stary plik nietkniety, plik tymczasowy usuniety."""
+    """A failure while writing: old file untouched, temp file removed."""
     from scripts.teams_agent import sharepoint_poller
 
-    dest = tmp_path / "urlopy.json"
+    dest = tmp_path / "leave.json"
     old = '{"count": 7, "records": []}'
     dest.write_text(old, encoding="utf-8")
     _set_dest(monkeypatch, dest)
 
     def boom(src, dst):
-        raise OSError("dysk pelny")
+        raise OSError("disk full")
 
     monkeypatch.setattr(sharepoint_poller.os, "replace", boom)
 
@@ -232,4 +255,43 @@ def test_write_json_failure_keeps_old_file_and_cleans_tmp(tmp_path, monkeypatch)
         write_json([{"Id": 1}])
 
     assert dest.read_text(encoding="utf-8") == old
-    assert [p.name for p in tmp_path.iterdir()] == ["urlopy.json"]
+    assert [p.name for p in tmp_path.iterdir()] == ["leave.json"]
+
+
+# ---------------------------------------------------------------------------
+# poll(): skip only when nothing changed AND the output file exists
+# ---------------------------------------------------------------------------
+
+
+def _stub_poll(monkeypatch, tmp_path, dest: Path, state: dict) -> list[str]:
+    from scripts.teams_agent import sharepoint_poller as sp
+
+    calls: list[str] = []
+    monkeypatch.setattr(sp, "_URLS", {"view": "v", "download": "d", "rest_mtime": "r", "referer": "f"})
+    monkeypatch.setattr(sp, "DEST", dest)
+    monkeypatch.setattr(sp.sharepoint_meta, "fetch_remote_mtime", lambda *a: "2026-06-01T00:00:00Z")
+    monkeypatch.setattr(sp.sharepoint_meta, "load_state", lambda: state)
+    monkeypatch.setattr(sp.sharepoint_meta, "mark_processed", lambda k, v: calls.append(f"mark:{k}"))
+    xlsx = _make_xlsx(tmp_path / "in.xlsx", [["Name", "First day", "Last day"], ["A", None, None]])
+    monkeypatch.setattr(sp, "download_xlsx", lambda: calls.append("download") or xlsx)
+    return calls
+
+
+def test_poll_skips_when_unchanged_and_dest_exists(tmp_path, monkeypatch):
+    from scripts.teams_agent import sharepoint_poller as sp
+
+    dest = tmp_path / "leave.json"
+    dest.write_text('{"count": 3, "records": []}', encoding="utf-8")
+    calls = _stub_poll(monkeypatch, tmp_path, dest, {"leave": "2026-06-01T00:00:00Z"})
+    assert sp.poll() == {"status": "skipped", "count": 3}
+    assert calls == []
+
+
+def test_poll_runs_when_dest_missing_even_if_unchanged(tmp_path, monkeypatch):
+    from scripts.teams_agent import sharepoint_poller as sp
+
+    dest = tmp_path / "leave" / "leave.json"
+    calls = _stub_poll(monkeypatch, tmp_path, dest, {"leave": "2026-06-01T00:00:00Z"})
+    assert sp.poll() == {"status": "ok", "count": 1}
+    assert calls == ["download", "mark:leave"]
+    assert json.loads(dest.read_text(encoding="utf-8"))["records"][0]["name"] == "A"

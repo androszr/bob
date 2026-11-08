@@ -21,9 +21,9 @@ def _site_root(folder_url: str) -> str:
 
 SP_WARMUP_URLS = [
     url for url in (
-        # urlopy poller (sharepoint_poller.py) — OneDrive personal file view, same URL as the poller
-        org_config.URLOPY_SHAREPOINT_URL,
-        # attachment uploads (sharepoint_upload.py, [WYSLIJ_PLIK] replies) — the upload
+        # leave poller (sharepoint_poller.py) — OneDrive personal file view, same URL as the poller
+        org_config.LEAVE_SHAREPOINT_URL,
+        # attachment uploads (sharepoint_upload.py, [SEND_FILE] replies) — the upload
         # folder's team site, its own site collection on the main tenant domain
         _site_root(org_config.SHAREPOINT_UPLOAD_FOLDER_URL),
     ) if url

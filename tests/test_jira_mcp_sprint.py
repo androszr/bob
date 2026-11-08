@@ -49,7 +49,7 @@ def _make_stubs() -> dict[str, ModuleType]:
 
     requests_stub = ModuleType("requests")
     requests_stub.RequestException = Exception  # type: ignore[attr-defined]
-    requests_stub.Response = object  # type: ignore[attr-defined]  # adnotacja w _request_with_retry
+    requests_stub.Response = object  # type: ignore[attr-defined]  # annotation in _request_with_retry
 
     jira_client_stub = ModuleType("jira_client")
     jira_client_stub.JIRA_URL = "https://fake.jira"  # type: ignore[attr-defined]
@@ -186,7 +186,7 @@ def test_sprint_search_no_match_returns_empty(jira_mcp):
 
     jira_mcp.requests.get = mock_get
 
-    result = json.loads(jira_mcp.jira_sprint_search("Nieistniejacy Sprint 99", "PRJ2"))
+    result = json.loads(jira_mcp.jira_sprint_search("Missing Sprint 99", "PRJ2"))
 
     assert result["count"] == 0
     assert result["sprints"] == []
@@ -196,8 +196,8 @@ def test_sprint_search_no_match_returns_empty(jira_mcp):
 # C: jira_sprint_search — board discovery HTTP error
 # ---------------------------------------------------------------------------
 
-def test_sprint_search_board_error_returns_blad(jira_mcp):
-    """jira_sprint_search returns BLAD: when board discovery fails."""
+def test_sprint_search_board_error_returns_error(jira_mcp):
+    """jira_sprint_search returns ERROR: when board discovery fails."""
     resp = MagicMock()
     resp.status_code = 403
     resp.json.return_value = {"errorMessages": ["Forbidden"]}
@@ -205,7 +205,7 @@ def test_sprint_search_board_error_returns_blad(jira_mcp):
     jira_mcp.requests.get = lambda *a, **kw: resp
 
     result = jira_mcp.jira_sprint_search("Sprint 13", "PRJ2")
-    assert result.startswith("BLAD:")
+    assert result.startswith("ERROR:")
 
 
 # ---------------------------------------------------------------------------
@@ -291,11 +291,11 @@ def test_assign_sprint_success(jira_mcp):
 
 
 # ---------------------------------------------------------------------------
-# H: jira_assign_sprint — HTTP error returns BLAD
+# H: jira_assign_sprint — HTTP error returns ERROR
 # ---------------------------------------------------------------------------
 
-def test_assign_sprint_http_error_returns_blad(jira_mcp):
-    """jira_assign_sprint returns BLAD: on non-2xx response."""
+def test_assign_sprint_http_error_returns_error(jira_mcp):
+    """jira_assign_sprint returns ERROR: on non-2xx response."""
     def mock_post(url, data=None, headers=None, timeout=None, **kwargs):
         resp = MagicMock()
         resp.status_code = 400
@@ -306,20 +306,20 @@ def test_assign_sprint_http_error_returns_blad(jira_mcp):
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_assign_sprint("PRJ2-INVALID", 9002)
-    assert result.startswith("BLAD:")
+    assert result.startswith("ERROR:")
     assert "Issue not found" in result
 
 
 # ---------------------------------------------------------------------------
-# I: jira_assign_sprint — connection error returns BLAD
+# I: jira_assign_sprint — connection error returns ERROR
 # ---------------------------------------------------------------------------
 
-def test_assign_sprint_connection_error_returns_blad(jira_mcp):
-    """jira_assign_sprint returns BLAD: when requests raises RequestException."""
+def test_assign_sprint_connection_error_returns_error(jira_mcp):
+    """jira_assign_sprint returns ERROR: when requests raises RequestException."""
     def mock_post(url, data=None, headers=None, timeout=None, **kwargs):
         raise jira_mcp.requests.RequestException("connection refused")
 
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_assign_sprint("PRJ2-123", 9002)
-    assert result.startswith("BLAD:")
+    assert result.startswith("ERROR:")

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Unload and remove LaunchAgent plists for all 9 MCP servers.
+# Unload and remove LaunchAgent plists for every MCP server.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_servers.sh
 source "$SCRIPT_DIR/_servers.sh"
+retire_legacy_servers
 
 LAUNCHAGENTS_DIR="$HOME/Library/LaunchAgents"
 
@@ -23,6 +24,6 @@ for entry in "${MCP_SERVERS[@]}"; do
 done
 
 echo ""
-echo "All 9 MCP LaunchAgents uninstalled."
+echo "All MCP LaunchAgents uninstalled."
 echo "If you want a fully clean state, also clear logs:"
 echo "  rm -f $LOGDIR/mcp-*.log $LOGDIR/mcp-*.out"

@@ -32,10 +32,10 @@ cp scripts/broadcast/broadcast-schedule.example.json scripts/broadcast/broadcast
 
 | File | What it sets |
 |---|---|
-| `.env` | the owner (`OWNER_TEAMS_USER_ID`, `OWNER_DISPLAY_NAME`, `OWNER_ALIAS`, `OWNER_JIRA_LOGIN`, `ORG_EMAIL_DOMAIN`), Jira (`ATLASSIAN_TOKEN`, `JIRA_URL`, `JIRA_BOARD_ID`, `JIRA_PROJECT`, `JIRA_TEAMS`), SharePoint (`SHAREPOINT_TENANT`, `URLOPY_SHAREPOINT_URL`, `SHAREPOINT_UPLOAD_FOLDER_URL`), optionally `GIPHY_API_KEY`, `BOB_MCP_TRANSPORT` |
+| `.env` | the owner (`OWNER_TEAMS_USER_ID`, `OWNER_DISPLAY_NAME`, `OWNER_ALIAS`, `OWNER_JIRA_LOGIN`, `ORG_EMAIL_DOMAIN`), Jira (`ATLASSIAN_TOKEN`, `JIRA_URL`, `JIRA_BOARD_ID`, `JIRA_PROJECT`, `JIRA_TEAMS`), SharePoint (`SHAREPOINT_TENANT`, `LEAVE_SHAREPOINT_URL`, `SHAREPOINT_UPLOAD_FOLDER_URL`), the time zone (`BOB_TIMEZONE`), optionally `GIPHY_API_KEY`, `BOB_MCP_TRANSPORT` |
 | `chat-config.json` | which chats to watch and how: MCP groups, internet access, trigger, persona, model, `hold_s` |
 | `roles.json` | the roles a chat can wear: tool groups, skills, knowledge (path: `BOB_ROLES_FILE`; see [running](running.md#roles)) |
-| `people.json` | people to @-mention with the `[BOB-WYWOLAJ: key]` token (path: `PEOPLE_FILE`) |
+| `people.json` | people to @-mention with the `[BOB-CALL: key]` token (path: `PEOPLE_FILE`) |
 | `config/jira-fields.json` | the fields and issue types of your Jira (path: `JIRA_FIELDS_FILE`) |
 
 ### Every `.env` variable, grouped as in `.env.example`
@@ -43,10 +43,12 @@ cp scripts/broadcast/broadcast-schedule.example.json scripts/broadcast/broadcast
 - **Jira / Atlassian:** `ATLASSIAN_TOKEN`, `JIRA_URL`, `JIRA_BOARD_ID`, `JIRA_PROJECT`,
   `JIRA_TEAMS`, `OWNER_JIRA_LOGIN`, `ORG_EMAIL_DOMAIN`, `JIRA_FIELDS_FILE`, `VERIFY_SSL`
 - **md-to-mp3 (Gemini TTS):** `GOOGLE_GEMINI`, `GEMINI_BASE_URL`, `MD_TO_MP3_DIR`,
-  `MD_TO_MP3_TTS_CONCURRENCY`, `MD_TO_MP3_VOICE_KOBIETA_ID`, `MD_TO_MP3_VOICE_MEZCZYZNA_ID`
+  `MD_TO_MP3_TTS_CONCURRENCY`, `MD_TO_MP3_VOICE_FEMALE_ID`, `MD_TO_MP3_VOICE_MALE_ID` (the voice ids
+  behind `voice='female'` and `voice='male'`)
 - **Owner and organisation:** `OWNER_TEAMS_USER_ID`, `OWNER_DISPLAY_NAME`, `OWNER_ALIAS`,
-  `SHAREPOINT_TENANT`, `URLOPY_SHAREPOINT_URL`, `SHAREPOINT_UPLOAD_FOLDER_URL`,
-  `PEOPLE_FILE`, `NAME_NOISE_PREFIXES`
+  `SHAREPOINT_TENANT`, `LEAVE_SHAREPOINT_URL` (the older name `URLOPY_SHAREPOINT_URL` is still read),
+  `SHAREPOINT_UPLOAD_FOLDER_URL`, `PEOPLE_FILE`, `NAME_NOISE_PREFIXES`, `BOB_TIMEZONE` (the time zone for dates,
+  schedules and the leave sheet; default `Europe/Warsaw`)
 - **The Teams daemon:** `GIPHY_API_KEY`, `BOB_MCP_TRANSPORT`, `TEAMS_ROBOT_DEBUG`
 - **The panel:** `BOB_PANEL_PORT` (default `3006`), `BOB_PANEL_SHELL` (login shell the panel starts Bob in,
   default `/bin/zsh`), `BOB_ROLES_FILE`

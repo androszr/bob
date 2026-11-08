@@ -2,7 +2,8 @@
 
 Generic requests only: anyone local (Claude Code, Bob's automations, scripts) POSTs {title, details, source};
 the asker polls GET /api/approvals/<id> for the decision. The owner decides in the panel or - away from the
-computer - in the notes chat ("Bob, zatwierdzam apr-..."), where announce_pending() posts each new request once.
+computer - in the notes chat ("Bob, approve apr-..." / "Bob, reject apr-..."; the older Polish "Bob, zatwierdzam" /
+"Bob, odrzucam" still work in cli.py), where announce_pending() posts each new request once.
 """
 
 from __future__ import annotations
@@ -66,8 +67,8 @@ def decide(req_id: str, approve: bool, note: str = "", by: str = OWNER) -> dict:
         return items, None
     hit = _update(fn)
     if not hit:
-        return {"ok": False, "request": None, "message": "Nic do zatwierdzenia."}
-    msg = "Zapisane."
+        return {"ok": False, "request": None, "message": "Nothing to approve."}
+    msg = "Saved."
     run = ACTIONS.get(hit.get("action") or "")
     if run:
         msg = run(approve, hit)
@@ -85,18 +86,18 @@ ACTIONS = {"knowledge_apply": _knowledge_action}
 
 def announce_pending(send) -> int:
     """Post every new request to the notes chat once, with its id, so the owner can decide away from the
-    computer ("Bob, zatwierdzam apr-..." - cli.py). send(text) -> bool; a failed send is retried on the next pass."""
+    computer ("Bob, approve apr-..." - cli.py). send(text) -> bool; a failed send is retried on the next pass."""
     fresh = [r for r in _load() if r.get("status") == "pending" and not r.get("announced_at")]
     sent = []
     for r in fresh:
         details = (r.get("details") or "").strip()
         if len(details) > 1200:
-            details = details[:1200].rstrip() + " …(całość w panelu)"
-        text = (f"🟡 Zgoda do decyzji: {r['title']}\n"
-                + (f"Od: {r['source']}\n" if r.get("source") else "")
+            details = details[:1200].rstrip() + " …(full text in the panel)"
+        text = (f"🟡 Approval needed: {r['title']}\n"
+                + (f"From: {r['source']}\n" if r.get("source") else "")
                 + (f"\n{details}\n" if details else "")
-                + f"\nNapisz „Bob, zatwierdzam {r['id']}” albo „Bob, odrzucam {r['id']}” (po dwukropku możesz "
-                  "dodać notatkę) - albo kliknij w panelu.")
+                + f"\nWrite \"Bob, approve {r['id']}\" or \"Bob, reject {r['id']}\" (you can add a note after a "
+                  "colon) - or click in the panel.")
         if send(text):
             sent.append(r["id"])
     if sent:

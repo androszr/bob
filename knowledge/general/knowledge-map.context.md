@@ -1,35 +1,35 @@
-# Knowledge Map — dostepne MCP i zrodla wiedzy
+# Knowledge Map — available MCP servers and knowledge sources
 
-Kontekst: fikcyjna firma Acme buduje produkt dla serwisu terenowego — aplikacje mobilna
-dla technikow serwisowych (PRJ1) i portal back-office dla dyspozytorow i klientow (PRJ2).
-Discovery w PRJ3, infrastruktura i DevOps w PRJ4.
+Context: the fictional company Acme builds a product for field service — a mobile app
+for service technicians (PRJ1) and a back-office portal for dispatchers and customers (PRJ2).
+Discovery lives in PRJ3, infrastructure and DevOps in PRJ4.
 
-## Dostepne serwery MCP
+## Available MCP servers
 
-| Serwer | Narzedzia | Zrodlo danych |
+| Server | Tools | Data source |
 |---|---|---|
-| `jira-bob` | `jira_issue`, `jira_search`, `jira_comment`, `jira_create`, `jira_attach`, `jira_link`, `jira_transition`, `jira_update_*`, `jira_sprint_search`, `jira_assign_sprint`, `jira_boards`, `jira_search_users` | Jira REST (odczyt + zapisy z tokenem wlasciciela) |
-| `jira-read-bob` | `find`, `jira_issue`, `jira_search`, `jira_boards` | Jira REST, bez zapisow |
-| `todos-bob` | `add_todo`, `list_todos`, `update_todo`, `list_upcoming_todos`, `delete_todo` | Lokalna lista zadan wlasciciela |
-| `urlopy-bob` | `urlopy_meta`, `urlopy_check`, `urlopy_list` | Arkusz urlopow zespolu (SharePoint poll) |
-| `datetime-bob` | `now`, `resolve_date`, `weekday`, `date_range` | Zegar i kalendarz (Europe/Warsaw) |
-| `md-to-mp3-bob` | `convert_md_to_mp3`, `list_md_to_mp3_files` | Lokalne pliki MP3 wygenerowane z Markdown |
+| `jira-bob` | `jira_issue`, `jira_search`, `jira_comment`, `jira_create`, `jira_attach`, `jira_link`, `jira_transition`, `jira_update_*`, `jira_sprint_search`, `jira_assign_sprint`, `jira_boards`, `jira_search_users` | Jira REST (reads + writes with the owner's token) |
+| `jira-read-bob` | `find`, `jira_issue`, `jira_search`, `jira_boards` | Jira REST, no writes |
+| `todos-bob` | `add_todo`, `list_todos`, `update_todo`, `list_upcoming_todos`, `delete_todo` | The owner's local to-do list |
+| `leave-bob` | `leave_meta`, `leave_check`, `leave_list` | The team leave sheet (SharePoint poll) |
+| `datetime-bob` | `now`, `resolve_date`, `weekday`, `date_range` | Clock and calendar (time zone from `BOB_TIMEZONE`, default Europe/Warsaw) |
+| `md-to-mp3-bob` | `convert_md_to_mp3`, `list_md_to_mp3_files` | Local MP3 files generated from Markdown |
 
-Grupy spoza tej listy w `chat-config.json` sa ignorowane.
+Groups not on this list are ignored in `chat-config.json`.
 
-## Kiedy uzywac urlopy-bob
+## When to use leave-bob
 
-Pytania o urlopy, nieobecnosci, dyspozycyjnosc czlonkow zespolu — kieruj do `urlopy-bob`.
+Questions about leave, absences, team members' availability — send them to `leave-bob`.
 
-Rekomendowana kolejnosc: `urlopy_meta` (raz/sesje) -> `urlopy_check(date)` (konkretny dzien)
-lub `urlopy_list(month)` (przeglad miesiaca).
+Recommended order: `leave_meta` (once per session) -> `leave_check(date)` (a specific day)
+or `leave_list(month)` (an overview of the month).
 
-## Kiedy uzywac jira-bob
+## When to use jira-bob
 
-Tickety, sprinty, wyszukiwanie JQL, zakladanie i komentowanie zgloszen — `jira-bob`
-(kanaly bez prawa zapisu dostaja `jira-read-bob`).
+Tickets, sprints, JQL search, creating and commenting on issues — `jira-bob`
+(chats without write access get `jira-read-bob`).
 
-## Czego tu nie ma
+## What is not here
 
-Baza wiedzy, archiwum spotkan, sklad zespolu i Confluence nie maja serwera MCP w tym repo.
-Gdy ktos o nie pyta, powiedz wprost, ze nie masz do nich dostepu — nie zgaduj.
+The knowledge base, the meeting archive, the team roster and Confluence have no MCP server in this repo.
+When someone asks about them, say plainly that you have no access to them — do not guess.

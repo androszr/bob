@@ -1,36 +1,36 @@
 {
-  "_comment": "mcp: null=wszystkie, ['jira','jira_write','todos']=wybrane (jira = odczyt, jira_write = zapisy w Jirze z tokenem ownera, jira_hypercare = tylko create/attach/comment/link dla kanalow z uzytkownikami zewnetrznymi). control_chat: tylko z tego chatu komendy Bob pause/off/on. epithets: lista cech charakteru agenta dla tego kanału, np. ['zwięzły','formalny','analityczny'] — Bob trzyma się ich w każdej odpowiedzi. notes: 'owner' (domyślnie) = tylko owner może zapisywać prywatne notatki komendą 'Bob, zapamietaj:'; 'all' = każdy uczestnik chatu może. internet: brak/null/false = brak dostepu; 'all' = wszyscy; 'only_me' = tylko owner. caller: 'all' = kazdy moze wolac Boba; 'owner' = tylko owner. persona: 'example' = przykladowa persona kanalowa (prompts/example_persona.md; zmienia bazowy system prompt; lista w ai._PERSONA_PROMPTS); brak/null = Bob (domyslnie). trigger: slowo LUB lista slow wywolujacych agenta na tym kanale zamiast 'bob' (np. 'asystent' albo ['asystent','asystencie']); przy caller='auto' gatuje tylko wiadomosci wlasciciela. hold_s: ile sekund odczekac przed wyslaniem odpowiedzi NIEPROSZONEJ (takiej, w ktorej nikt nie zawolal agenta triggerem) — w tym czasie moze odpisac czlowiek i wtedy agent milczy; odpowiedzi na jawne wywolanie ida od razu. brak/0 = bez czekania. model: model dla tego kanalu zamiast globalnego (alias haiku/sonnet/opus albo pelne id, np. 'opus'); brak = globalny (--model / 'Bob, model X'). effort: wysilek rozumowania claude CLI dla tego kanalu: low|medium|high|xhigh|max; brak = domyslny CLI (grill bez ustawienia: high). mcp_extra: lista grup opt-in dokładana do 'mcp' (także do null = wszystkie domyślne). role: lista nazw rol z roles.json zamiast recznej listy 'mcp' (czat z 'role' ignoruje 'mcp'); dodatkowo: grupy dokladane do rol; bez: grupy odejmowane od rol; kanal_fr: true = kanal z uzytkownikami zewnetrznymi, bez grup 'tylko_zespol'. ingest_only: true = kanal tylko do odbioru: Bob nie odpowiada w tym czacie, nie reaguje i nic tam nie wysle (kazda sciezka zapisu w api_client odmawia), nawet zaplanowana wiadomosc.",
+  "_comment": "mcp: null = every group, ['jira','jira_write','todos'] = the chosen ones (jira = read, jira_write = Jira writes with the owner's token, jira_hypercare = only create/attach/comment/link, for chats with external users). control_chat: Bob pause/off/on commands only from this chat. epithets: the agent's character traits for this chat, e.g. ['concise','formal','analytical'] - Bob keeps to them in every reply. notes: 'owner' (default) = only the owner may save private notes with 'Bob, remember:'; 'all' = every chat member may. internet: missing/null/false = no access; 'all' = everyone; 'only_me' = the owner only. caller: 'all' = anyone may call Bob; 'owner' = the owner only. persona: 'example' = the example channel persona (prompts/example_persona.md; replaces the base system prompt; list in ai._PERSONA_PROMPTS); missing/null = Bob (default). trigger: a word OR a list of words that call the agent in this chat instead of 'bob' (e.g. 'assistant' or ['assistant','helper']); with caller='auto' it gates only the owner's messages. hold_s: how many seconds to wait before sending an UNPROMPTED reply (one where nobody called the agent by its trigger) - a person may answer meanwhile and then the agent stays silent; replies to an explicit call go at once. missing/0 = no wait. model: the model for this chat instead of the global one (alias haiku/sonnet/opus or a full id, e.g. 'opus'); missing = global (--model / 'Bob, model X'). effort: claude CLI reasoning effort for this chat: low|medium|high|xhigh|max; missing = the CLI default (grill without a setting: high). mcp_extra: a list of opt-in groups added to 'mcp' (also to null = every default). roles: a list of role names from roles.json instead of a hand-written 'mcp' list (a chat with 'roles' ignores 'mcp'); add_groups: groups added to the roles; remove_groups: groups taken away from the roles; external_chat: true = a chat with external users, without 'team_only' groups. ingest_only: true = a listen-only chat: Bob does not reply in it, does not react and sends nothing there (every write path in api_client refuses), not even a scheduled message. Files with the older Polish keys (role, dodatkowo, bez, kanal_fr) still load.",
   "chats": {
-    "Notatki": {
+    "Notes": {
       "conv_id": "48:notes",
       "control_chat": true,
       "caller": "owner",
       "mcp": null,
       "internet": "only_me"
     },
-    "Przykladowa Osoba": {
+    "Example Person": {
       "conv_id": "19:00000000000000000000000000000001@thread.v2",
       "caller": "all",
       "mcp": null,
       "epithets": [
-        "konkretny",
-        "szybki",
-        "stanowczy"
+        "concrete",
+        "quick",
+        "firm"
       ],
       "internet": "only_me"
     },
-    "Zespol A - kanal projektu": {
+    "Team A - project channel": {
       "conv_id": "19:00000000000000000000000000000002@thread.v2",
       "caller": "all",
-      "role": [
+      "roles": [
         "project_manager"
       ],
-      "dodatkowo": [
+      "add_groups": [
         "todos"
       ],
       "internet": "only_me"
     },
-    "Kanal produktowy": {
+    "Product channel": {
       "conv_id": "19:00000000000000000000000000000005@thread.v2",
       "persona": "example",
       "mcp": [
@@ -39,12 +39,12 @@
       ],
       "caller": "auto",
       "trigger": [
-        "asystent",
-        "asystencie"
+        "assistant",
+        "helper"
       ],
       "hold_s": 60
     },
-    "Kanal release notes": {
+    "Release notes channel": {
       "conv_id": "19:00000000000000000000000000000004@thread.v2",
       "caller": "all",
       "mcp": [
@@ -52,7 +52,7 @@
       ],
       "internet": "only_me"
     },
-    "Kanal tylko do czytania": {
+    "Read-only channel": {
       "conv_id": "19:00000000000000000000000000000006@thread.v2",
       "ingest_only": true
     }

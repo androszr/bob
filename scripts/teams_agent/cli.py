@@ -1,4 +1,4 @@
-"""Terminal orchestrator for AI Jan — Teams agent.
+"""Terminal orchestrator for Bob — Teams agent.
 
 Usage:
     python scripts/teams_agent/cli.py [--model MODEL] [--max-chats N]
@@ -58,7 +58,7 @@ import datetime_bob.resolver as _dt_resolver  # noqa: E402
 def _build_schedule_context() -> str | None:
     """Build the schedule_context string injected into every Bob prompt.
 
-    Always includes a date anchor ([DZIS] ...) so Bob always knows today's date.
+    Always includes a date anchor ([TODAY] ...) so Bob always knows today's date.
     Appends the owner's availability block when schedule is non-empty.
     Returns None only if both parts are empty (should not happen — anchor always present).
     """
@@ -70,7 +70,7 @@ def _build_schedule_context() -> str | None:
     return joined or None
 
 # Load scripts/todos/mcp_server.py by explicit path to avoid colliding with
-# other MCP servers that also expose a `mcp_server` module (jira, urlopy, ...).
+# other MCP servers that also expose a `mcp_server` module (jira, leave, ...).
 # Each of those does `sys.path.insert(0, <their dir>)`, which causes a bare
 # `import mcp_server` to resolve to whichever was imported first.
 _todos_spec = importlib.util.spec_from_file_location(
@@ -85,9 +85,9 @@ DEFAULT_WATCH_STATE = str(Path(__file__).parent / "watch-state.json")
 _CHAT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "chat-config.json"
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_MAX_CHATS = 10
-DEFAULT_POLL_S = 5  # 14 chats x 2 s = 7 REST req/s stale; 5 s wystarcza
+DEFAULT_POLL_S = 5  # 14 chats x 2 s = 7 REST req/s sustained; 5 s is enough
 def _default_watch_chats() -> list[str]:
-    """Return all chat names from chat-config.json, falling back to Notatki."""
+    """Return all chat names from chat-config.json, falling back to Notes."""
     try:
         data = json.loads(_CHAT_CONFIG_PATH.read_text(encoding="utf-8"))
         chats = list(data.get("chats", {}).keys())
@@ -95,12 +95,13 @@ def _default_watch_chats() -> list[str]:
             return chats
     except Exception:
         pass
-    return ["Notatki"]
+    return ["Notes"]
 
 DEFAULT_WATCH_CHATS = _default_watch_chats()
 DEFAULT_RATE_LIMIT_S = 3           # minimum seconds between auto-replies
 _TOKEN_REFRESH_INTERVAL_S = 40 * 60  # proactive browser nav every 40 min to keep token fresh
-_CET = ZoneInfo("Europe/Warsaw")
+_TZ_NAME = org_config.TIMEZONE
+_CET = ZoneInfo(_TZ_NAME)
 
 # Per-chat in-memory conversation history (persisted to disk across restarts).
 # Dict: chat_name → list of {"sender": str, "text": str}
@@ -112,7 +113,7 @@ _HISTORY_KEEP_LAST = 8          # keep last N user+Bob exchange pairs after comp
 _HISTORY_DIR = Path(__file__).parent / "history"
 _HISTORY_DISK_MAX_ENTRIES = 200  # hard cap on disk entries per chat (trim oldest on write)
 # Last run of the slow periodic jobs, kept across restarts: a restart must not re-run a headless Chromium SharePoint
-# warm-up and the urlopy poll every time.
+# warm-up and the leave poll every time.
 _TIMERS_FILE = Path(__file__).parent / "timers-state.json"
 
 
@@ -158,7 +159,7 @@ _STILL_WORKING_EVERY_S = 180
 
 
 class _StillWorking:
-    """Context manager: while a reply is being generated, post "⏳ nadal pracuję" after FIRST_S seconds and edit
+    """Context manager: while a reply is being generated, post "⏳ still working" after FIRST_S seconds and edit
     it every EVERY_S with the elapsed minutes. Leaving the block only stops the timer: the caller then calls
     finish(sent) - "done" when a reply really went out, otherwise the note is deleted (or edited when Teams
     refuses). enabled=False makes the whole thing a no-op (uninvited replies get no note). Never raises."""
@@ -185,7 +186,7 @@ class _StillWorking:
         wait = self.first_s
         while not self._stop.wait(wait):
             mins = max(1, round((_time_mod.time() - self._t0) / 60))
-            self._say(f"⏳ Nadal pracuję nad odpowiedzią ({mins} min) - długie zapytania, odpiszę tutaj.")
+            self._say(f"⏳ Still working on the answer ({mins} min) - long lookups, I will reply here.")
             wait = self.every_s
 
     def __enter__(self) -> "_StillWorking":
@@ -212,15 +213,15 @@ class _StillWorking:
         try:
             if sent:
                 mins = max(1, round((_time_mod.time() - self._t0) / 60))
-                api_client.edit_message(msg_id, api_client.bob_html(f"✅ Gotowe po {mins} min - odpowiedź poniżej."),
+                api_client.edit_message(msg_id, api_client.bob_html(f"✅ Done after {mins} min - answer below."),
                                         self.conv_id)
             elif not api_client.delete_message(msg_id, self.conv_id):
-                api_client.edit_message(msg_id, api_client.bob_html("Sprawdziłem - tym razem bez odpowiedzi."),
+                api_client.edit_message(msg_id, api_client.bob_html("I checked - no answer this time."),
                                         self.conv_id)
         except Exception as exc:  # noqa: BLE001
             print(f"[watch] still-working: {exc}", file=sys.stderr, flush=True)
 
-# Directories from which [WYSLIJ_PLIK_Z_DYSKU] uploads are permitted.
+# Directories from which [SEND_FILE_FROM_DISK] uploads are permitted.
 # Prevents prompt-injection from exfiltrating arbitrary files (e.g. ~/.ssh/id_rsa).
 _ALLOWED_UPLOAD_ROOT = Path(__file__).parent.parent.parent / "user-data"
 _ALLOWED_UPLOAD_ROOTS: list[Path] = [_ALLOWED_UPLOAD_ROOT]
@@ -241,7 +242,7 @@ def _load_history_from_disk(chat_name: str) -> list[dict]:
     try:
         raw = path.read_text(encoding="utf-8").splitlines()
     except Exception as exc:
-        print(f"[watch] BLAD ladowania historii {chat_name!r}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR loading history {chat_name!r}: {exc}", file=sys.stderr)
         return []
     entries: list[dict] = []
     for line in raw:
@@ -276,12 +277,12 @@ def _append_history_to_disk(chat_name: str, entries: list[dict]) -> None:
         if len(lines) > _HISTORY_DISK_MAX_ENTRIES:
             path.write_text("".join(lines[-_HISTORY_DISK_MAX_ENTRIES:]), encoding="utf-8")
     except Exception as exc:
-        print(f"[watch] BLAD zapisu historii {chat_name!r}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR writing history {chat_name!r}: {exc}", file=sys.stderr)
 
 
 def _note_bot_post(chat_name: str, inner_html: str, extra: str = "", kind: str = "", file: str = "") -> None:
     """A message a background job posted as Bob (a file link, a deploy note) -> the chat's history, so Bob
-    knows what "this file" / "ta zmiana" refers to when someone answers it."""
+    knows what "this file" / "this change" refers to when someone answers it."""
     text = (api_client._strip_html(inner_html) + (f" {extra}" if extra else "")).strip()
     if not chat_name or not text:
         return
@@ -301,11 +302,11 @@ def _rewrite_history_on_disk(chat_name: str, entries: list[dict]) -> None:
             encoding="utf-8",
         )
     except Exception as exc:
-        print(f"[watch] BLAD przepisywania historii {chat_name!r}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR rewriting history {chat_name!r}: {exc}", file=sys.stderr)
 
 
 # Silent sentinel + roleplay-silence patterns. When Bob has nothing valuable to add
-# we want NO message sent — not a stage-direction like *milczy* / *milczę*.
+# we want NO message sent — not a stage-direction like *stays silent* (or the Polish *milczy* / *milczę*).
 _SILENT_SENTINEL_RE = re.compile(r'<\s*silent\s*/?\s*>', re.IGNORECASE)
 _SILENT_ROLEPLAY_RE = re.compile(
     r'^[\s*_~`"\'()\[\]\.]*'
@@ -365,7 +366,7 @@ def _owner_label(m: dict) -> str:
     return api_client.agent_label_from_html(m.get("raw_html", "")) or OWNER_LABEL
 
 # Collapses runs of blank lines left behind after stripping one or more inline tokens
-# (e.g. several [EXAMPLE-POMYSL: ...] lines in a row) — otherwise Teams renders each
+# (e.g. several [EXAMPLE-IDEA: ...] lines in a row) — otherwise Teams renders each
 # leftover newline as a <br>, producing a wall of empty vertical space in the message.
 _BLANK_RUN_RE = re.compile(r'\n[ \t]*\n(?:[ \t]*\n)*')
 
@@ -381,25 +382,26 @@ def _collapse_blank_lines(text: str) -> str:
 # each persona needs its own token prefix to keep audit trails apart.
 # ---------------------------------------------------------------------------
 _EXAMPLE_DIR = Path(__file__).resolve().parent.parent.parent / "user-data" / "example"
-_EXAMPLE_IDEAS_FILE = _EXAMPLE_DIR / "pomysly.jsonl"
+# Canonical tags are English; the Polish forms (EXAMPLE-POMYSL, EXAMPLE-UCZY-SIE) stay accepted.
+_EXAMPLE_IDEAS_FILE = _EXAMPLE_DIR / "ideas.jsonl"
 _EXAMPLE_IDEAS_RE = re.compile(
-    r'\[EXAMPLE-POMYSL:\s*(?P<title>[^|\]]+?)\s*\|\s*(?P<content>[^\]]+?)\s*\]',
+    r'\[EXAMPLE-(?:IDEA|POMYSL):\s*(?P<title>[^|\]]+?)\s*\|\s*(?P<content>[^\]]+?)\s*\]',
     re.IGNORECASE | re.DOTALL,
 )
-_EXAMPLE_LEARN_DIR = _EXAMPLE_DIR / "nauka"
+_EXAMPLE_LEARN_DIR = _EXAMPLE_DIR / "learning"
 _EXAMPLE_LEARN_RE = re.compile(
-    r'\[EXAMPLE-UCZY-SIE:\s*(?P<title>[^|\]]+?)\s*\|\s*(?P<content>[^\]]+?)\s*\]',
+    r'\[EXAMPLE-(?:LEARN|UCZY-SIE):\s*(?P<title>[^|\]]+?)\s*\|\s*(?P<content>[^\]]+?)\s*\]',
     re.IGNORECASE | re.DOTALL,
 )
 
 
-# Bob escalation token: [BOB-WYWOLAJ: klucz] or [BOB-WYWOLAJ: klucz1,klucz2]
+# Bob escalation token: [BOB-CALL: key] or [BOB-CALL: key1,key2] (Polish alias [BOB-WYWOLAJ: ...])
 # — pings a real person on Teams via native @mention when Bob doesn't know an answer,
-# or on explicit user request ("oznacz X"). Own dict/regex/prefix, independent from the personas.
-# Filled from people.json "mention_people.bob" ({"klucz": ["Imie Nazwisko", "8:orgid:..."]});
-# empty by default.
+# or on explicit user request ("tag X"). Own dict/regex/prefix, independent from the personas.
+# Filled from people.json "mention_people.bob" ({"key": ["First Last", "8:orgid:..."]});
+# empty by default. `who` still allows Polish diacritics (keys can be Polish names).
 _BOB_MENTION_PEOPLE: dict[str, tuple[str, str]] = _people_table("bob")
-_BOB_MENTION_RE = re.compile(r'\[BOB-WYWOLAJ:\s*(?P<who>[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ,\s]+?)\s*\]', re.IGNORECASE)
+_BOB_MENTION_RE = re.compile(r'\[BOB-(?:CALL|WYWOLAJ):\s*(?P<who>[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ,\s]+?)\s*\]', re.IGNORECASE)
 
 
 def _resolve_mentions(
@@ -433,7 +435,7 @@ def _resolve_mentions(
 
 
 def _handle_bob_mention(reply: str) -> tuple[str, str, list[dict]]:
-    """Extract [BOB-WYWOLAJ: kto] token(s), resolve to a real Teams @mention chip."""
+    """Extract [BOB-CALL: who] token(s), resolve to a real Teams @mention chip."""
     return _resolve_mentions(reply, _BOB_MENTION_RE, _BOB_MENTION_PEOPLE)
 
 
@@ -445,7 +447,7 @@ def _handle_idea_token(
     content_key: str,
     log_tag: str,
 ) -> str:
-    """Extract [<X>-POMYSL: tytul | tresc] tokens, append to out_file, strip from reply.
+    """Extract [<X>-IDEA: title | content] tokens, append to out_file, strip from reply.
 
     Shared by every persona's idea token — each one passes its own regex and its own
     JSONL file so the audit trails never mix. Ticket creation (when a persona does it)
@@ -464,18 +466,18 @@ def _handle_idea_token(
             entry = {
                 "date": today,
                 "sender": sender,
-                "tytul": m.group("title").strip(),
+                "title": m.group("title").strip(),
                 content_key: m.group("content").strip(),
             }
             fh.write(_json.dumps(entry, ensure_ascii=False) + "\n")
-            print(f"[{log_tag}] zapisano pomysl od {sender!r}: {entry['tytul']!r}", flush=True)
+            print(f"[{log_tag}] saved idea from {sender!r}: {entry['title']!r}", flush=True)
     return _collapse_blank_lines(regex.sub("", reply))
 
 
 def _handle_learning_token(
     reply: str, regex: re.Pattern, out_dir: Path, log_tag: str,
 ) -> str:
-    """Extract [<X>-UCZY-SIE: title | content] tokens, save .md files, strip from reply."""
+    """Extract [<X>-LEARN: title | content] tokens, save .md files, strip from reply."""
     import datetime as _dt
     matches = list(regex.finditer(reply))
     if not matches:
@@ -492,49 +494,62 @@ def _handle_learning_token(
             suffix += 1
             fname = out_dir / f"{today}-{slug}-{suffix}.md"
         fname.write_text(f"# {title_raw}\n\n{content}\n", encoding="utf-8")
-        print(f"[{log_tag}] zapisano: {fname}", flush=True)
+        print(f"[{log_tag}] saved: {fname}", flush=True)
     return regex.sub("", reply).strip()
 
 
+def _adopt_legacy_example_files() -> None:
+    """Older builds wrote pomysly.jsonl and nauka/: move them to the English names once, so nothing splits."""
+    for old, new in ((_EXAMPLE_IDEAS_FILE.parent / "pomysly.jsonl", _EXAMPLE_IDEAS_FILE),
+                     (_EXAMPLE_LEARN_DIR.parent / "nauka", _EXAMPLE_LEARN_DIR)):
+        try:
+            if old.exists() and not new.exists():
+                os.replace(old, new)
+        except OSError as exc:
+            print(f"[example] could not rename {old.name} to {new.name}: {exc}", file=sys.stderr, flush=True)
+
+
 def _handle_example_idea(reply: str, sender: str) -> str:
-    """[EXAMPLE-POMYSL: tytul | tresc] — ideas collected by the example persona."""
+    """[EXAMPLE-IDEA: title | content] — ideas collected by the example persona."""
+    _adopt_legacy_example_files()
     return _handle_idea_token(
-        reply, sender, _EXAMPLE_IDEAS_RE, _EXAMPLE_IDEAS_FILE, "pomysl", "example-ideas",
+        reply, sender, _EXAMPLE_IDEAS_RE, _EXAMPLE_IDEAS_FILE, "idea", "example-ideas",
     )
 
 
 def _handle_example_learning(reply: str, sender_mri: str) -> str:
-    """[EXAMPLE-UCZY-SIE: title | content] — the owner teaching the example persona.
+    """[EXAMPLE-LEARN: title | content] — the owner teaching the example persona.
 
     Enforced by MRI here, not only in the prompt: a token anyone else talks the
     model into is stripped without being saved.
     """
     if sender_mri != api_client.USER_MRI:
         if _EXAMPLE_LEARN_RE.search(reply):
-            print(f"[example-learn] odrzucono nauke od {sender_mri!r}", flush=True)
+            print(f"[example-learn] rejected learning from {sender_mri!r}", flush=True)
         return _EXAMPLE_LEARN_RE.sub("", reply).strip()
+    _adopt_legacy_example_files()
     return _handle_learning_token(
         reply, _EXAMPLE_LEARN_RE, _EXAMPLE_LEARN_DIR, "example-learn",
     )
 
 
-# 👍 on the incoming message instead of (or next to) a reply: [BOB-REAKCJA].
+# 👍 on the incoming message instead of (or next to) a reply: [BOB-REACT] (Polish alias [BOB-REAKCJA]).
 # A reply that is only the token sends nothing - the reaction is the whole answer.
-_REACTION_RE = re.compile(r'\[BOB-REAKCJA\]', re.IGNORECASE)
+_REACTION_RE = re.compile(r'\[BOB-(?:REACT|REAKCJA)\]', re.IGNORECASE)
 
 
 def _handle_reaction(reply: str, msg_id: str, conv_id: str) -> str:
-    """[BOB-REAKCJA] - put 👍 on the message being answered, strip the token."""
+    """[BOB-REACT] - put 👍 on the message being answered, strip the token."""
     if not _REACTION_RE.search(reply):
         return reply
     if msg_id:
         ok = api_client.add_reaction(msg_id, conv_id, "like")
-        print(f"[reakcja] 👍 na {msg_id}: {'ok' if ok else 'BLAD'}", flush=True)
+        print(f"[reaction] 👍 on {msg_id}: {'ok' if ok else 'ERROR'}", flush=True)
     return _collapse_blank_lines(_REACTION_RE.sub("", reply))
 
 
 def _is_silent_reply(reply: str) -> bool:
-    """True if reply is empty or a silence-sentinel/roleplay (e.g. '<silent/>', '*milczy*')."""
+    """True if reply is empty or a silence-sentinel/roleplay (e.g. '<silent/>', '*stays silent*', '*milczy*')."""
     if not reply or not reply.strip():
         return True
     stripped = _SILENT_SENTINEL_RE.sub("", reply).strip()
@@ -546,7 +561,9 @@ def _is_silent_reply(reply: str) -> bool:
 _MCP_COLD_START_RE = re.compile(
     r"serwer(?:y|ow)?\s+mcp.*?(?:nie\s+(?:polacz|zostal|sa\s+got)|jeszcze\s+(?:nie|sie))"
     r"|mcp.*?(?:nie\s+sa\s+gotowe|sie\s+nie\s+polaczyl|nie\s+(?:zainicjalizow|aktywow))"
-    r"|narzedzi(?:a|ach)?\s+mcp.*?nie",
+    r"|narzedzi(?:a|ach)?\s+mcp.*?nie"
+    r"|mcp\s+servers?.*?(?:not\s+(?:connected|ready|available|initiali[sz]ed)|still\s+(?:starting|initiali[sz]ing))"
+    r"|mcp\s+tools?.*?(?:not\s+(?:available|ready|connected)|unavailable)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -559,7 +576,8 @@ def _looks_like_mcp_cold_start(reply: str) -> bool:
     """
     if not reply:
         return False
-    # Normalize Polish diacritics so the regex doesn't need to enumerate them.
+    # Matches English and Polish fallback prose; Polish diacritics are folded so the regex
+    # doesn't need to enumerate them.
     folded = (
         reply.lower()
         .replace("ą", "a").replace("ć", "c").replace("ę", "e").replace("ł", "l")
@@ -594,11 +612,11 @@ def _user_memory_sweeper() -> None:
                         _USER_SESSION_START.pop(mri, None)
                 except Exception as exc:
                     print(
-                        f"[watch] user_memory sweeper blad dla {mri!r}: {exc}",
+                        f"[watch] user_memory sweeper error for {mri!r}: {exc}",
                         flush=True,
                     )
         except Exception as exc:
-            print(f"[watch] user_memory sweeper blad: {exc}", flush=True)
+            print(f"[watch] user_memory sweeper error: {exc}", flush=True)
 
 
 # GIF tag emitted by Claude: [GIF: query] (Giphy fallback, both personas)
@@ -674,16 +692,17 @@ def _extract_and_send_gifs(reply: str, conv_id: str, persona: str | None = None)
     return cleaned
 
 
-# File attachment tag emitted by Claude: [WYSLIJ_PLIK: name.md]\ncontent\n[/WYSLIJ_PLIK]
+# File attachment tag emitted by Claude: [SEND_FILE: name.md]\ncontent\n[/SEND_FILE]
+# (Polish alias [WYSLIJ_PLIK: ...]...[/WYSLIJ_PLIK]; open and close may be either form).
 _FILE_TAG_RE = re.compile(
-    r'\[WYSLIJ_PLIK:\s*([^\]\n]+)\]\s*\n(.*?)\n?\[/WYSLIJ_PLIK\]',
+    r'\[(?:SEND_FILE|WYSLIJ_PLIK):\s*([^\]\n]+)\]\s*\n(.*?)\n?\[/(?:SEND_FILE|WYSLIJ_PLIK)\]',
     re.DOTALL | re.IGNORECASE,
 )
 
 # Disk-path attachment tag (for binary files already on disk, e.g. MP3):
-# [WYSLIJ_PLIK_Z_DYSKU: /absolute/path/to/file.mp3]
+# [SEND_FILE_FROM_DISK: /absolute/path/to/file.mp3] (Polish alias [WYSLIJ_PLIK_Z_DYSKU: ...])
 _FILE_PATH_TAG_RE = re.compile(
-    r'\[WYSLIJ_PLIK_Z_DYSKU:\s*([^\]\n]+)\]',
+    r'\[(?:SEND_FILE_FROM_DISK|WYSLIJ_PLIK_Z_DYSKU):\s*([^\]\n]+)\]',
     re.IGNORECASE,
 )
 
@@ -697,7 +716,7 @@ def _safe_relative(path: Path, root: Path) -> bool:
 
 
 def _remember_bob_file(name: str, url: str, chat_name: str, content: bytes) -> None:
-    """Keep the file Bob sent (bob_files) and note the post in the chat history, so a later "popraw ten plik" -
+    """Keep the file Bob sent (bob_files) and note the post in the chat history, so a later "fix that file" -
     quoted or by link - reaches its content."""
     try:
         import bob_files  # noqa: PLC0415
@@ -713,8 +732,9 @@ def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:
     """Find file attachment tags in reply, upload each to SharePoint, send a link.
 
     Handles two tag forms:
-      [WYSLIJ_PLIK: name.md]\\ncontent\\n[/WYSLIJ_PLIK]  — inline text content
-      [WYSLIJ_PLIK_Z_DYSKU: /path/to/file.mp3]           — existing file on disk (binary-safe)
+      [SEND_FILE: name.md]\\ncontent\\n[/SEND_FILE]   — inline text content
+      [SEND_FILE_FROM_DISK: /path/to/file.mp3]       — existing file on disk (binary-safe)
+    (the Polish forms [WYSLIJ_PLIK: ...] / [WYSLIJ_PLIK_Z_DYSKU: ...] are accepted too)
 
     Uploads to the SharePoint upload folder (SHAREPOINT_UPLOAD_FOLDER_URL) (sharepoint_upload.py) and
     sends the link via the regular chatsvc message path, instead of dragging the
@@ -747,7 +767,7 @@ def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:
         fname = Path(m.group(1).strip()).name
         content = m.group(2)
         if not content.strip():
-            print(f"[watch] -> wyslij_plik: pusta tresc, odrzucam {fname!r}", flush=True)
+            print(f"[watch] -> send_file: empty content, rejecting {fname!r}", flush=True)
             continue
         suffix = f"_{fname}" if "." in fname else f"_{fname}.md"
         fd, tmp_str = tempfile.mkstemp(suffix=suffix)
@@ -755,67 +775,67 @@ def _extract_and_send_files(reply: str, conv_id: str, chat_name: str) -> str:
         _os.close(fd)
         try:
             tmp_path.write_text(content, encoding="utf-8")
-            print(f"[watch] -> wyslij_plik: {fname!r} ({len(content)} B)", flush=True)
+            print(f"[watch] -> send_file: {fname!r} ({len(content)} B)", flush=True)
             url = sharepoint_upload.upload_file(tmp_path, dest_name=_dest_name(fname))
             if url is None:
-                print(f"[watch] -> wyslij_plik: upload {fname!r} nie powiodl sie", flush=True)
+                print(f"[watch] -> send_file: upload {fname!r} failed", flush=True)
                 fallback_dir = _ALLOWED_UPLOAD_ROOT / "failed-uploads"
                 fallback_dir.mkdir(parents=True, exist_ok=True)
                 fallback_path = fallback_dir / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}_{fname}"
                 fallback_path.write_text(content, encoding="utf-8")
                 api_client.send_message(
-                    f"⚠️ Nie udało się wysłać pliku „{fname}” (błąd automatyzacji "
-                    f"uploadu na SharePoint). Zapisałem treść lokalnie: {fallback_path}",
+                    f"⚠️ Could not send the file \"{fname}\" (the SharePoint upload "
+                    f"automation failed). I saved the content locally: {fallback_path}",
                     conv_id,
                 )
             else:
                 api_client.send_message(f"📎 **{fname}**\n{url}", conv_id)
-                print(f"[watch] -> wyslij_plik: OK {url}", flush=True)
+                print(f"[watch] -> send_file: OK {url}", flush=True)
                 _remember_bob_file(fname, url, chat_name, content.encode("utf-8"))
         except Exception as exc:
-            print(f"[watch] -> wyslij_plik: blad {exc}", flush=True)
+            print(f"[watch] -> send_file: error {exc}", flush=True)
         finally:
             tmp_path.unlink(missing_ok=True)
 
     for m in path_matches:
         src = Path(m.group(1).strip())
         if not src.is_absolute():
-            print(f"[watch] -> wyslij_plik_z_dysku: odrzucam sciezke wzgledna {src!r}", flush=True)
+            print(f"[watch] -> send_file_from_disk: rejecting relative path {src!r}", flush=True)
             continue
         if not any(
             _safe_relative(src, root) for root in _ALLOWED_UPLOAD_ROOTS
         ):
-            print(f"[watch] -> wyslij_plik_z_dysku: sciezka poza dozwolonymi katalogami, odrzucam {src!r}", flush=True)
+            print(f"[watch] -> send_file_from_disk: path outside the allowed folders, rejecting {src!r}", flush=True)
             continue
         if not src.exists():
-            print(f"[watch] -> wyslij_plik_z_dysku: plik nie istnieje {src!r}", flush=True)
+            print(f"[watch] -> send_file_from_disk: file does not exist {src!r}", flush=True)
             continue
         try:
-            print(f"[watch] -> wyslij_plik_z_dysku: {src.name!r} ({src.stat().st_size} B)", flush=True)
+            print(f"[watch] -> send_file_from_disk: {src.name!r} ({src.stat().st_size} B)", flush=True)
             url = sharepoint_upload.upload_file(src, dest_name=_dest_name(src.name))
             if url is None:
-                print(f"[watch] -> wyslij_plik_z_dysku: upload {src.name!r} nie powiodl sie", flush=True)
+                print(f"[watch] -> send_file_from_disk: upload {src.name!r} failed", flush=True)
                 api_client.send_message(
-                    f"⚠️ Nie udało się wysłać pliku „{src.name}” (błąd automatyzacji "
-                    f"uploadu na SharePoint). Plik jest dostępny lokalnie: {src}",
+                    f"⚠️ Could not send the file \"{src.name}\" (the SharePoint upload "
+                    f"automation failed). The file is available locally: {src}",
                     conv_id,
                 )
             else:
                 api_client.send_message(f"📎 **{src.name}**\n{url}", conv_id)
-                print(f"[watch] -> wyslij_plik_z_dysku: OK {url}", flush=True)
+                print(f"[watch] -> send_file_from_disk: OK {url}", flush=True)
                 _remember_bob_file(src.name, url, chat_name,
                                    src.read_bytes() if src.stat().st_size <= 2 * 1024 * 1024 else b"")
         except Exception as exc:
-            print(f"[watch] -> wyslij_plik_z_dysku: blad {exc}", flush=True)
+            print(f"[watch] -> send_file_from_disk: error {exc}", flush=True)
 
     return cleaned
 
 
-# 'Hej Claude' / 'Hey Claude' trigger: used only in --interactive approval loop.
+# 'Hey Claude' (Polish 'Hej Claude') trigger: used only in --interactive approval loop.
 # Watch mode responds to ALL messages and does not require this trigger.
 _TRIGGER_RE = re.compile(r'he[yj]\s+claude[\s,:.\-—]*(.+)', re.IGNORECASE | re.DOTALL)
 
-# Trigger: message mentions "Bob" anywhere (e.g. "hej Bob, ...", "Bob co sądzisz", "a Bob?")
+# Trigger: message mentions "Bob" anywhere (e.g. "hey Bob, ...", "Bob what do you think", "and Bob?")
 # Group 1 is unused — we pass the full message text to Claude when Bob is mentioned anywhere.
 _BOB_RE = re.compile(r'\bbob\b', re.IGNORECASE)
 _TRIGGER_RE_CACHE: dict[str, re.Pattern] = {}
@@ -824,8 +844,8 @@ _TRIGGER_RE_CACHE: dict[str, re.Pattern] = {}
 def _trigger_re_for(chat_name: str, chat_config: dict) -> re.Pattern:
     """Return the mention-trigger regex for a channel. Defaults to _BOB_RE.
 
-    chat-config.json "trigger" accepts a single word ("asystent") or a list of
-    alternatives (["example", "przyklad"]) — a persona whose name people spell
+    chat-config.json "trigger" accepts a single word ("assistant") or a list of
+    alternatives (["example", "sample"]) — a persona whose name people spell
     more than one way needs all of them here, because under caller="auto" this
     regex is the ONE place the owner's own messages are still gated: a form the
     persona's prompt claims to answer to but that is missing here is dropped
@@ -844,16 +864,17 @@ def _trigger_re_for(chat_name: str, chat_config: dict) -> re.Pattern:
     _TRIGGER_RE_CACHE[chat_name] = pat
     return pat
 
-# Grill mode triggers. Start: "Bob - grillujemy - ..." / "grillujemy" / "grill me" / "grill mnie".
-# Stop: explicit "stop grill" / "zakończ grill" / "koniec grillu".
-_GRILL_START_RE = re.compile(r'\b(grillujemy|grill\s+me|grill\s+mnie)\b', re.IGNORECASE)
-_GRILL_STOP_RE = re.compile(r'stop\s+grill|grill\s+stop|zakończ\s+grill|koniec\s+grill', re.IGNORECASE)
+# Grill mode triggers. Start: "grill me" / "let's grill" (Polish aliases: "grillujemy", "grill mnie").
+# Stop: explicit "stop grill" / "end grill" (Polish aliases: "zakończ grill", "koniec grillu").
+_GRILL_START_RE = re.compile(r'\b(grill\s+me|let\'?s\s+grill|grillujemy|grill\s+mnie)\b', re.IGNORECASE)
+_GRILL_STOP_RE = re.compile(
+    r'stop\s+grill|grill\s+stop|end\s+grill|zakończ\s+grill|koniec\s+grill', re.IGNORECASE,
+)
 
 # Attachment/file read trigger: user is explicitly asking about a file or image content.
-# Positive examples: "przeczytaj plik", "opisz obraz", "podsumuj ten plik",
-#   "co tam w pliku", "co widzisz na zdjeciu", "spojrz na to", "co sadzisz o tym",
-#   "what's in the file", "read this", "summarize this", "describe the image".
-# Negative examples: "dziekuje", "ok", "tak Bob", "co u Ciebie", "zrob mi taski".
+# Positive examples: "what's in the file", "read this", "summarize this", "describe the image",
+#   and the Polish equivalents ("przeczytaj plik", "opisz obraz", "co tam w pliku", ...).
+# Negative examples: "thanks", "ok", "yes Bob", "how are you", "make me some tasks".
 # Note: prefix alternations (przeczyt, summariz, describ etc.) have no trailing \b
 # so they match all inflected forms (przeczytaj, summarize, describes etc.).
 # Polish "co X" alternations also have NO trailing \b — Polish inflection means
@@ -868,7 +889,8 @@ _READ_FILE_TRIGGER_RE = re.compile(
     r'|\bwhat[\s\'a-z]*\b.*?\b(file|image|attach|picture|photo)\b',
     re.IGNORECASE,
 )
-_GRILL_END_MARKER = "Grill zakończony"
+_GRILL_END_MARKER = "Grill finished"
+_GRILL_END_MARKERS = (_GRILL_END_MARKER, "Grill zakończony")  # Polish marker from older sessions
 
 # After Bob replies, treat follow-up messages from the same sender as continuation
 # (no "Bob" tag required) for this many seconds.
@@ -881,17 +903,17 @@ _BURST_WINDOW_S = 10
 # pending triggered messages, reply with one aggregated response instead of N replies.
 _CATCHUP_THRESHOLD_S = 300   # 5 minutes
 _CATCHUP_MIN_MSGS = 4        # minimum triggered messages to activate catch-up
-_STATS_POST_INTERVAL_S = 10 * 60  # post/edit stats to Notatki every 10 min
+_STATS_POST_INTERVAL_S = 10 * 60  # post/edit stats to the notes chat every 10 min
 _NOTIF_CHECK_INTERVAL_S = 60     # check due notifications every 60 s
-_PANEL_APPROVALS_INTERVAL_S = 60  # new yes/no requests from Bob's panel -> Notatki (scripts/bob_panel/approvals.py)
+_PANEL_APPROVALS_INTERVAL_S = 60  # new yes/no requests from Bob's panel -> notes chat (bob_panel/approvals.py)
 _PANEL_APPROVALS_LOCK = threading.Lock()
 # The SharePoint poller checks TimeLastModified (one cheap REST call) before doing
 # any real download/import work -- see sharepoint_meta.py -- so a short interval here
 # just controls change-detection latency, not download frequency.
-_SHAREPOINT_POLL_INTERVAL_S = 60 * 60  # check SharePoint urlopy XLSX every 60 min
-# Hard kill for a poller subprocess. MUSI byc wieksze niz wlasny budzet pollera,
-# inaczej zabijamy go tuz przed zapisaniem stanu i cala praca powtarza sie przy kazdym
-# ticku. Poller urlopow to sesja SSO + pobranie xlsx, wiec 300 s to duzy zapas.
+_SHAREPOINT_POLL_INTERVAL_S = 60 * 60  # check the SharePoint leave XLSX every 60 min
+# Hard kill for a poller subprocess. MUST be larger than the poller's own budget,
+# otherwise we kill it just before it saves its state and all the work repeats on every
+# tick. The leave poller is an SSO session + an xlsx download, so 300 s is plenty.
 _POLLER_SUBPROCESS_TIMEOUT_S = 300
 _SP_SESSION_WARM_INTERVAL_S = 6 * 60 * 60   # re-warm both SP domains in session.json every 6h
 _BROADCAST_CHECK_INTERVAL_S = 30  # check broadcast schedule every 30 s
@@ -916,8 +938,8 @@ def _ensure_daemon_servers(restart: bool) -> None:
             continue
         ok = restart_daemon(name, ai._MCP_SERVERS[name])
         changed = True
-        state = "dziala" if ok else "NIE wstal -- fallback na stdio"
-        print(f"[watch] demon MCP {name}: {state}", flush=True)
+        state = "running" if ok else "did NOT start -- falling back to stdio"
+        print(f"[watch] MCP daemon {name}: {state}", flush=True)
     if changed:
         ai._refresh_mcp_config()
 
@@ -935,55 +957,60 @@ _BROADCAST_RUNNER_SCRIPT = (
 )
 # "Bob pause 30m" / "Bob pause 2h" / "Bob pause 45 min"
 _PAUSE_RE = re.compile(
-    r'\bbob\s+pause\s+(\d+)\s*(m|min|h|g|godz|hour)',
+    r'\bbob\s+pause\s+(\d+)\s*(m|min|h|g|godz|hour)',  # g/godz = Polish hours
     re.IGNORECASE,
 )
-# "Bob off" / "Bob wyłącz" / "Bob wylacz" / "Bob stop" / "Bob disable"
+# "Bob off" / "Bob stop" / "Bob disable" (Polish aliases: "Bob wyłącz" / "Bob wylacz")
 # Note: must NOT match "Bob disable chat X" — those are handled by _CHAT_DISABLE_RE first.
 _BOB_OFF_RE = re.compile(
-    r'\bbob\s+(off|wyłącz|wylacz|stop|disable)\b(?!\s+chat\b)',
+    r'\bbob\s+(off|stop|disable|wyłącz|wylacz)\b(?!\s+chat\b)',
     re.IGNORECASE,
 )
-# "Bob on" / "Bob włącz" / "Bob wlacz" / "Bob resume" / "Bob wróć" / "Bob wroc" / "Bob start"
+# "Bob on" / "Bob resume" / "Bob start" / "Bob enable" (Polish aliases: "Bob włącz" / "Bob wróć"); "enable" only on
+# its own, so "Bob enable notifications for X" goes to Claude
 _BOB_ON_RE = re.compile(
-    r'\bbob\s+(on|włącz|wlacz|resume|wróć|wroc|start)\b(?!\s+chat\b)',
+    r'\bbob\s+(on|resume|start|włącz|wlacz|wróć|wroc|enable(?=\W*$))\b(?!\s+chat\b)',
     re.IGNORECASE,
 )
-# "Bob wyłącz chat Dyspozytornia" / "Bob disable chat X"
+# "Bob disable chat X" / "Bob off chat X" (Polish alias: "Bob wyłącz chat X")
 _CHAT_DISABLE_RE = re.compile(
     r'\bbob\s+(?:wyłącz|wylacz|disable|off)\s+chat\s+(.+)',
     re.IGNORECASE,
 )
-# "Bob włącz chat Dyspozytornia" / "Bob enable chat X"
+# "Bob enable chat X" / "Bob on chat X" (Polish alias: "Bob włącz chat X")
 _CHAT_ENABLE_RE = re.compile(
     r'\bbob\s+(?:włącz|wlacz|enable|on)\s+chat\s+(.+)',
     re.IGNORECASE,
 )
-# "Bob, zatwierdzam apr-1a2b3c4d5e: notatka" / "Bob, odrzucam apr-..." — a yes/no request from Bob's panel
+# "Bob, approve apr-1a2b3c4d5e: note" / "Bob, reject apr-..." — a yes/no request from Bob's panel
+# (Polish aliases: "zatwierdzam" / "odrzucam" and their variants)
 # (scripts/bob_panel/approvals.py), announced in the control chat; owner + control chat only
 _APR_DECIDE_RE = re.compile(
-    r'\bbob\W+(zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)\s+'
+    r'\bbob\W+(approve|reject|zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)\s+'
     r'(apr-[0-9a-f]{10})\b\s*[:\-–]?\s*(.*)',
     re.IGNORECASE | re.DOTALL,
 )
-# the same without the id ("Bob zatwierdzam", optionally ": notatka") - only when exactly one decision waits
+# the same without the id ("Bob approve", optionally ": note") - only when exactly one decision waits
 _APR_DECIDE_BARE_RE = re.compile(
-    r'^\W*bob\W+(zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)\W*(?::\s*(.*))?$',
+    r'^\W*bob\W+(approve|reject|zatwierdzam|zatwierdź|zatwierdz|akceptuję|akceptuje|odrzucam|odrzuć|odrzuc)'
+    r'\W*(?::\s*(.*))?$',
     re.IGNORECASE | re.DOTALL,
 )
-# "Bob chaty" / "Bob status chatów" — show per-chat enabled/disabled status
+# "Bob chats" / "Bob chat status" — show per-chat enabled/disabled status
+# (Polish aliases: "Bob chaty" / "Bob status chatów")
 _CHAT_STATUS_RE = re.compile(
-    r'\bbob\s+(?:chaty|status\s+chat(?:ów|ow)?)\b',
+    r'\bbob\s+(?:chats|chat\s+status|chaty|status\s+chat(?:ów|ow)?)\b',
     re.IGNORECASE,
 )
-# "Bob ?" / "Bob help" / "Bob pomoc" — show available commands
+# "Bob ?" / "Bob help" (Polish alias: "Bob pomoc") — show available commands
 _BOB_HELP_RE = re.compile(
     r'\bbob\s+(\?|help|pomoc)(?=\s|$)',
     re.IGNORECASE,
 )
-# "Bob ankieta <topic>" — send an Adaptive Card poll for Bob configuration
+# "Bob poll <topic>" (Polish alias: "Bob ankieta <topic>") — send an Adaptive Card poll for Bob configuration;
+# the English form only with a known topic
 _BOB_POLL_RE = re.compile(
-    r'\bbob\s+ankieta\s+(.+)',
+    r'\bbob\s+(?:poll\s+(?=(?:model|pause|onoff|chat)\b)|ankieta\s+)(.+)',
     re.IGNORECASE,
 )
 # Fallback text commands for per-chat config (used when Adaptive Card is unavailable).
@@ -1022,31 +1049,37 @@ _BOB_CONFIG_RE = re.compile(
     r'\bbob\s+config\s+(.+)',
     re.IGNORECASE,
 )
-# "Bob, wyslij na <target>" — forward last reply to another chat (control_chat + owner only)
-# Separators: space, comma, dash, colon (e.g. "Bob - wyslij na X", "Bob: wyślij na X").
-# Verbs: wyślij / prześlij. Optional "to" before "na" ("Bob wyślij to na X").
+# "Bob, forward to <target>" / "Bob, send it to <target>" — forward last reply to another chat
+# (control_chat + owner only). Separators: space, comma, dash, colon (e.g. "Bob - forward to X").
+# Polish aliases: "Bob, wyślij na X" / "Bob prześlij to na X".
 _BOB_FORWARD_RE = re.compile(
-    r'\bbob[\s,\-:]+(?:wy[ssś]lij|prze[ssś]lij)(?:\s+to)?\s+na\s+(.+)',
+    r'\bbob[\s,\-:]+(?:(?:forward|send)(?:\s+(?:this|it))?\s+to(?!\s+(?:me|us|him|her|them)\b)'
+    r'|(?:wy[ssś]lij|prze[ssś]lij)(?:\s+to)?\s+na)\s+(.+)',
     re.IGNORECASE | re.DOTALL,
 )
+# Replies that confirm a pending forward (English canonical, Polish alias).
+_FWD_CONFIRM_WORDS = frozenset({"yes", "tak"})
 # Teams chat link — capture conv_id from path component (19:...@thread.v2 or similar)
 _TEAMS_LINK_RE = re.compile(
     r'teams\.microsoft\.com/l/chat/(19:[^/\s?]+)',
 )
 
 
-# "Bob, zapamietaj: ..." (private notes — owner-only by default, configurable per chat)
+# "Bob, remember: ..." / "Bob, remember that ..." (Polish alias "Bob, zapamiętaj: ...") — private notes, owner-only
+# by default, configurable per chat. The English form needs the colon or "that": "Bob, remember the ticket ...?" is a
+# question, not a note.
 _ZAPAMIETAJ_RE = re.compile(
-    r'\bbob[,\s]+zapami[eę]taj?[,:\s]*(.+)',
+    r'\bbob[,\s]+(?:remember\s*(?::|\bthat\b)|zapami[eę]taj?[,:\s]*)\s*(.+)',
     re.IGNORECASE | re.DOTALL,
 )
-# "Bob, pokaż notatki" / "Bob pokaz notatki"
+# "Bob, show notes" (Polish alias "Bob, pokaż notatki")
 _POKAZ_NOTATKI_RE = re.compile(
-    r'\bbob[,\s]+poka[zż][,\s]+notatki',
+    r'\bbob[,\s]+(?:show[,\s]+notes|poka[zż][,\s]+notatki)',
     re.IGNORECASE,
 )
 
-# "Bob, wygeneruj/zbuduj/stwórz/zrób mi grę/appkę/stronę www ..." — real code
+# "Bob, build me a game / generate an app / make me a website ..." (and the Polish
+# "wygeneruj/zbuduj/stwórz/zrób mi grę/appkę/stronę www ...") — real code
 # generation, gated behind owner approval (see _handle_build_approval_gate).
 # Scoped narrowly: verb and target must appear within a few words of each other
 # (not just anywhere in the message), so a Jira-bug/incident report that merely
@@ -1054,29 +1087,35 @@ _POKAZ_NOTATKI_RE = re.compile(
 # get misrouted into the build gate. Normal asks — Jira tickets, KB search,
 # summaries, TTS audio, tables — are unaffected.
 _BOB_BUILD_VERB_RE = re.compile(
-    r'\b(wygeneruj\w*|zbuduj\w*|zbudowa\w*|stw[oó]rz\w*|stworzy\w*|zr[oó]b\w*|zrobi[cć]|napisz mi)\b'
+    # English: only a command aimed at somebody ("build me ...", "make us ..."); a bare "build" / "generate" is
+    # usually a noun or an ordinary ask ("why does the build of the app fail", "generate release notes for the app").
+    r'\b(?:((?:build|code|make|create|write|generate)\s+(?:me|us))\s+(?:an?\s+)?(?:\w+\s+){0,2}?'
+    r'(game|app|website|prototype)\b'
+    r'|(wygeneruj\w*|zbuduj\w*|zbudowa\w*|stw[oó]rz\w*|stworzy\w*|zr[oó]b\w*|zrobi[cć]|napisz mi)\b'
     r'(?:\W+\w+){0,4}?\W+'
-    r'(\bgr[eę]\b|\bgra\b|\bgry\b|gierk\w*|\bgame\b|aplikacj\w*|appk\w*|\bapp\b|'
-    r'stron[eę]\s*(?:www|internetow\w*)|\bwebsite\b|\bprototyp\w*)',
+    r'(\bgr[eę]\b|\bgra\b|\bgry\b|gierk\w*|aplikacj\w*|appk\w*|\bapp\b|'
+    r'stron[eę]\s*(?:www|internetow\w*)|\bwebsite\b|\bprototyp\w*))',
     re.IGNORECASE,
 )
-# Owner-only: "Bob zatwierdź <id>" / "Bob odrzuć <id>" resolve a pending build.
-_BOB_BUILD_APPROVE_RE = re.compile(r'\bbob\s+zatwierd[zź]\s+(\d+)', re.IGNORECASE)
-_BOB_BUILD_REJECT_RE = re.compile(r'\bbob\s+odrzu[cć]\s+(\d+)', re.IGNORECASE)
+# Owner-only: "Bob approve <id>" / "Bob reject <id>" (Polish aliases "zatwierdź" / "odrzuć") resolve a pending build.
+_BOB_BUILD_APPROVE_RE = re.compile(r'\bbob\s+(?:approve|zatwierd[zź])\s+(\d+)', re.IGNORECASE)
+_BOB_BUILD_REJECT_RE = re.compile(r'\bbob\s+(?:reject|odrzu[cć])\s+(\d+)', re.IGNORECASE)
 
-# "Bob, harmonogram dziś: treść" / "Bob, harmonogram 28.05: treść" / range "28.05-30.05: treść"
+# "Bob, schedule today: text" / "Bob, schedule 28.05: text" / range "28.05-30.05: text"
+# (Polish alias "Bob, harmonogram dziś: treść"). The English form needs a date first: "Bob, schedule a call ..." is
+# an ordinary ask.
 _HARMONOGRAM_SET_RE = re.compile(
-    r'\bbob[,\s]+harmonogram\s+([^\s:]+)[:\s]+(.+)',
+    r'\bbob[,\s]+(?:schedule\s+(?=today|tomorrow|yesterday|\d)|harmonogram\s+)([^\s:]+)[:\s]+(.+)',
     re.IGNORECASE | re.DOTALL,
 )
-# "Bob, pokaż harmonogram"
+# "Bob, show schedule" (Polish alias "Bob, pokaż harmonogram")
 _POKAZ_HARMONOGRAM_RE = re.compile(
-    r'\bbob[,\s]+poka[zż]\s+harmonogram',
+    r'\bbob[,\s]+(?:show\s+schedule|poka[zż]\s+harmonogram)',
     re.IGNORECASE,
 )
-# "Bob, harmonogram usuń 28.05" / "usuń dziś"
+# "Bob, schedule delete 28.05" / "schedule clear today" (Polish alias "Bob, harmonogram usuń 28.05")
 _HARMONOGRAM_CLEAR_RE = re.compile(
-    r'\bbob[,\s]+harmonogram\s+usu[nń]\s+(\S+)',
+    r'\bbob[,\s]+(?:schedule|harmonogram)\s+(?:delete|clear|usu[nń])\s+(\S+)',
     re.IGNORECASE,
 )
 
@@ -1085,24 +1124,26 @@ _BROADCAST_STATUS_RE = re.compile(
     r'\bbob[,\s]+broadcast\s+status',
     re.IGNORECASE,
 )
-# "Bob, ustaw broadcast <team> wyslij HH:MM"
-# Also accepts: generuj|dry-run instead of wyslij for generate/dry-run phase
+# "Bob, set broadcast <team> send HH:MM"
+# Also accepts: generate|dry-run instead of send for the generate/dry-run phase
+# (Polish aliases: "ustaw" for set, "wyslij" for send, "generuj" for generate)
 _BROADCAST_SET_RE = re.compile(
-    r'\bbob[,\s]+ustaw\s+broadcast\s+(\S+)\s+(wyslij|generuj|dry-run)\s+(\d{1,2}:\d{2})',
+    r'\bbob[,\s]+(?:set|ustaw)\s+broadcast\s+(\S+)\s+(send|generate|wyslij|generuj|dry-run)\s+(\d{1,2}:\d{2})',
     re.IGNORECASE,
 )
 
-# "Bob, przypomnij dziś|jutro|28.05 HH:MM na [nazwa chatu]: [treść]"
+# "Bob, remind today|tomorrow|28.05 HH:MM in [chat name]: [text]"
+# (Polish alias "Bob, przypomnij dziś|jutro|28.05 HH:MM na [nazwa chatu]: [treść]")
 _NOTIF_SET_RE = re.compile(
-    r'\bbob[,\s]+przypomnij\s+(\S+)\s+(\d{1,2}:\d{2})\s+na\s+(.+?)(?::\s*|\s+-\s+)(.+)',
+    r'\bbob[,\s]+(?:remind|przypomnij)\s+(\S+)\s+(\d{1,2}:\d{2})\s+(?:in|on|na)\s+(.+?)(?::\s*|\s+-\s+)(.+)',
     re.IGNORECASE | re.DOTALL,
 )
-# "Bob, pokaż przypomnienia"
-_NOTIF_SHOW_RE = re.compile(r'\bbob[,\s]+poka[zż]\s+przypomnienia', re.IGNORECASE)
-# "Bob, usuń przypomnienie [id]"
-_NOTIF_DEL_RE = re.compile(r'\bbob[,\s]+usu[nń]\s+przypomnienie\s+(\S+)', re.IGNORECASE)
-# "Bob, usuń zaległe [przypomnienia|zadania]"
-_NOTIF_DEL_OVERDUE_RE = re.compile(r'\bbob[,\s]+usu[nń]\s+zaleg[łl][ey]\b', re.IGNORECASE)
+# "Bob, show reminders" (Polish alias "Bob, pokaż przypomnienia")
+_NOTIF_SHOW_RE = re.compile(r'\bbob[,\s]+(?:show\s+reminders|poka[zż]\s+przypomnienia)', re.IGNORECASE)
+# "Bob, delete reminder [id]" (Polish alias "Bob, usuń przypomnienie [id]")
+_NOTIF_DEL_RE = re.compile(r'\bbob[,\s]+(?:delete\s+reminder|usu[nń]\s+przypomnienie)\s+(\S+)', re.IGNORECASE)
+# "Bob, delete overdue [reminders|tasks]" (Polish alias "Bob, usuń zaległe")
+_NOTIF_DEL_OVERDUE_RE = re.compile(r'\bbob[,\s]+(?:delete\s+overdue|usu[nń]\s+zaleg[łl][ey])\b', re.IGNORECASE)
 
 
 def _parse_reminder_time(token: str) -> tuple[int, int] | None:
@@ -1117,10 +1158,11 @@ def _parse_reminder_time(token: str) -> tuple[int, int] | None:
 
 
 def _parse_reminder_datetime(date_token: str, time_token: str) -> datetime | None:
-    """Parse 'dzis|jutro|DD.MM[.YYYY]' + 'HH:MM' into naive CET datetime, or None.
+    """Parse a date token ('today|tomorrow|DD.MM[.YYYY]', or the Polish 'dzis|jutro') + 'HH:MM'
+    into a naive local datetime, or None.
 
-    Delegates date parsing to owner_schedule.parse_date (already supports the same
-    vocabulary used by 'Bob, harmonogram ...').
+    Delegates date parsing to owner_schedule.parse_date (the same vocabulary used by
+    'Bob, schedule ...').
     """
     d = owner_schedule.parse_date(date_token)
     if d is None:
@@ -1164,7 +1206,7 @@ def _load_user_context(sender_mri: str) -> str | None:
 def _append_private_note(chat_name: str, note: str, sender: str) -> None:
     _BOB_PRIVATE_DIR.mkdir(exist_ok=True)
     path = _BOB_PRIVATE_DIR / f"{_chat_name_to_filename(chat_name)}.md"
-    ts = datetime.now(_CET).strftime("%Y-%m-%d %H:%M CET")
+    ts = datetime.now(_CET).strftime("%Y-%m-%d %H:%M %Z")
     entry = f"\n---\n{ts} [{sender}]\n{note.strip()}\n"
     with path.open("a", encoding="utf-8") as f:
         f.write(entry)
@@ -1187,11 +1229,11 @@ def _save_control(state: dict) -> None:
         tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
         os.replace(tmp, _BOB_CONTROL_FILE)
     except Exception as exc:
-        print(f"[watch] BLAD zapisu bob-control: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR writing bob-control: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
-# Build-approval gate — "Bob, wygeneruj/zbuduj mi grę/appkę/stronę ..." needs
+# Build-approval gate — "Bob, build me a game/app/website ..." needs
 # real code-generation work (Write/Agent) that the sandboxed reply pipeline does
 # NOT have (see ai.py's _NO_TOOLS_LOCKDOWN). Rather than let such a request
 # silently fail, loop, or get fulfilled without oversight, it's parked here for
@@ -1218,7 +1260,7 @@ def _save_pending_builds(items: list[dict]) -> None:
             json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8",
         )
     except Exception as exc:
-        print(f"[watch] BLAD zapisu pending-builds: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR writing pending-builds: {exc}", file=sys.stderr)
 
 
 def _add_pending_build(chat_name: str, conv_id: str, sender: str, text: str) -> str:
@@ -1260,18 +1302,18 @@ def _handle_build_approval_gate(
     build_id = _add_pending_build(chat_name, conv_id, sender, text)
     try:
         api_client.send_message(
-            f"[Zgoda #{build_id}] {sender} w {chat_name!r} prosi:\n"
-            f"„{text.strip()[:500]}”\n\n"
-            f"To wymaga realnej generacji kodu (Agent/Write) — nie robię tego "
-            f"bez Twojej zgody. Odpowiedz tutaj (Notatki):\n"
-            f"'Bob zatwierdź {build_id}' albo 'Bob odrzuć {build_id}'.",
+            f"[Approval #{build_id}] {sender} in {chat_name!r} asks:\n"
+            f"\"{text.strip()[:500]}\"\n\n"
+            f"This needs real code generation (Agent/Write) — I don't do that "
+            f"without your approval. Reply here (notes chat):\n"
+            f"'Bob approve {build_id}' or 'Bob reject {build_id}'.",
             conversation_id=api_client.NOTES_CONV_ID,
         )
     except Exception as exc:
-        print(f"[watch] BLAD wysylki prosby o zgode: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR sending the approval request: {exc}", file=sys.stderr)
     return (
-        "To większe zadanie — budowanie realnego kodu, nie moja zwykła robota. "
-        "Pytam Jana o zgodę, wracam z odpowiedzią jak tylko potwierdzi 🙂"
+        "That's a bigger job — building real code, not my usual work. "
+        "I'm asking the owner for approval and will come back as soon as they confirm 🙂"
     )
 
 
@@ -1293,7 +1335,7 @@ def _save_broadcast_schedule(schedule: dict) -> None:
             json.dumps(schedule, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     except Exception as exc:
-        print(f"[broadcast] BLAD zapisu broadcast-schedule.json: {exc}", file=sys.stderr)
+        print(f"[broadcast] ERROR writing broadcast-schedule.json: {exc}", file=sys.stderr)
 
 
 def _is_broadcast_planning_day(today) -> bool:
@@ -1316,7 +1358,7 @@ def _broadcast_scheduler_tick(log_path: str) -> None:
 
     Called every ~30 s from the watch loop executor. Non-blocking.
     """
-    _CET = ZoneInfo("Europe/Warsaw")
+    _CET = ZoneInfo(_TZ_NAME)
     now_cet = datetime.now(_CET)
     today = now_cet.date()
 
@@ -1344,8 +1386,8 @@ def _broadcast_scheduler_tick(log_path: str) -> None:
 
     for job_id, times in schedule.items():
         job_def = _jobs_by_id.get(job_id, {})
-        # enabled=false: nie odpalaj w ogole -- runner i tak przerwalby z exit 1,
-        # co przy kazdym ticku zasmiecaloby log bledami.
+        # enabled=false: do not fire at all -- the runner would exit 1 anyway,
+        # which would litter the log with errors on every tick.
         if job_def.get("enabled") is False:
             continue
         schedule_type = job_def.get("schedule_type", "planning")
@@ -1416,7 +1458,7 @@ def _broadcast_scheduler_tick(log_path: str) -> None:
                 )
             except Exception as exc:
                 print(
-                    f"[watch] broadcast blad: job={job_id} phase={phase_arg}: {exc}",
+                    f"[watch] broadcast error: job={job_id} phase={phase_arg}: {exc}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -1426,7 +1468,7 @@ def _is_paused() -> tuple[bool, str]:
     """Return (is_paused, reason). Cheap — reads small JSON once per tick."""
     ctrl = _load_control()
     if ctrl.get("disabled"):
-        return True, "wyłączony (Bob off)"
+        return True, "disabled (Bob off)"
     paused_until = ctrl.get("paused_until")
     if paused_until:
         try:
@@ -1434,7 +1476,7 @@ def _is_paused() -> tuple[bool, str]:
             now = datetime.now(UTC)
             if now < until_dt:
                 remaining_m = int((until_dt - now).total_seconds() / 60) + 1
-                return True, f"pauza do {until_dt.strftime('%H:%M')} UTC (~{remaining_m} min)"
+                return True, f"paused until {until_dt.strftime('%H:%M')} UTC (~{remaining_m} min)"
         except Exception:
             pass
     return False, ""
@@ -1471,6 +1513,24 @@ def list_chat_status(chat_names: list[str]) -> dict[str, bool]:
     return {name: name not in disabled for name in chat_names}
 
 
+def _norm_chat(cfg: object) -> dict:
+    """One chat's chat-config entry with English keys (roles <- role, add_groups <- dodatkowo, ...).
+
+    roles.normalize_chat owns the alias table; this wrapper only tolerates a missing (None) entry.
+    """
+    if not isinstance(cfg, dict):
+        return {}
+    import roles  # noqa: PLC0415
+    return roles.normalize_chat(cfg)
+
+
+def _norm_chats(chats: object) -> dict:
+    """Every chat of chat-config.json "chats" through _norm_chat; non-dict entries are kept as they are."""
+    if not isinstance(chats, dict):
+        return {}
+    return {name: (_norm_chat(cfg) if isinstance(cfg, dict) else cfg) for name, cfg in chats.items()}
+
+
 def _config_mtime(path: Path) -> float:
     try:
         return path.stat().st_mtime
@@ -1492,14 +1552,15 @@ def _reload_chat_config_if_changed(chat_config: dict, path: Path, seen_mtime: fl
     try:
         fresh = json.loads(path.read_text(encoding="utf-8")).get("chats")
     except Exception as exc:  # noqa: BLE001 -- keep the running config
-        print(f"[watch] BLAD przeladowania chat-config {path}: {exc} -- zostaje poprzednia", file=sys.stderr)
+        print(f"[watch] ERROR reloading chat-config {path}: {exc} -- keeping the previous one", file=sys.stderr)
         return seen_mtime
     if not isinstance(fresh, dict):
         return seen_mtime
+    fresh = _norm_chats(fresh)
     if fresh != chat_config:
         chat_config.clear()
         chat_config.update(fresh)
-        print("[watch] chat-config.json zmieniony -- przeladowany", flush=True)
+        print("[watch] chat-config.json changed -- reloaded", flush=True)
     return mtime
 
 
@@ -1508,9 +1569,9 @@ def _load_chat_config(path: Path) -> dict:
     try:
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
-            return data.get("chats", {})
+            return _norm_chats(data.get("chats", {}))
     except Exception as exc:
-        print(f"[watch] BLAD ladowania chat-config {path}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR loading chat-config {path}: {exc}", file=sys.stderr)
     return {}
 
 
@@ -1526,7 +1587,7 @@ def _save_chat_config(chat_config: dict, path: Path = _CHAT_CONFIG_PATH) -> None
         if path.exists():
             existing = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[watch] OSTRZEZENIE: nie mozna odczytac {path} przed zapisem: {exc}",
+        print(f"[watch] WARNING: cannot read {path} before writing: {exc}",
               file=sys.stderr)
     result: dict = {}
     if "_comment" in existing:
@@ -1538,7 +1599,7 @@ def _save_chat_config(chat_config: dict, path: Path = _CHAT_CONFIG_PATH) -> None
                        encoding="utf-8")
         os.replace(str(tmp), str(path))
     except Exception as exc:
-        print(f"[watch] BLAD zapisu chat-config {path}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR writing chat-config {path}: {exc}", file=sys.stderr)
         try:
             tmp.unlink(missing_ok=True)
         except Exception:
@@ -1562,14 +1623,16 @@ def _apply_chat_config_change(
     For 'caller': value=None removes the key (fallback to args.caller).
     """
     if field not in _CHAT_CONFIG_MUTABLE_FIELDS:
-        print(f"[watch] _apply_chat_config_change: nieprawidlowe pole {field!r}", file=sys.stderr)
+        print(f"[watch] _apply_chat_config_change: invalid field {field!r}", file=sys.stderr)
         return
     if name not in chat_config:
         chat_config[name] = {}
-    if field == "mcp" and "role" in chat_config[name]:
+    chat_config[name] = _norm_chat(chat_config[name])
+    if field == "mcp" and "roles" in chat_config[name]:
         # an explicit group list from the control chat replaces the chat's roles: it goes back to the hand-written list
-        print(f"[watch] {name!r}: role {chat_config[name].get('role')} zastapione reczna lista mcp", flush=True)
-        for key in ("role", "bez", "dodatkowo"):
+        print(f"[watch] {name!r}: roles {chat_config[name].get('roles')} replaced by a hand-written mcp list",
+              flush=True)
+        for key in ("roles", "remove_groups", "add_groups"):
             chat_config[name].pop(key, None)
     if field == "epithets":
         if value is None or (isinstance(value, list) and len(value) == 0):
@@ -1588,8 +1651,8 @@ def _apply_chat_config_change(
             chat_config[name]["internet"] = value
         else:
             print(
-                f"[watch] _apply_chat_config_change: nieprawidlowa wartosc internet {value!r}"
-                " (dozwolone: all, only_me, off)",
+                f"[watch] _apply_chat_config_change: invalid internet value {value!r}"
+                " (allowed: all, only_me, off)",
                 file=sys.stderr,
             )
             return
@@ -1671,37 +1734,37 @@ def _control_chat_for(chat_name: str, chat_config: dict) -> bool:
 def _mcp_for(chat_name: str, chat_config: dict) -> list[str] | None:
     """Return list of allowed MCP groups for this chat, or None (= all groups).
 
-    chat-config.json format: "role": ["project_manager", ...] (roles.json, scripts/teams_agent/roles.py), or the
+    chat-config.json format: "roles": ["project_manager", ...] (roles.json, scripts/teams_agent/roles.py), or the
     older hand-written "mcp": ["jira", "todos"] or omitted/null for all.
     Valid group names: keys of ai._MCP_GROUPS.
     "mcp_extra": ["<group>"] adds opt-in groups (ai._OPT_IN_GROUPS) on top of
     "mcp": null, so the chat keeps every default group and gains the extras.
     """
     # roles (roles.json, read fresh: panel edits apply at once) or the hand-written list; a chat on a channel
-    # with external users ("kanal_fr") never gets a team-only group
+    # with external users ("external_chat") never gets a team-only group
     import roles  # noqa: PLC0415
-    cfg = chat_config.get(chat_name) or {}
-    doc = roles.load() if ("role" in cfg or cfg.get("kanal_fr")) else {}
+    cfg = _norm_chat(chat_config.get(chat_name))
+    doc = roles.load() if ("roles" in cfg or cfg.get("external_chat")) else {}
     return roles.effective_groups(cfg, doc, list(ai._ALL_GROUPS), list(ai._MCP_GROUPS))
 
 
 def _role_knowledge_for(chat_name: str, chat_config: dict | None) -> str:
-    """The chat's role knowledge added in the panel ("wpiecie": "prompt" in roles.json), read fresh per reply."""
-    cfg = (chat_config or {}).get(chat_name) or {}
-    if "role" not in cfg:
+    """The chat's role knowledge added in the panel ("wiring": "prompt" in roles.json), read fresh per reply."""
+    cfg = _norm_chat((chat_config or {}).get(chat_name))
+    if "roles" not in cfg:
         return ""
     import roles  # noqa: PLC0415
     try:
         return roles.knowledge_text(roles.knowledge_for(cfg, roles.load()))
     except Exception as exc:  # noqa: BLE001 -- knowledge must never block a reply
-        print(f"[watch] wiedza rol {chat_name!r}: {exc}", file=sys.stderr, flush=True)
+        print(f"[watch] role knowledge {chat_name!r}: {exc}", file=sys.stderr, flush=True)
         return ""
 
 
 def _epithets_for(chat_name: str, chat_config: dict) -> list[str] | None:
     """Return per-channel personality epithets, or None if not configured.
 
-    chat-config.json format: "epithets": ["zwięzły", "formalny", "analityczny"]
+    chat-config.json format: "epithets": ["concise", "formal", "analytical"]
     """
     return (chat_config.get(chat_name) or {}).get("epithets", None)
 
@@ -1759,7 +1822,7 @@ def _internet_allows(setting: str | None, is_owner: bool) -> bool:
 
 
 def _parse_args(argv=None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="AI Jan — Teams terminal agent")
+    parser = argparse.ArgumentParser(description="Bob — Teams terminal agent")
     parser.add_argument('--model', default=DEFAULT_MODEL,
                         help=f"Claude model to use for drafts (default: {DEFAULT_MODEL})")
     parser.add_argument('--max-chats', type=int, default=DEFAULT_MAX_CHATS, dest="max_chats",
@@ -1776,12 +1839,12 @@ def _parse_args(argv=None) -> argparse.Namespace:
                         help=f"Daemon mode: poll one or more chats (by name substring) and "
                              f"auto-reply to triggered messages. "
                              f"Default: {DEFAULT_WATCH_CHATS}. "
-                             f"Example: --watch 'Kanal AI' 'Zespół A'")
+                             f"Example: --watch 'AI Channel' 'Team A'")
     parser.add_argument('--interactive', action='store_true',
                         help="Run the manual approval loop instead of watch daemon mode.")
     parser.add_argument('--poll', type=int, default=DEFAULT_POLL_S, dest='poll',
                         help=f"Watch mode tick interval in seconds (default: {DEFAULT_POLL_S}). "
-                             f"Min 1 — prawdziwy bottleneck to claude CLI (2-5s), nie polling.")
+                             f"Min 1 — the real bottleneck is the claude CLI (2-5s), not polling.")
     parser.add_argument('--rate-limit', type=int, default=DEFAULT_RATE_LIMIT_S, dest='rate_limit',
                         help=f"Minimum seconds between auto-replies in watch mode "
                              f"(default: {DEFAULT_RATE_LIMIT_S}).")
@@ -1796,7 +1859,7 @@ def _parse_args(argv=None) -> argparse.Namespace:
                              "the real-time event format before implementing push-based mode.")
     parser.add_argument('--caller', choices=['owner', 'all', 'auto'], default='all', dest='caller',
                         help="Who triggers Bob: "
-                             "'owner' = only Jan via 'Bob' mention, "
+                             "'owner' = only the owner via 'Bob' mention, "
                              "'all' = anyone via 'Bob' mention (default), "
                              "'auto' = every message on the chat, no trigger needed.")
     return parser.parse_args(argv)
@@ -1863,7 +1926,7 @@ def _parse_json_payload(stdout: str) -> dict:
 
 
 def _extract_trigger(text: str) -> str | None:
-    """Return the prompt portion after 'Hej Claude' trigger, or None.
+    """Return the prompt portion after the 'Hey Claude' trigger, or None.
 
     Matches anywhere in the message text because Teams' inner_text concatenates
     sender/time prefixes with the body. The capture group is everything after
@@ -1884,7 +1947,7 @@ def _load_watch_state(path: str) -> dict:
         if p.exists():
             return json.loads(p.read_text(encoding='utf-8'))
     except Exception as exc:
-        print(f"[watch] BLAD odczytu state {path}: {exc}", file=sys.stderr)
+        print(f"[watch] ERROR reading state {path}: {exc}", file=sys.stderr)
     return {}
 
 
@@ -1901,7 +1964,7 @@ def _save_watch_state(path: str, chat_name: str, chat_state: dict) -> None:
                 encoding='utf-8',
             )
         except Exception as exc:
-            print(f"[watch] BLAD zapisu state {path}: {exc}", file=sys.stderr)
+            print(f"[watch] ERROR writing state {path}: {exc}", file=sys.stderr)
 
 
 def _parse_teams_ts(ts: str) -> float:
@@ -1985,10 +2048,10 @@ def _images_to_tmp_files(urls: list[str]) -> list[str]:
         return []
     paths: list[str] = []
     for url in urls:
-        print(f"[watch] -> pobieranie obrazka: {url[:80]}...", flush=True)
+        print(f"[watch] -> downloading image: {url[:80]}...", flush=True)
         result = api_client.download_image(url)
         if not result:
-            print(f"[watch] -> download_image zwrocilo None dla {url[:60]}", flush=True)
+            print(f"[watch] -> download_image returned None for {url[:60]}", flush=True)
             continue
         img_bytes, media_type = result
         ext = _IMG_EXT_MAP.get(media_type, ".jpg")
@@ -1996,7 +2059,7 @@ def _images_to_tmp_files(urls: list[str]) -> list[str]:
         tf.write(img_bytes)
         tf.close()
         paths.append(tf.name)
-        print(f"[watch] -> obraz zapisany: {tf.name} ({len(img_bytes)} b, {media_type})", flush=True)
+        print(f"[watch] -> image saved: {tf.name} ({len(img_bytes)} b, {media_type})", flush=True)
     return paths
 
 
@@ -2005,7 +2068,7 @@ def _enrich_text_with_images(text: str, image_urls: list[str], mode: str = "stub
 
     mode="stub" (default): no network calls; returns a placeholder string so that
         history and live_context never store full image descriptions.
-        1 image -> "[Obraz dolaczony do wiadomosci]"; N>1 -> "[N obrazy dolaczone ...]".
+        1 image -> "[Image attached to the message]"; N>1 -> "[N images attached ...]".
     mode="full": existing behaviour — download + describe via Gemini.
     """
     if not image_urls:
@@ -2013,17 +2076,17 @@ def _enrich_text_with_images(text: str, image_urls: list[str], mode: str = "stub
     if mode == "stub":
         n = len(image_urls)
         if n == 1:
-            placeholder = "[Obraz dolaczony do wiadomosci]"
+            placeholder = "[Image attached to the message]"
         else:
-            placeholder = f"[{n} obrazy dolaczone do wiadomosci]"
+            placeholder = f"[{n} images attached to the message]"
         return f"{placeholder}\n{text}" if text else placeholder
     # mode == "full" — inline image_urls now flow via image_paths to freeform_reply;
     # fall back to stub placeholder (describe_image no longer called on this path).
     n = len(image_urls)
     if n == 1:
-        placeholder = "[Obraz dolaczony do wiadomosci]"
+        placeholder = "[Image attached to the message]"
     else:
-        placeholder = f"[{n} obrazy dolaczone do wiadomosci]"
+        placeholder = f"[{n} images attached to the message]"
     return f"{placeholder}\n{text}" if text else placeholder
 
 
@@ -2044,8 +2107,8 @@ def _enrich_text_with_attachments(
     """Download .md attachments and describe image attachments.
 
     mode="stub" (default): no SharePoint downloads; returns placeholder per attachment.
-        For image files: "[Zalacznik: name.png — obraz]".
-        For md files: "[Zalacznik: name.md]" (no size — body not fetched).
+        For image files: "[Attachment: name.png — image]".
+        For md files: "[Attachment: name.md]" (no size — body not fetched).
     mode="full": download + inline md; image attachments described via Claude CLI.
 
     For .md files (full mode): pulls each file via attachments.download and inlines the
@@ -2075,14 +2138,14 @@ def _enrich_text_with_attachments(
         # Stub mode: return placeholders without any network calls.
         placeholders: list[str] = []
         for a in image_attaches:
-            name = a.get("name", "obraz")
-            stub = f"[Załącznik: {name} — obraz]"
+            name = a.get("name", "image")
+            stub = f"[Attachment: {name} — image]"
             if len(stub) > 200:
                 stub = stub[:196] + "...]"
             placeholders.append(stub)
         for a in md_attaches:
-            name = a.get("name", "plik.md")
-            stub = f"[Załącznik: {name}]"
+            name = a.get("name", "file.md")
+            stub = f"[Attachment: {name}]"
             if len(stub) > 200:
                 stub = stub[:196] + "...]"
             placeholders.append(stub)
@@ -2098,12 +2161,12 @@ def _enrich_text_with_attachments(
         raw_images: list[tuple[bytes, str]] = []
         for a in image_attaches:
             url = a.get("url", "")
-            name = a.get("name", "obraz")
+            name = a.get("name", "image")
             if not url:
                 continue
             result = _attachments.download(url, name, max_bytes=_attachments._MAX_IMAGE_BYTES)
             if not result:
-                print(f"[watch] -> image attach {name!r}: pobranie nieudane", flush=True)
+                print(f"[watch] -> image attach {name!r}: download failed", flush=True)
                 continue
             body, ct = result
             if not ct.startswith("image/"):
@@ -2121,10 +2184,10 @@ def _enrich_text_with_attachments(
                 tf.close()
                 image_paths_out.append(tf.name)
         if raw_images:
-            print(f"[watch] -> opisuje {len(raw_images)} obraz(ow) z zalacznika...", flush=True)
+            print(f"[watch] -> describing {len(raw_images)} attached image(s)...", flush=True)
             desc = ai.describe_image(raw_images, context=text)
             if desc:
-                prefix = f"[Obraz (zalacznik): {desc}]"
+                prefix = f"[Image (attachment): {desc}]"
                 text = f"{prefix}\n{text}" if text else prefix
 
     if not md_attaches:
@@ -2140,7 +2203,7 @@ def _enrich_text_with_attachments(
             continue
         result = _attachments.download(url, name)
         if not result:
-            print(f"[watch] -> attachment {name!r}: pobranie nieudane", flush=True)
+            print(f"[watch] -> attachment {name!r}: download failed", flush=True)
             _append_log(DEFAULT_LOG_FILE, {
                 "ts": _ts(), "action": "attachment_fetch_fail",
                 "name": name, "url": url[:200],
@@ -2156,7 +2219,7 @@ def _enrich_text_with_attachments(
         files.append((body, ct, name))
     if not files:
         return text
-    print(f"[watch] -> dolaczam {len(files)} plik(ow) .md do promptu", flush=True)
+    print(f"[watch] -> adding {len(files)} .md file(s) to the prompt", flush=True)
     block = ai.attachments_to_text(files, mode="full")
     if not block:
         return text
@@ -2165,7 +2228,7 @@ def _enrich_text_with_attachments(
 
 def _resolve_conv_id(chat_name: str) -> str | None:
     """Return conversation ID for a chat name. Hardcoded for known chats, discovered otherwise."""
-    if chat_name == "Notatki":
+    if chat_name in ("Notes", "Notatki"):  # the owner's notes chat (Polish name kept as an alias)
         return api_client.NOTES_CONV_ID
     return api_client.find_conversation_id(chat_name)
 
@@ -2189,10 +2252,10 @@ def _process_chat_messages(
     rate_limit_s = max(0, args.rate_limit)
 
     effective_caller = caller if caller is not None else args.caller
-    # Per-kanalowy trigger (np. "example" na kanale persony, "bob" wszedzie indziej).
-    # MUSI byc uzywany we WSZYSTKICH bramkach na wiadomosci wlasciciela ponizej — inaczej
-    # wlasciciel nie jest w stanie wywolac agenta na kanale z wlasnym triggerem, bo jego
-    # wiadomosc odpada na zahardkodowanym \bbob\b, zanim dojdzie do NORMAL MODE.
+    # Per-channel trigger (e.g. "example" on the persona's channel, "bob" everywhere else).
+    # MUST be used in ALL the gates on the owner's messages below — otherwise the owner
+    # cannot call the agent on a channel with its own trigger, because the message is
+    # dropped by the hard-coded \bbob\b before it reaches NORMAL MODE.
     trigger_re = _trigger_re_for(chat_name, chat_config or {})
     chat_model = _model_for(chat_name, chat_config or {}, args)
     chat_effort = _effort_for(chat_name, chat_config or {})
@@ -2212,7 +2275,7 @@ def _process_chat_messages(
             state["last_composetime"] = max(all_ts)
         state["last_activity_ts"] = _time_mod.time()
         _save_watch_state(state_path, chat_name, state)
-        print(f"[watch] {chat_name!r} inicjalizacja: last_seq_id={last_seq_id}", flush=True)
+        print(f"[watch] {chat_name!r} initialised: last_seq_id={last_seq_id}", flush=True)
         return
 
     new_msgs_seq = [m for m in msgs if m["sequence_id"] > last_seq_id]
@@ -2243,7 +2306,7 @@ def _process_chat_messages(
         _before = len(new_msgs)
         new_msgs = _group_bursts(new_msgs)
         if len(new_msgs) < _before:
-            print(f"[watch] {chat_name!r}: burst-merge {_before} → {len(new_msgs)} wiad.", flush=True)
+            print(f"[watch] {chat_name!r}: burst-merge {_before} → {len(new_msgs)} msgs", flush=True)
 
     # Catch-up aggregation: if offline > _CATCHUP_THRESHOLD_S and enough pending messages,
     # reply once with an aggregated summary instead of N individual replies.
@@ -2279,8 +2342,8 @@ def _process_chat_messages(
             if len(_triggered) >= _CATCHUP_MIN_MSGS:
                 _gap_min = int(_offline_s / 60)
                 print(
-                    f"[watch] {chat_name!r}: catch-up po {_gap_min} min — "
-                    f"{len(_triggered)} wiad.", flush=True,
+                    f"[watch] {chat_name!r}: catch-up after {_gap_min} min — "
+                    f"{len(_triggered)} msgs", flush=True,
                 )
                 _lines = []
                 for _m in _triggered:
@@ -2295,9 +2358,9 @@ def _process_chat_messages(
                     )
                     _lines.append(f"{_lbl}: {_enriched}")
                 _catchup_text = (
-                    f"[WRÓCIŁEM PO {_gap_min} MIN — poniżej wiadomości które mnie ominęły]\n"
+                    f"[BACK AFTER {_gap_min} MIN — below are the messages I missed]\n"
                     + "\n".join(_lines)
-                    + "\n\nOdpowiedz jedną zwięzłą zbiorczą wiadomością na wszystkie powyższe."
+                    + "\n\nAnswer all of the above in one short combined message."
                 )
                 _since_last = _time_mod.time() - state.get("last_reply_ts", 0.0)
                 if _since_last < rate_limit_s:
@@ -2323,7 +2386,7 @@ def _process_chat_messages(
                     },
                     effort=chat_effort,
                 )
-                print(f"[watch] -> {len(_reply)}b odp w {_time_mod.time()-_t0:.1f}s", flush=True)
+                print(f"[watch] -> {len(_reply)}b reply in {_time_mod.time()-_t0:.1f}s", flush=True)
                 _last_m = _triggered[-1]
                 _last_sender = _owner_label(_last_m)
                 _reply = _extract_and_send_gifs(_reply, conv_id, persona=persona)
@@ -2335,7 +2398,7 @@ def _process_chat_messages(
                 _sent = False
                 _silent_skip = _is_silent_reply(_reply)
                 if _silent_skip:
-                    print("[watch] -> catch-up: silent reply, pomijam wysylanie", flush=True)
+                    print("[watch] -> catch-up: silent reply, not sending", flush=True)
                 elif _reply:
                     _sent = api_client.reply_to_message(
                         _reply, _last_m["id"], _last_sender,
@@ -2348,7 +2411,7 @@ def _process_chat_messages(
                     state["last_reply_ts"] = _time_mod.time()
                 if not _silent_skip:
                     print(
-                        f"[watch] -> catch-up: {'wyslano' if _sent else 'BLAD/pusta odp'}",
+                        f"[watch] -> catch-up: {'sent' if _sent else 'ERROR/empty reply'}",
                         flush=True,
                     )
                 _catchup_send_log: dict = {
@@ -2385,7 +2448,7 @@ def _process_chat_messages(
 
         # Skip own bot replies — quote-replies start with <blockquote, thinking
         # placeholders start with <p>🧑‍💻<strong>[Bob]</strong>.
-        # Jan's real messages are plain text / <p> without the [Bob] prefix.
+        # The owner's real messages are plain text / <p> without the [Bob] prefix.
         # Also skip own plain-text messages that don't mention Bob — these are proactive
         # notifications sent by _fire_due_notifications, not user interactions.
         _raw_html = msg.get("raw_html", "").lstrip()
@@ -2400,7 +2463,7 @@ def _process_chat_messages(
         # inline image (<img src=...sharepoint...). They are not user interactions.
         # Exception: don't skip if the message mentions Bob — that's the owner
         # pasting a SharePoint recording link while triggering Bob
-        # (e.g. "Bob - podsumuj [SP link]"). Those are real user interactions.
+        # (e.g. "Bob - summarise [SP link]"). Those are real user interactions.
         if is_owner and (
             "sharepoint" in _raw_html
             and ("<a href" in _raw_html or "<img" in _raw_html)
@@ -2411,19 +2474,19 @@ def _process_chat_messages(
         # Skip Bob's own GIF messages — any is_owner message containing <img is a GIF Bob sent.
         # Teams strips class attributes so we can't rely on sentinels; <img is reliable.
         # Exception: if the message text mentions Bob it's the owner triggering Bob
-        # (e.g. "Bob - zrób X 🙂") — Teams renders emoji as <img> so we must let it through.
+        # (e.g. "Bob - do X 🙂") — Teams renders emoji as <img> so we must let it through.
         if is_owner and "<img" in _raw_html and not trigger_re.search(msg.get("text", "")):
             last_seq_id = max(last_seq_id, seq)
             continue
 
         if is_owner:
             _plain_text = msg.get("text", "")
-            # Exception: allow bare "tak" through to the control block when a forward
-            # is pending — the confirmation must not require "Bob" prefix.
+            # Exception: allow a bare "yes" (Polish "tak") through to the control block when a
+            # forward is pending — the confirmation must not require "Bob" prefix.
             _is_fwd_confirm = (
                 control_chat
                 and state.get("pending_forward")
-                and _plain_text.strip().lower() == "tak"
+                and _plain_text.strip().lower() in _FWD_CONFIRM_WORDS
             )
             if not _is_fwd_confirm and not trigger_re.search(_plain_text):
                 last_seq_id = max(last_seq_id, seq)
@@ -2445,7 +2508,7 @@ def _process_chat_messages(
                 )
                 print(f"[watch] -> vote applied: {vote.get('action')!r}", flush=True)
             else:
-                print("[watch] -> card_action bez poll_id lub ankieta wygasla", flush=True)
+                print("[watch] -> card_action without poll_id or the poll expired", flush=True)
             last_seq_id = max(last_seq_id, seq)
             continue
 
@@ -2462,9 +2525,9 @@ def _process_chat_messages(
             last_seq_id = max(last_seq_id, seq)
             continue
 
-        # === PRIVATE NOTES — "Bob, zapamietaj: ..." ===
+        # === PRIVATE NOTES — "Bob, remember: ..." (Polish alias "Bob, zapamiętaj: ...") ===
         # Works in every chat. Access controlled by chat config "notes": "owner"|"all".
-        # Default (missing key) = "owner" → only Jan can save notes.
+        # Default (missing key) = "owner" → only the owner can save notes.
         _notes_mode = (chat_config or {}).get("notes", "owner")
         _can_note = is_owner or _notes_mode == "all"
         if _can_note:
@@ -2474,10 +2537,10 @@ def _process_chat_messages(
                 _note_mri = msg.get("sender_mri", "")
                 _append_private_note(chat_name, note_content, _note_sender)
                 api_client.reply_to_message(
-                    "Zapamiętane.",
+                    "Noted.",
                     msg["id"], _note_sender, text, conv_id, _note_mri,
                 )
-                print(f"[watch] -> notatka zapisana dla {chat_name!r} od {_note_sender!r}",
+                print(f"[watch] -> note saved for {chat_name!r} from {_note_sender!r}",
                       flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
@@ -2486,19 +2549,19 @@ def _process_chat_messages(
                 _note_mri = msg.get("sender_mri", "")
                 notes = _load_private_notes(chat_name)
                 if notes:
-                    reply_text = f"Notatki dla tego chatu:\n\n{notes[:1800]}"
+                    reply_text = f"Notes for this chat:\n\n{notes[:1800]}"
                     if len(notes) > 1800:
-                        reply_text += "\n\n[...skrócone]"
+                        reply_text += "\n\n[...shortened]"
                 else:
-                    reply_text = "Brak notatek dla tego chatu."
+                    reply_text = "No notes for this chat."
                 api_client.reply_to_message(
                     reply_text, msg["id"], _note_sender, text, conv_id, _note_mri,
                 )
-                print(f"[watch] -> pokaz notatki dla {chat_name!r}", flush=True)
+                print(f"[watch] -> show notes for {chat_name!r}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
 
-        # === BUILD APPROVAL — "Bob zatwierdź <id>" / "Bob odrzuć <id>" ===
+        # === BUILD APPROVAL — "Bob approve <id>" / "Bob reject <id>" (Polish "zatwierdź" / "odrzuć") ===
         # Owner-only, any chat (mirrors the todo-list gate below). Resolves a
         # pending heavy-generation request queued by _handle_build_approval_gate.
         if is_owner:
@@ -2509,24 +2572,24 @@ def _process_chat_messages(
                 if _bld:
                     _set_pending_build_status(m.group(1), "approved")
                     api_client.reply_to_message(
-                        f"Zatwierdzone #{m.group(1)} — dawaj znać {_bld['sender']} "
-                        f"w {_bld['chat_name']!r} co robisz z tym dalej.",
+                        f"Approved #{m.group(1)} — let {_bld['sender']} "
+                        f"in {_bld['chat_name']!r} know what happens next.",
                         msg["id"], _bld_sender, text, conv_id, _bld_mri,
                     )
                     try:
                         api_client.send_message(
-                            "Jan zatwierdził — biorę się za to 🙂",
+                            "The owner approved it — I'm on it 🙂",
                             conversation_id=_bld["conv_id"],
                         )
                     except Exception as exc:
-                        print(f"[watch] BLAD powiadomienia o zgodzie: {exc}",
+                        print(f"[watch] ERROR sending the approval notice: {exc}",
                               file=sys.stderr)
                 else:
                     api_client.reply_to_message(
-                        f"Nie znalazłem oczekującej prośby #{m.group(1)}.",
+                        f"I found no pending request #{m.group(1)}.",
                         msg["id"], _bld_sender, text, conv_id, _bld_mri,
                     )
-                print(f"[watch] -> build #{m.group(1)}: zatwierdzone", flush=True)
+                print(f"[watch] -> build #{m.group(1)}: approved", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if m := _BOB_BUILD_REJECT_RE.search(text):
@@ -2534,28 +2597,28 @@ def _process_chat_messages(
                 if _bld:
                     _set_pending_build_status(m.group(1), "rejected")
                     api_client.reply_to_message(
-                        f"Odrzucone #{m.group(1)}.",
+                        f"Rejected #{m.group(1)}.",
                         msg["id"], _bld_sender, text, conv_id, _bld_mri,
                     )
                     try:
                         api_client.send_message(
-                            "Jan nie dał zgody na to zadanie — nie będę tego robić 🙏",
+                            "The owner did not approve this task — I won't do it 🙏",
                             conversation_id=_bld["conv_id"],
                         )
                     except Exception as exc:
-                        print(f"[watch] BLAD powiadomienia o odrzuceniu: {exc}",
+                        print(f"[watch] ERROR sending the rejection notice: {exc}",
                               file=sys.stderr)
                 else:
                     api_client.reply_to_message(
-                        f"Nie znalazłem oczekującej prośby #{m.group(1)}.",
+                        f"I found no pending request #{m.group(1)}.",
                         msg["id"], _bld_sender, text, conv_id, _bld_mri,
                     )
-                print(f"[watch] -> build #{m.group(1)}: odrzucone", flush=True)
+                print(f"[watch] -> build #{m.group(1)}: rejected", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
 
         # === TODO/REMINDER LIST + DELETE — work on any chat for the owner ===
-        # On the control chat (Notatki) we show ALL todos across every chat;
+        # On the control chat (the notes chat) we show ALL todos across every chat;
         # on a specific chat we filter to todos belonging to it. The owner-gate
         # mirrors the prior behaviour — non-owners can't browse the todo list.
         if is_owner:
@@ -2570,7 +2633,7 @@ def _process_chat_messages(
                     msg["id"], _todo_sender, text, conv_id, _todo_mri,
                 )
                 print(
-                    f"[watch] -> pokaz zadania dla {chat_name!r} "
+                    f"[watch] -> show tasks for {chat_name!r} "
                     f"(show_all={bool(control_chat)})",
                     flush=True,
                 )
@@ -2582,23 +2645,23 @@ def _process_chat_messages(
                     show_all=bool(control_chat),
                 )
                 if _del_count:
-                    _ack = f"Usunieto {_del_count} zaległ{'e zadanie' if _del_count == 1 else 'ych zadan'}."
+                    _ack = f"Deleted {_del_count} overdue task{'' if _del_count == 1 else 's'}."
                 else:
-                    _ack = "Brak zaległych zadań do usunięcia."
+                    _ack = "No overdue tasks to delete."
                 api_client.reply_to_message(
                     _ack, msg["id"], _todo_sender, text, conv_id, _todo_mri,
                 )
-                print(f"[watch] -> zadania del overdue: count={_del_count} show_all={bool(control_chat)}", flush=True)
+                print(f"[watch] -> tasks del overdue: count={_del_count} show_all={bool(control_chat)}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if m := _NOTIF_DEL_RE.search(text):
                 _del_id = m.group(1).strip()
                 _del_ok = todos_store.delete_todo_by_id(_del_id)
-                _ack = "Usuniete." if _del_ok else f"Nie znalazlem zadania '{_del_id}'."
+                _ack = "Deleted." if _del_ok else f"I found no task '{_del_id}'."
                 api_client.reply_to_message(
                     _ack, msg["id"], _todo_sender, text, conv_id, _todo_mri,
                 )
-                print(f"[watch] -> zadanie del: id={_del_id!r} ok={_del_ok}", flush=True)
+                print(f"[watch] -> task del: id={_del_id!r} ok={_del_ok}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
 
@@ -2608,8 +2671,8 @@ def _process_chat_messages(
         if control_chat and is_owner:
             _ctrl_sender = msg.get("sender", OWNER_LABEL)
             _ctrl_mri = msg.get("sender_mri", "")
-            # --- Forward: confirmation branch (must be first to consume "tak") ---
-            if state.get("pending_forward") and text.strip().lower() == "tak":
+            # --- Forward: confirmation branch (must be first to consume "yes" / "tak") ---
+            if state.get("pending_forward") and text.strip().lower() in _FWD_CONFIRM_WORDS:
                 _pf = state["pending_forward"]
                 _fwd_text = state.get("last_forward_text") or ""
                 if _fwd_text:
@@ -2617,26 +2680,26 @@ def _process_chat_messages(
                     _fwd_html = f'<p>🧑‍💻<strong>[Bob]</strong>: {api_client.md_to_html(_fwd_text)}</p>'
                     api_client.send_html_message(_fwd_html, _pf["conv_id"])
                     api_client.reply_to_message(
-                        f"Wyslane na '{_fwd_name}'.",
+                        f"Sent to '{_fwd_name}'.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward confirmed to {_fwd_name!r}", flush=True)
                 else:
                     api_client.reply_to_message(
-                        "Nie mam jeszcze zadnej odpowiedzi do przeslania.",
+                        "I have no reply to forward yet.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                 state["pending_forward"] = None
                 _save_watch_state(args.watch_state, chat_name, state)
                 last_seq_id = max(last_seq_id, seq)
                 continue
-            # --- Forward: "Bob, wyslij na <target>" branch ---
+            # --- Forward: "Bob, forward to <target>" (Polish "Bob, wyślij na <target>") branch ---
             if m := _BOB_FORWARD_RE.search(text):
                 _fwd_target = m.group(1).strip()
                 _fwd_text = state.get("last_forward_text") or ""
                 if not _fwd_text:
                     api_client.reply_to_message(
-                        "Nie mam jeszcze zadnej odpowiedzi do przeslania.",
+                        "I have no reply to forward yet.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     last_seq_id = max(last_seq_id, seq)
@@ -2649,7 +2712,7 @@ def _process_chat_messages(
                     _save_watch_state(args.watch_state, chat_name, state)
                     _preview = _fwd_text[:150].rstrip() + ("…" if len(_fwd_text) > 150 else "")
                     api_client.reply_to_message(
-                        f"Wyślę na czat (link). Treść: \"{_preview}\". Odpisz 'tak' żeby wysłać.",
+                        f"I'll send it to the chat (link). Text: \"{_preview}\". Reply 'yes' to send.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward pending for link {_fwd_cid!r}", flush=True)
@@ -2663,7 +2726,7 @@ def _process_chat_messages(
                     _save_watch_state(args.watch_state, chat_name, state)
                     _preview = _fwd_text[:150].rstrip() + ("…" if len(_fwd_text) > 150 else "")
                     api_client.reply_to_message(
-                        f"Wyślę na '{_fwd_target}'. Treść: \"{_preview}\". Odpisz 'tak' żeby wysłać.",
+                        f"I'll send it to '{_fwd_target}'. Text: \"{_preview}\". Reply 'yes' to send.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward pending for {_fwd_target!r}", flush=True)
@@ -2677,22 +2740,22 @@ def _process_chat_messages(
                     _save_watch_state(args.watch_state, chat_name, state)
                     _preview = _fwd_text[:150].rstrip() + ("…" if len(_fwd_text) > 150 else "")
                     api_client.reply_to_message(
-                        f"Chodzi o '{_fwd_name}'? Treść: \"{_preview}\". Odpisz 'tak' żeby wysłać.",
+                        f"Do you mean '{_fwd_name}'? Text: \"{_preview}\". Reply 'yes' to send.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward pending for {_fwd_name!r}", flush=True)
                 elif len(_fwd_matches) > 1:
                     _candidate_lines = "\n".join(f"- {n}" for _, n in _fwd_matches)
                     api_client.reply_to_message(
-                        f"Znalazlem kilka chatow pasujacych do '{_fwd_target}':\n"
+                        f"I found several chats matching '{_fwd_target}':\n"
                         f"{_candidate_lines}\n"
-                        "Podaj dokladna nazwe.",
+                        "Give me the exact name.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward ambiguous: {len(_fwd_matches)} matches", flush=True)
                 else:
                     api_client.reply_to_message(
-                        f"Nie znalazlem chatu '{_fwd_target}'.",
+                        f"I found no chat '{_fwd_target}'.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     print(f"[watch] -> forward: no match for {_fwd_target!r}", flush=True)
@@ -2706,11 +2769,11 @@ def _process_chat_messages(
                 until_dt = datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=minutes)
                 _save_control({**_load_control(), "paused_until": until_dt.isoformat(), "disabled": False})
                 ack = (
-                    f"Ok, milknę na {minutes} min "
-                    f"(do {until_dt.strftime('%H:%M')} UTC)."
+                    f"Ok, going quiet for {minutes} min "
+                    f"(until {until_dt.strftime('%H:%M')} UTC)."
                 )
                 api_client.reply_to_message(ack, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri)
-                print(f"[watch] -> Bob pause {minutes}min (do {until_dt.isoformat()})", flush=True)
+                print(f"[watch] -> Bob pause {minutes}min (until {until_dt.isoformat()})", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             _apr = None
@@ -2719,20 +2782,20 @@ def _process_chat_messages(
             elif mb := _APR_DECIDE_BARE_RE.search(text):
                 from bob_panel import approvals as _approvals  # noqa: PLC0415
                 _waiting = _approvals.listing()["pending"]
-                # exactly one request waits -> "Bob zatwierdzam" is unambiguous
+                # exactly one request waits -> "Bob approve" is unambiguous
                 if len(_waiting) == 1 and str(_waiting[0].get("id", "")).startswith("apr-"):
                     _apr = (mb.group(1), _waiting[0]["id"], mb.group(2) or "")
             if _apr:
                 from bob_panel import approvals as _approvals  # noqa: PLC0415
                 _verb, _apr_id, _note = _apr
-                _approve = _verb.lower().startswith(("zatw", "akcept"))
+                _approve = _verb.lower().startswith(("approve", "zatw", "akcept"))
                 try:
                     _res = _approvals.decide(_apr_id, _approve, _note.strip(), by=f"{_approvals.OWNER} (chat)")
-                    _ack = _res.get("message") or ("Zapisane." if _res.get("ok") else "Nic do zatwierdzenia.")
+                    _ack = _res.get("message") or ("Saved." if _res.get("ok") else "Nothing to approve.")
                     if _res.get("ok"):
-                        _ack = f"{'✅ Zatwierdzone' if _approve else '❌ Odrzucone'}: {_apr_id}. {_ack}"
+                        _ack = f"{'✅ Approved' if _approve else '❌ Rejected'}: {_apr_id}. {_ack}"
                 except Exception as exc:  # noqa: BLE001
-                    _ack = f"Nie udało się zapisać decyzji {_apr_id}: {exc}"
+                    _ack = f"Could not save the decision {_apr_id}: {exc}"
                 api_client.reply_to_message(_ack, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri)
                 print(f"[watch] -> approval {_apr_id} {'approved' if _approve else 'rejected'}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
@@ -2741,7 +2804,7 @@ def _process_chat_messages(
                 target = m.group(1).strip()
                 disable_chat(target)
                 api_client.reply_to_message(
-                    f"Chat '{target}' wyłączony. Wiadomości będę ignorować.",
+                    f"Chat '{target}' disabled. I will ignore its messages.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> chat disabled: {target!r}", flush=True)
@@ -2751,7 +2814,7 @@ def _process_chat_messages(
                 target = m.group(1).strip()
                 enable_chat(target)
                 api_client.reply_to_message(
-                    f"Chat '{target}' włączony z powrotem.",
+                    f"Chat '{target}' enabled again.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> chat enabled: {target!r}", flush=True)
@@ -2760,16 +2823,16 @@ def _process_chat_messages(
             if _CHAT_STATUS_RE.search(text):
                 _live_cfg = _load_chat_config(_CHAT_CONFIG_PATH)
                 _disabled = set(_load_control().get("disabled_chats", []))
-                _lines = [f"Model: {args.model} | Caller globalny: {args.caller}\n"]
+                _lines = [f"Model: {args.model} | Global caller: {args.caller}\n"]
                 for _n, _cv in _live_cfg.items():
                     _en = "✅" if _n not in _disabled else "❌"
-                    _cal = _cv.get("caller") or "(globalny)"
+                    _cal = _cv.get("caller") or "(global)"
                     _eff = _mcp_for(_n, _live_cfg)
-                    _mcp = (f"role {'+'.join(_cv['role'])} -> " if _cv.get("role") else "") + (
-                        ", ".join(_eff) if _eff is not None else "wszystkie")
+                    _mcp = (f"roles {'+'.join(_cv['roles'])} -> " if _cv.get("roles") else "") + (
+                        ", ".join(_eff) if _eff is not None else "all")
                     _kl = _cv.get("knowledge")
                     _know = ", ".join(_kl) if isinstance(_kl, list) and _kl else (
-                        "brak" if isinstance(_kl, list) else "wszystkie"
+                        "none" if isinstance(_kl, list) else "all"
                     )
                     _ep = ", ".join(_cv["epithets"]) if _cv.get("epithets") else "-"
                     _lines.append(
@@ -2794,26 +2857,26 @@ def _process_chat_messages(
                     else:
                         _known = ", ".join(_live_cfg.keys())
                         api_client.reply_to_message(
-                            f"Nie znam chatu '{_tgt}'. Znane: {_known}.",
+                            f"I don't know the chat '{_tgt}'. Known: {_known}.",
                             msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                         )
                         last_seq_id = max(last_seq_id, seq)
                         continue
                 _dis = _tgt in _load_control().get("disabled_chats", [])
-                _cal = _cv.get("caller") or f"(globalny: {args.caller})"
+                _cal = _cv.get("caller") or f"(global: {args.caller})"
                 _eff_v = _mcp_for(_tgt, _live_cfg)
-                _mcp_v = (f"role {'+'.join(_cv['role'])} -> " if _cv.get("role") else "") + (
-                    ", ".join(_eff_v) if _eff_v is not None else "wszystkie domyślne")
+                _mcp_v = (f"roles {'+'.join(_cv['roles'])} -> " if _cv.get("roles") else "") + (
+                    ", ".join(_eff_v) if _eff_v is not None else "all defaults")
                 _kl_v = _cv.get("knowledge")
                 _know_v = ", ".join(_kl_v) if isinstance(_kl_v, list) and _kl_v else (
-                    "brak" if isinstance(_kl_v, list) else "wszystkie"
+                    "none" if isinstance(_kl_v, list) else "all"
                 )
                 _ep_v = ", ".join(_cv["epithets"]) if _cv.get("epithets") else "-"
-                _ctrl_chat = "tak" if _cv.get("control_chat") else "nie"
+                _ctrl_chat = "yes" if _cv.get("control_chat") else "no"
                 _cid = _cv.get("conv_id", "?")
                 api_client.reply_to_message(
                     f"📋 {_tgt}\n"
-                    f"Status: {'❌ wyłączony' if _dis else '✅ aktywny'}\n"
+                    f"Status: {'❌ disabled' if _dis else '✅ active'}\n"
                     f"Caller: {_cal}\n"
                     f"MCP: {_mcp_v}\n"
                     f"Knowledge: {_know_v}\n"
@@ -2831,15 +2894,15 @@ def _process_chat_messages(
                 if _ok:
                     _removed = ", ".join(owner_schedule._fmt_date(d) for d in _dates)
                     api_client.reply_to_message(
-                        f"Usunięto: {_removed}.",
+                        f"Deleted: {_removed}.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                 else:
                     api_client.reply_to_message(
-                        f"Nie rozpoznaję daty: '{_date_key}'. Użyj np.: dziś, jutro, 28.05, 28.05.2026",
+                        f"I don't recognise the date: '{_date_key}'. Use e.g.: today, tomorrow, 28.05, 28.05.2026",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
-                print(f"[watch] -> harmonogram clear: {_date_key!r}", flush=True)
+                print(f"[watch] -> schedule clear: {_date_key!r}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if _POKAZ_HARMONOGRAM_RE.search(text):
@@ -2847,7 +2910,7 @@ def _process_chat_messages(
                     owner_schedule.format_full_schedule(),
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
-                print("[watch] -> harmonogram show", flush=True)
+                print("[watch] -> schedule show", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if m := _HARMONOGRAM_SET_RE.search(text):
@@ -2860,29 +2923,30 @@ def _process_chat_messages(
                     else:
                         _d0 = owner_schedule._fmt_date(_dates[0])
                         _d1 = owner_schedule._fmt_date(_dates[-1])
-                        _label = f"{_d0} – {_d1} ({len(_dates)} dni)"
+                        _label = f"{_d0} – {_d1} ({len(_dates)} days)"
                     api_client.reply_to_message(
-                        f"Harmonogram: {_label} — {_date_text}",
+                        f"Schedule: {_label} — {_date_text}",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                 else:
                     api_client.reply_to_message(
-                        f"Nie rozpoznaję daty: '{_date_key}'. Użyj np.: dziś, jutro, 28.05, 28.05.2026, 28.05-30.05",
+                        f"I don't recognise the date: '{_date_key}'. "
+                        "Use e.g.: today, tomorrow, 28.05, 28.05.2026, 28.05-30.05",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
-                print(f"[watch] -> harmonogram set: {_date_key!r} = {_date_text!r}", flush=True)
+                print(f"[watch] -> schedule set: {_date_key!r} = {_date_text!r}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if _BROADCAST_STATUS_RE.search(text):
-                _CET = ZoneInfo("Europe/Warsaw")
+                _CET = ZoneInfo(_TZ_NAME)
                 _today = datetime.now(_CET).date()
                 _is_planning = _is_broadcast_planning_day(_today)
                 _is_workday = _today.weekday() < 5
                 _bc_sched = _load_broadcast_schedule()
                 _lines = [
-                    f"Broadcast scheduler — dzis: {_today.isoformat()}",
-                    f"Dzien roboczy: {'TAK' if _is_workday else 'nie'}"
-                    f" | Dzien planowania: {'TAK' if _is_planning else 'nie'}",
+                    f"Broadcast scheduler — today: {_today.isoformat()}",
+                    f"Workday: {'YES' if _is_workday else 'no'}"
+                    f" | Planning day: {'YES' if _is_planning else 'no'}",
                     "",
                 ]
                 if _bc_sched:
@@ -2902,14 +2966,14 @@ def _process_chat_messages(
                         _job_def = _jobs_by_id.get(_jid, {})
                         _display = _job_def.get("name") or _job_def.get("team") or _jid
                         _stype = _job_def.get("schedule_type", "planning")
-                        _stype_label = {"daily": "codziennie", "weekly": "co tydzień",
-                                        "always": "codziennie (też weekend)"}.get(_stype, "planning")
+                        _stype_label = {"daily": "daily", "weekly": "weekly",
+                                        "always": "daily (weekends too)"}.get(_stype, "planning")
                         _parts = []
                         for _phase_key, _phase_arg, _phase_label in [
-                            ("generate",      "generate",      "generuj"),
+                            ("generate",      "generate",      "generate"),
                             ("dry_run",       "dry-run",       "dry-run"),
-                            ("send",          "send",          "wyslij"),
-                            ("generate_send", "generate-send", "generuj+wyslij"),
+                            ("send",          "send",          "send"),
+                            ("generate_send", "generate-send", "generate+send"),
                         ]:
                             _t = _times.get(_phase_key, "-")
                             if _t == "-":
@@ -2918,7 +2982,7 @@ def _process_chat_messages(
                             _parts.append(f"{_phase_label} {_t} {'✅' if _fired else ''}")
                         _lines.append(f"{_display} ({_stype_label}):\n  " + " | ".join(_parts))
                 else:
-                    _lines.append("(brak harmonogramu)")
+                    _lines.append("(no schedule)")
                 api_client.reply_to_message(
                     "\n".join(_lines),
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
@@ -2933,13 +2997,15 @@ def _process_chat_messages(
                 _bc_parsed_time = _parse_reminder_time(_bc_time_str)
                 if _bc_parsed_time is None:
                     api_client.reply_to_message(
-                        f"Nieprawidlowy czas: '{_bc_time_str}'. Uzyj formatu HH:MM.",
+                        f"Invalid time: '{_bc_time_str}'. Use the HH:MM format.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     last_seq_id = max(last_seq_id, seq)
                     continue
                 # Map phase word to schedule key.
                 _bc_phase_map = {
+                    "send": "send",
+                    "generate": "generate",
                     "wyslij": "send",
                     "generuj": "generate",
                     "dry-run": "dry_run",
@@ -2960,7 +3026,7 @@ def _process_chat_messages(
                     pass
                 if _bc_job_id is None:
                     api_client.reply_to_message(
-                        f"Nie znam zespolu '{_bc_team}'. Sprawdz nazwy w jobs.json.",
+                        f"I don't know the team '{_bc_team}'. Check the names in jobs.json.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     last_seq_id = max(last_seq_id, seq)
@@ -2989,8 +3055,8 @@ def _process_chat_messages(
                 _dt = _parse_reminder_datetime(_date_tok, _time_tok)
                 if _dt is None:
                     api_client.reply_to_message(
-                        f"Nie rozpoznaje daty/godziny: '{_date_tok} {_time_tok}'. "
-                        "Uzyj np.: dzis 15:00 / jutro 9:30 / 28.05 14:00",
+                        f"I don't recognise the date/time: '{_date_tok} {_time_tok}'. "
+                        "Use e.g.: today 15:00 / tomorrow 9:30 / 28.05 14:00",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     last_seq_id = max(last_seq_id, seq)
@@ -3005,7 +3071,7 @@ def _process_chat_messages(
                 )
                 _preview = _notif_msg[:60] + ("..." if len(_notif_msg) > 60 else "")
                 api_client.reply_to_message(
-                    f"Ok, przypomnę {_dt.strftime('%d.%m %H:%M')} na '{_notif_chat}': "
+                    f"Ok, I'll remind {_dt.strftime('%d.%m %H:%M')} in '{_notif_chat}': "
                     f"{_preview} (id: {_notif_id})",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
@@ -3018,39 +3084,41 @@ def _process_chat_messages(
                 continue
             if _BOB_HELP_RE.search(text):
                 help_text = (
-                    "Dostępne komendy:\n"
+                    "Available commands:\n"
                     "\n"
-                    "⏸ Bob pause 30m / 2h — pauza\n"
-                    "🔴 Bob off / 🟢 Bob on — wyłącz/włącz\n"
-                    "🤖 Bob model haiku|sonnet|opus — zmień model\n"
-                    "👥 Bob caller owner|all|auto — zmień tryb wyzwalania\n"
+                    "⏸ Bob pause 30m / 2h — pause\n"
+                    "🔴 Bob off / 🟢 Bob on — disable/enable\n"
+                    "🤖 Bob model haiku|sonnet|opus — switch model\n"
+                    "👥 Bob caller owner|all|auto — switch trigger mode\n"
                     "\n"
-                    "💬 Bob wyłącz chat [nazwa] / Bob włącz chat [nazwa]\n"
-                    "📋 Bob chaty — pełny status wszystkich chatów\n"
-                    "📋 Bob config [nazwa] — szczegóły jednego chatu\n"
+                    "💬 Bob disable chat [name] / Bob enable chat [name]\n"
+                    "📋 Bob chats — full status of every chat\n"
+                    "📋 Bob config [name] — details of one chat\n"
                     "\n"
-                    "⚙️ Bob chat [nazwa] mcp jira,todos|all|none\n"
-                    "⚙️ Bob chat [nazwa] knowledge <obszar>|all|none\n"
-                    "⚙️ Bob chat [nazwa] caller owner|all|auto|clear\n"
-                    "⚙️ Bob chat [nazwa] epithets zwiezly,formalny|none\n"
+                    "⚙️ Bob chat [name] mcp jira,todos|all|none\n"
+                    "⚙️ Bob chat [name] knowledge <area>|all|none\n"
+                    "⚙️ Bob chat [name] caller owner|all|auto|clear\n"
+                    "⚙️ Bob chat [name] epithets concise,formal|none\n"
                     "\n"
-                    "📅 Bob, harmonogram dziś|jutro|28.05: [treść]\n"
-                    "📅 Bob, harmonogram 28.05-30.05: [treść] — zakres dat\n"
-                    "📅 Bob, pokaż harmonogram\n"
-                    "📅 Bob, harmonogram usuń 28.05\n"
+                    "📅 Bob, schedule today|tomorrow|28.05: [text]\n"
+                    "📅 Bob, schedule 28.05-30.05: [text] — date range\n"
+                    "📅 Bob, show schedule\n"
+                    "📅 Bob, schedule delete 28.05\n"
                     "\n"
-                    "🔔 Bob, przypomnij dziś|jutro|28.05 HH:MM na [nazwa chatu]: [treść]\n"
-                    "🔔 Bob, pokaż przypomnienia — na Notatkach pokazuje wszystkie zadania,\n"
-                    "                              na innych chatach tylko z tego chatu\n"
-                    "🔔 Bob, usuń przypomnienie [id] — kasuje całe zadanie\n"
-                    "🔔 Bob, usuń zaległe — kasuje wszystkie zaległe (z tego chatu;\n"
-                    "                        na Notatkach: wszystkie chaty)\n"
+                    "🔔 Bob, remind today|tomorrow|28.05 HH:MM in [chat name]: [text]\n"
+                    "🔔 Bob, show reminders — in the notes chat shows every task,\n"
+                    "                        in other chats only this chat's\n"
+                    "🔔 Bob, delete reminder [id] — deletes the whole task\n"
+                    "🔔 Bob, delete overdue — deletes every overdue task (this chat;\n"
+                    "                         in the notes chat: every chat)\n"
                     "\n"
-                    "🔥 grillujemy / 🛑 stop grill\n"
-                    "📝 Bob, zapamietaj: [treść]\n"
-                    "📋 Bob, pokaż notatki\n"
-                    "📤 Bob, wyslij na [chat/link] — wyslij ostatnia wiadomosc na inny chat\n"
-                    "❓ Bob ? — ta wiadomość"
+                    "🔥 grill me / 🛑 stop grill\n"
+                    "📝 Bob, remember: [text]\n"
+                    "📋 Bob, show notes\n"
+                    "📤 Bob, forward to [chat/link] — send the last reply to another chat\n"
+                    "❓ Bob ? — this message\n"
+                    "\n"
+                    "The Polish forms of these commands still work."
                 )
                 api_client.reply_to_message(
                     help_text, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
@@ -3062,7 +3130,7 @@ def _process_chat_messages(
                 _new_model = ai.MODEL_ALIASES.get(_raw_model, _raw_model)
                 args.model = _new_model
                 api_client.reply_to_message(
-                    f"Model zmieniony na: {_new_model}.",
+                    f"Model changed to: {_new_model}.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> Bob model: {_new_model}", flush=True)
@@ -3072,12 +3140,12 @@ def _process_chat_messages(
                 _new_caller = m.group(1).strip().lower()
                 args.caller = _new_caller
                 _label = {
-                    "owner": f"tylko {OWNER_LABEL} (via 'Bob')",
-                    "all": "wszyscy (via 'Bob')",
-                    "auto": "auto — każda wiadomość",
+                    "owner": f"only {OWNER_LABEL} (via 'Bob')",
+                    "all": "everyone (via 'Bob')",
+                    "auto": "auto — every message",
                 }.get(_new_caller, _new_caller)
                 api_client.reply_to_message(
-                    f"Caller globalny zmieniony na: {_new_caller} ({_label}).",
+                    f"Global caller changed to: {_new_caller} ({_label}).",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> Bob caller global: {_new_caller}", flush=True)
@@ -3090,20 +3158,20 @@ def _process_chat_messages(
                     card, poll_id = polls.build_poll_card(topic, _cfg)
                     msg_id = api_client.post_card(card, conv_id)
                     if msg_id:
-                        ack = f"Karta ankiety wysłana (poll_id={poll_id})."
+                        ack = f"Poll card sent (poll_id={poll_id})."
                     else:
                         _err = api_client._get_last_send_error()
                         _err_detail = f" ({_err['err_type']} status={_err['status']})" if _err else ""
-                        ack = f"Nie udało się wysłać karty ankiety dla topic={topic!r}{_err_detail}."
+                        ack = f"Could not send the poll card for topic={topic!r}{_err_detail}."
                 except ValueError as exc:
                     ack = (
-                        f"Nieznany temat ankiety: {topic!r}. "
-                        f"Dostepne: model, pause, onoff, "
+                        f"Unknown poll topic: {topic!r}. "
+                        f"Available: model, pause, onoff, "
                         f"chat <name> onoff|mcp|knowledge|caller|epithets. "
-                        f"Blad: {exc}"
+                        f"Error: {exc}"
                     )
                 api_client.reply_to_message(ack, msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri)
-                print(f"[watch] -> Bob ankieta topic={topic!r}", flush=True)
+                print(f"[watch] -> Bob poll topic={topic!r}", flush=True)
                 last_seq_id = max(last_seq_id, seq)
                 continue
             if m := _BOB_CHAT_MCP_RE.search(text):
@@ -3117,9 +3185,9 @@ def _process_chat_messages(
                 else:
                     _mcp_val = [v.strip() for v in _raw_val.split(",") if v.strip()]
                 _apply_chat_config_change(_tgt_chat, "mcp", _mcp_val, _cfg)
-                _ack_val = "wszystkie" if _mcp_val is None else (", ".join(_mcp_val) or "brak")
+                _ack_val = "all" if _mcp_val is None else (", ".join(_mcp_val) or "none")
                 api_client.reply_to_message(
-                    f"MCP dla '{_tgt_chat}' ustawione na: {_ack_val}.",
+                    f"MCP for '{_tgt_chat}' set to: {_ack_val}.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> chat mcp fallback: {_tgt_chat!r} = {_mcp_val!r}", flush=True)
@@ -3131,9 +3199,9 @@ def _process_chat_messages(
                 _cfg = chat_config if chat_config is not None else {}
                 _caller_val = None if _raw_val == "clear" else _raw_val
                 _apply_chat_config_change(_tgt_chat, "caller", _caller_val, _cfg)
-                _ack_val = "usuniety (fallback do globalnego)" if _caller_val is None else _caller_val
+                _ack_val = "removed (falls back to the global one)" if _caller_val is None else _caller_val
                 api_client.reply_to_message(
-                    f"Caller dla '{_tgt_chat}' ustawiony na: {_ack_val}.",
+                    f"Caller for '{_tgt_chat}' set to: {_ack_val}.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> chat caller fallback: {_tgt_chat!r} = {_caller_val!r}",
@@ -3149,10 +3217,10 @@ def _process_chat_messages(
                 else:
                     _ep_val = [v.strip() for v in _raw_val.split(",") if v.strip()] or None
                 _apply_chat_config_change(_tgt_chat, "epithets", _ep_val, _cfg)
-                _ack_val = "wyczyszczone (default prompt)" if _ep_val is None \
+                _ack_val = "cleared (default prompt)" if _ep_val is None \
                     else ", ".join(_ep_val)
                 api_client.reply_to_message(
-                    f"Epithets dla '{_tgt_chat}' ustawione na: {_ack_val}.",
+                    f"Epithets for '{_tgt_chat}' set to: {_ack_val}.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(f"[watch] -> chat epithets fallback: {_tgt_chat!r} = {_ep_val!r}",
@@ -3169,16 +3237,16 @@ def _process_chat_messages(
                     _inet_val = _raw_val
                 else:
                     api_client.reply_to_message(
-                        f"Nieprawidlowa wartosc internet: {_raw_val!r}."
-                        " Dozwolone: all, only_me, off.",
+                        f"Invalid internet value: {_raw_val!r}."
+                        " Allowed: all, only_me, off.",
                         msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                     )
                     last_seq_id = max(last_seq_id, seq)
                     continue
                 _apply_chat_config_change(_tgt_chat, "internet", _inet_val, _cfg)
-                _ack_val = "wylaczony (brak dostepu)" if _inet_val is None else _inet_val
+                _ack_val = "off (no access)" if _inet_val is None else _inet_val
                 api_client.reply_to_message(
-                    f"Internet dla '{_tgt_chat}' ustawiony na: {_ack_val}.",
+                    f"Internet for '{_tgt_chat}' set to: {_ack_val}.",
                     msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print(
@@ -3190,7 +3258,7 @@ def _process_chat_messages(
             if _BOB_OFF_RE.search(text):
                 _save_control({**_load_control(), "disabled": True, "paused_until": None})
                 api_client.reply_to_message(
-                    "Wyłączam się.", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
+                    "Switching off.", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print("[watch] -> Bob disabled", flush=True)
                 last_seq_id = max(last_seq_id, seq)
@@ -3198,7 +3266,7 @@ def _process_chat_messages(
             if _BOB_ON_RE.search(text):
                 _save_control({**_load_control(), "disabled": False, "paused_until": None})
                 api_client.reply_to_message(
-                    "Jestem z powrotem :)", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
+                    "I'm back :)", msg["id"], _ctrl_sender, text, conv_id, _ctrl_mri,
                 )
                 print("[watch] -> Bob enabled", flush=True)
                 last_seq_id = max(last_seq_id, seq)
@@ -3236,7 +3304,7 @@ def _process_chat_messages(
             if _GRILL_STOP_RE.search(text):
                 state["grill_active"] = False
                 state["grill_start_seq"] = 0
-                print("[watch] -> grill stop — dezaktywuje grill mode", flush=True)
+                print("[watch] -> grill stop — deactivating grill mode", flush=True)
                 reply = ai.freeform_reply(text, model=chat_model,
                                           allowed_mcp=allowed_mcp, epithets=epithets,
                                           role_knowledge=_role_knowledge_for(chat_name, chat_config),
@@ -3265,17 +3333,17 @@ def _process_chat_messages(
                     effort=chat_effort or ai._GRILL_EFFORT,
                 )
                 elapsed = _time_mod.time() - t0
-                print(f"[watch] -> {len(reply)}b odp w {elapsed:.1f}s", flush=True)
-                if reply and _GRILL_END_MARKER in reply:
+                print(f"[watch] -> {len(reply)}b reply in {elapsed:.1f}s", flush=True)
+                if reply and any(_mk in reply for _mk in _GRILL_END_MARKERS):
                     state["grill_active"] = False
                     state["grill_start_seq"] = 0
-                    print("[watch] -> grill zakonczony (marker w odpowiedzi)", flush=True)
+                    print("[watch] -> grill finished (marker in the reply)", flush=True)
 
             reply = _extract_and_send_gifs(reply, conv_id, persona=persona)
             reply = _extract_and_send_files(reply, conv_id, chat_name)
 
             if not reply:
-                print("[watch] -> pusta odpowiedz grill, pomijam", flush=True)
+                print("[watch] -> empty grill reply, skipping", flush=True)
                 _append_log(log_path, {
                     "ts": _ts(), "chat_name": chat_name,
                     "incoming_text": text, "reply": "", "action": "grill_skip_empty",
@@ -3288,7 +3356,7 @@ def _process_chat_messages(
                 persona=persona,
             )
             state["last_reply_ts"] = _time_mod.time()
-            print(f"[watch] -> {'wyslano (grill)' if sent else 'BLAD wysylania (grill)'}",
+            print(f"[watch] -> {'sent (grill)' if sent else 'ERROR sending (grill)'}",
                   flush=True)
             _grill_send_log: dict = {
                 "ts": _ts(), "chat_name": chat_name, "incoming_text": text,
@@ -3320,7 +3388,7 @@ def _process_chat_messages(
         bob_match = trigger_re.search(_check_text)
         # Require the Reply schema to distinguish genuine quote-replies to Bob
         # from forwarded messages that also contain a blockquote + owner MRI.
-        # Also require an agent label in the quoted content so quoting a plain Jan message
+        # Also require an agent label in the quoted content so quoting a plain owner message
         # (same MRI) doesn't falsely trigger Bob.
         is_quote_of_bob = (
             not is_owner
@@ -3349,7 +3417,7 @@ def _process_chat_messages(
                 continue
         else:  # "all"
             # Owner must always call Bob explicitly — skip continuation for owner so that
-            # Jan's messages to other people don't re-trigger Bob within the window.
+            # the owner's messages to other people don't re-trigger Bob within the window.
             if is_owner:
                 triggered = bob_match
             else:
@@ -3362,7 +3430,7 @@ def _process_chat_messages(
         since_last = _time_mod.time() - state.get("last_reply_ts", 0.0)
         if since_last < rate_limit_s:
             wait = rate_limit_s - since_last
-            print(f"[watch] tick={tick} rate-limit: czekam {wait:.1f}s", flush=True)
+            print(f"[watch] tick={tick} rate-limit: waiting {wait:.1f}s", flush=True)
             _time_mod.sleep(wait)
 
         sender = OWNER_LABEL if is_owner else msg.get("sender", "?")
@@ -3381,15 +3449,15 @@ def _process_chat_messages(
         # --- Conversation history ---
         chat_history = _CHAT_HISTORY.setdefault(chat_name, [])
         history_chars = sum(len(m.get("text", "")) for m in chat_history)
-        print(f"[watch] -> historia: {len(chat_history)} wpisów {history_chars}ch", flush=True)
+        print(f"[watch] -> history: {len(chat_history)} entries {history_chars}ch", flush=True)
         if history_chars > _HISTORY_COMPACT_CHARS and len(chat_history) >= _HISTORY_KEEP_LAST * 2 + 1:
             keep_n = _HISTORY_KEEP_LAST * 2
             old_entries, keep_entries = chat_history[:-keep_n], chat_history[-keep_n:]
-            print(f"[watch] -> kompaktuje historię ({len(old_entries)} wpisów, {history_chars} znaków)",
+            print(f"[watch] -> compacting history ({len(old_entries)} entries, {history_chars} chars)",
                   flush=True)
             summary = ai.compact_history(old_entries)
             if summary:
-                _CHAT_HISTORY[chat_name] = [{"sender": "STRESZCZENIE", "text": summary}] + keep_entries
+                _CHAT_HISTORY[chat_name] = [{"sender": "SUMMARY", "kind": "summary", "text": summary}] + keep_entries
                 chat_history = _CHAT_HISTORY[chat_name]
                 _rewrite_history_on_disk(chat_name, chat_history)
 
@@ -3533,7 +3601,7 @@ def _process_chat_messages(
         if _GRILL_START_RE.search(raw_text):
             state["grill_active"] = True
             state["grill_start_seq"] = seq
-            print("[watch] -> grill mode aktywowany", flush=True)
+            print("[watch] -> grill mode activated", flush=True)
             print(f"[watch] -> grill_reply (model={chat_model})...", flush=True)
             t0 = _time_mod.time()
             grill_conv = [{"sender": sender, "text": text}]
@@ -3545,7 +3613,7 @@ def _process_chat_messages(
                 effort=chat_effort or ai._GRILL_EFFORT,
             )
         elif _BOB_BUILD_VERB_RE.search(raw_text):
-            print(f"[watch] -> build-gate: heavy-gen request, pytam {OWNER_LABEL} o zgode",
+            print(f"[watch] -> build-gate: heavy-gen request, asking {OWNER_LABEL} for approval",
                   flush=True)
             t0 = _time_mod.time()
             reply = _handle_build_approval_gate(chat_name, conv_id, sender, text)
@@ -3557,7 +3625,7 @@ def _process_chat_messages(
             if _files_note:
                 _private_notes = ((_private_notes or "") + "\n\n" + _files_note).strip()
             if persona and _image_paths:
-                _attach_note = "Załączniki z wiadomości:\n" + "\n".join(
+                _attach_note = "Attachments of the message:\n" + "\n".join(
                     f"  {p}" for p in _image_paths
                 )
                 _private_notes = ((_private_notes or "") + "\n\n" + _attach_note).strip()
@@ -3592,10 +3660,10 @@ def _process_chat_messages(
                     # MCP cold-start guard: in BOB_MCP_TRANSPORT=http mode, claude CLI
                     # initialises HTTP MCP connections asynchronously and may finish
                     # generating before tool sessions are ready. Sonnet then writes
-                    # something like "serwery MCP sie nie polaczyli". One retry — the
+                    # something like "the MCP servers are not connected". One retry — the
                     # second call is warm and gets the tools. Cheap, deterministic.
                     if _looks_like_mcp_cold_start(reply):
-                        print("[watch] -> wykryto cold-start MCP w odpowiedzi, retry...",
+                        print("[watch] -> MCP cold start detected in the reply, retrying...",
                               flush=True)
                         reply = ai.freeform_reply(
                             text, model=chat_model, timeout_s=_CHAT_REPLY_TIMEOUT_S,
@@ -3624,7 +3692,7 @@ def _process_chat_messages(
 
         try:  # an error anywhere between the reply and its send must not leave the "still working" note behind
             elapsed = _time_mod.time() - t0
-            print(f"[watch] -> {len(reply)}b odp w {elapsed:.1f}s", flush=True)
+            print(f"[watch] -> {len(reply)}b reply in {elapsed:.1f}s", flush=True)
 
             reply, _gif_plan = _plan_gifs(reply, persona=persona)
             reply = _extract_and_send_files(reply, conv_id, chat_name)
@@ -3635,7 +3703,7 @@ def _process_chat_messages(
 
             if _is_silent_reply(reply):
                 _skip_reason = "silent_sentinel" if reply.strip() else "empty"
-                print(f"[watch] -> {_skip_reason}: pomijam wysylanie ({reply.strip()[:40]!r})",
+                print(f"[watch] -> {_skip_reason}: not sending ({reply.strip()[:40]!r})",
                       flush=True)
                 _append_log(log_path, {
                     "ts": _ts(),
@@ -3677,8 +3745,8 @@ def _process_chat_messages(
                 _wait = _hold_wait_s(_hold_s, _msg_ts, _time_mod.time(), _invited)
                 if _wait > 0:
                     print(
-                        f"[watch] -> hold {_wait:.0f}s: czekam, czy ktos odpisze "
-                        "(odpowiedz nieproszona)",
+                        f"[watch] -> hold {_wait:.0f}s: waiting to see if someone answers "
+                        "(uninvited reply)",
                         flush=True,
                     )
                     _time_mod.sleep(_wait)
@@ -3688,7 +3756,7 @@ def _process_chat_messages(
             )
             if _skip:
                 print(
-                    f"[watch] -> juz odpowiedziane: pomijam wysylanie ({_skip_reason[:60]!r})",
+                    f"[watch] -> already answered: not sending ({_skip_reason[:60]!r})",
                     flush=True,
                 )
                 _append_log(log_path, {
@@ -3726,8 +3794,8 @@ def _process_chat_messages(
             raise
         if sent:
             _execute_gif_plan(_gif_plan, conv_id, persona=persona)
-        _send_mode = "cytat REST"
-        print(f"[watch] -> {'wyslano (' + _send_mode + ')' if sent else 'BLAD wysylania'}",
+        _send_mode = "REST quote"
+        print(f"[watch] -> {'sent (' + _send_mode + ')' if sent else 'ERROR sending'}",
               flush=True)
         _watch_send_log: dict = {
             "ts": _ts(),
@@ -3778,6 +3846,11 @@ def _process_chat_messages(
     _save_watch_state(state_path, chat_name, state)
 
 
+def _notes_chat_names() -> set[str]:
+    """Names the owner's notes chat goes by: the default "Notes", "Notatki" from older builds, and BOB_NOTES_CHAT."""
+    return {"notes", "notatki", (os.environ.get("BOB_NOTES_CHAT") or "notes").strip().lower()}
+
+
 def _fire_due_notifications(
     chat_convs: list,
     args: argparse.Namespace,
@@ -3811,20 +3884,27 @@ def _fire_due_notifications(
         msg = entry.get("title", "")
         at_str = entry.get("notify_at", "")
         conv_id = conv_map.get(chat)
-        if not conv_id:
+        if not conv_id and chat.lower() in _notes_chat_names():
+            # The owner's notes chat by its default name ("Notes", or "Notatki" from older builds): never look it up
+            # by a substring of chat topics, where "Release notes" would match - use the control chat.
+            conv_id = control_conv_id or next(
+                (conv_map[cn] for cn in conv_map if cn.lower() in _notes_chat_names()), None)
+            if conv_id:
+                chat = "control chat"
+        if not conv_id and chat.lower() not in _notes_chat_names():
             conv_id = api_client.find_conversation_id(chat)
         if not conv_id and control_conv_id:
             print(
-                f"[watch] NOTIF WARN: brak conv_id dla chatu '{chat}' "
-                f"(id={notif_id}) — wysyłam na Notatki jako fallback.",
+                f"[watch] NOTIF WARN: no conv_id for chat '{chat}' "
+                f"(id={notif_id}) — sending to the control chat as a fallback.",
                 file=sys.stderr, flush=True,
             )
             conv_id = control_conv_id
-            chat = "Notatki (fallback)"
+            chat = "control chat (fallback)"
         if not conv_id:
             print(
-                f"[watch] NOTIF WARN: nie znaleziono conv_id dla chatu '{chat}' "
-                f"(id={notif_id}, at={at_str}) — pomijam.",
+                f"[watch] NOTIF WARN: conv_id not found for chat '{chat}' "
+                f"(id={notif_id}, at={at_str}) — skipping.",
                 file=sys.stderr, flush=True,
             )
             _append_log(log_path, {
@@ -3840,15 +3920,16 @@ def _fire_due_notifications(
         # Atomic claim — stamps notified_at before send to prevent duplicate fires.
         todos_store.mark_notified(notif_id)
         notes = entry.get("notes") or ""
-        notes_section = f"\nNotatki do tasku: {notes}" if notes else ""
+        notes_section = f"\nTask notes: {notes}" if notes else ""
         instruction = (
-            f"[OSOBISTE PRZYPOMNIENIE DLA {OWNER_LABEL.upper()} — wyślij teraz na czat '{chat}']\n"
-            f"Treść przypomnienia: {msg}{notes_section}\n\n"
-            f"To OSOBISTE przypomnienie dla {OWNER_LABEL} — NIE wiadomość do zespołu. "
-            "Napisz krótkie przypomnienie w pierwszej osobie (np. 'Hej, przypominam: ...'). "
-            "Pisz bezpośrednio, bez wstępów, bez podpisu, bez słowa 'Bob'. "
-            "Nie generuj pytań do zespołu ani wiadomości w stylu 'Hej, mam pytanie do zespołu'. "
-            "Jeśli instrukcja mówi o GIF-ie, dodaj tag [GIF: zapytanie]."
+            f"[PERSONAL REMINDER FOR {OWNER_LABEL.upper()} — send it now to the chat '{chat}']\n"
+            f"Reminder text: {msg}{notes_section}\n\n"
+            f"This is a PERSONAL reminder for {OWNER_LABEL} — NOT a message to the team. "
+            "Write a short reminder in the first person (e.g. 'Hey, a reminder: ...'). "
+            "Be direct: no preamble, no signature, no word 'Bob'. "
+            "Do not generate questions to the team or messages like 'Hey, I have a question for the team'. "
+            "Write it in the same language as the reminder text. "
+            "If the instruction mentions a GIF, add the tag [GIF: query]."
         )
         generated = ai.freeform_reply(instruction, model=args.model, allowed_mcp=None)
         gif_match = _GIF_TAG_RE.search(generated) if generated else None
@@ -3902,12 +3983,12 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
         import subprocess as _sp
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from mcp_admin.ports import MCP_PORTS as _MCP_PORTS  # noqa: PLC0415
-        print("[watch] BOB_MCP_TRANSPORT=http — sprawdzam serwery MCP...", flush=True)
+        print("[watch] BOB_MCP_TRANSPORT=http — checking the MCP servers...", flush=True)
         _hc = Path(__file__).resolve().parents[1] / "mcp_admin" / "healthcheck.py"
         _rc = _sp.run([sys.executable, str(_hc), "--timeout", "30", "--quiet"]).returncode
         if _rc != 0:
-            print("[watch] BLAD: niektore serwery MCP nie odpowiadaja. "
-                  "Uruchom scripts/mcp_admin/install_launchd.sh albo unset BOB_MCP_TRANSPORT.",
+            print("[watch] ERROR: some MCP servers are not responding. "
+                  "Run scripts/mcp_admin/install_launchd.sh or unset BOB_MCP_TRANSPORT.",
                   file=sys.stderr)
             return
         _mcp_status = []
@@ -3933,56 +4014,58 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
     for chat_name in watch_chats:
         conv_id = _conv_id_override_for(chat_name, chat_config) or _resolve_conv_id(chat_name)
         if not conv_id:
-            print(f"[watch] BLAD: nie znaleziono konwersacji {chat_name!r}. "
-                  f"Dodaj 'conv_id' w chat-config.json jako fallback.", file=sys.stderr)
+            print(f"[watch] ERROR: conversation {chat_name!r} not found. "
+                  f"Add 'conv_id' in chat-config.json as a fallback.", file=sys.stderr)
         else:
             src = "config" if _conv_id_override_for(chat_name, chat_config) else "autodetect"
             if _ingest_only_for(chat_name, chat_config):
                 ingest_convs.append((chat_name, conv_id))
-                print(f"[watch] {chat_name!r}: ingest-only (bez odpowiedzi)", flush=True)
+                print(f"[watch] {chat_name!r}: ingest-only (no replies)", flush=True)
                 continue
             chat_convs.append((chat_name, conv_id))
-            print(f"[watch] Aktywuje chat: {chat_name!r} ({src}, conv_id={conv_id})", flush=True)
+            print(f"[watch] Activating chat: {chat_name!r} ({src}, conv_id={conv_id})", flush=True)
     _refresh_receive_only(chat_config, {c for _, c in ingest_convs})
 
     if not chat_convs:
-        print("[watch] Brak aktywnych konwersacji — koniec.", file=sys.stderr)
+        print("[watch] No active conversations — exiting.", file=sys.stderr)
         return
 
     # Navigate to a chat to trigger the Bearer token interceptor — only if not already captured.
     # Token is usually set during initial Teams load (page.goto), so this is a fallback.
-    # We navigate to Notatki (always accessible, owner's own notes-to-self) rather than
+    # We navigate to the notes chat (always accessible, owner's own notes-to-self) rather than
     # the watched chat by name, because watched chats may have different display names
-    # in the Teams DOM.
-    if not api_client._auth_token:
-        print("[watch] Token nie przechwycony — nawiguje do Notatki zeby go uzyskac...",
+    # in the Teams DOM. "Notatki" is the Polish name, tried second.
+    for _notes_name in ("Notes", "Notatki"):
+        if api_client._auth_token:
+            break
+        print(f"[watch] Token not captured — navigating to {_notes_name!r} to get it...",
               flush=True)
-        scraper.switch_to_chat_by_name(page, "Notatki")
+        scraper.switch_to_chat_by_name(page, _notes_name)
         for _ in range(10):
             if api_client._auth_token:
                 break
             page.wait_for_timeout(500)  # lets the token interceptor run (time.sleep would not)
     if not api_client._auth_token:
-        print("[watch] OSTRZEZENIE: Bearer token nie zostal przechwycony — "
-              "API moze zwrocic 401. Sprobuj --force-login.", file=sys.stderr, flush=True)
+        print("[watch] WARNING: Bearer token was not captured — "
+              "the API may return 401. Try --force-login.", file=sys.stderr, flush=True)
     else:
         print("[watch] Bearer token OK.", flush=True)
 
     caller_label = {
-        "owner": f"tylko {OWNER_LABEL} (via 'Bob')",
-        "all":   "wszyscy (via 'Bob')",
-        "auto":  "auto — odpowiedz na kazda wiadomosc",
+        "owner": f"only {OWNER_LABEL} (via 'Bob')",
+        "all":   "everyone (via 'Bob')",
+        "auto":  "auto — reply to every message",
     }.get(args.caller, args.caller)
     chats_label = ", ".join(f"'{n}'" for n, _ in chat_convs)
-    print(f"[watch] OK. Sledzenie: {chats_label}", flush=True)
-    print(f"[watch] Polling co {args.poll}s. Wywolujacy: {caller_label}.", flush=True)
-    print(f"[watch] Rate-limit: min {args.rate_limit}s miedzy odpowiedziami.", flush=True)
-    print("[watch] Ctrl-C aby zakonczyc.", flush=True)
+    print(f"[watch] OK. Watching: {chats_label}", flush=True)
+    print(f"[watch] Polling every {args.poll}s. Callers: {caller_label}.", flush=True)
+    print(f"[watch] Rate-limit: min {args.rate_limit}s between replies.", flush=True)
+    print("[watch] Ctrl-C to stop.", flush=True)
 
     for name, _ in chat_convs:
         cl = _caller_for(name, chat_config, args)
         ep = _epithets_for(name, chat_config)
-        ep_label = ", ".join(ep) if ep else "brak"
+        ep_label = ", ".join(ep) if ep else "none"
         print(f"[watch] {name!r}: caller = {cl}, epithets = {ep_label}", flush=True)
 
     # Per-chat state loaded once; updated in-place by _process_chat_messages.
@@ -3997,18 +4080,18 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
     for name in chat_states:
         if chat_states[name].get("last_composetime", "") < _startup_ts:
             chat_states[name]["last_composetime"] = _startup_ts
-            print(f"[watch] {name!r}: pomijam stare wiadomosci (composetime → teraz)", flush=True)
+            print(f"[watch] {name!r}: skipping old messages (composetime → now)", flush=True)
 
     # Restore conversation history from disk so Bob remembers across restarts.
     for name, _ in chat_convs:
         loaded = _load_history_from_disk(name)
         if loaded:
             _CHAT_HISTORY[name] = loaded
-            print(f"[watch] Historia {name!r}: {len(loaded)} wpisów z dysku.", flush=True)
+            print(f"[watch] History {name!r}: {len(loaded)} entries from disk.", flush=True)
 
     # Start per-user memory sweeper daemon thread.
     threading.Thread(target=_user_memory_sweeper, daemon=True).start()
-    print("[watch] user_memory sweeper uruchomiony.", flush=True)
+    print("[watch] user_memory sweeper started.", flush=True)
 
     # Per-chat locks: skip this tick if previous Claude call for a chat is still in flight.
     _chat_processing: dict[str, threading.Lock] = {}
@@ -4019,7 +4102,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
         max_workers=_max_workers,
         thread_name_prefix="bob-chat",
     )
-    print(f"[watch] Thread pool: max {_max_workers} workerow rownolegla.", flush=True)
+    print(f"[watch] Thread pool: max {_max_workers} parallel workers.", flush=True)
 
     # Anchored to the initial navigation timestamp so _refresh_token_via_browser's
     # "did a new token arrive?" check works correctly on the first refresh cycle.
@@ -4041,7 +4124,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
 
         Success is measured on api_client._auth_token_gen — the token VALUE —
         not on _auth_token_ts, which is bumped even when Teams hands back the
-        identical token. Reporting "odswiezony OK" for an unchanged token is
+        identical token. Reporting "refreshed OK" for an unchanged token is
         what once made a 401 loop invisible for an hour.
         """
         nonlocal _last_token_nav_ts
@@ -4052,16 +4135,16 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             # depend on the away chat being visible/findable in the rail by name.
             clicked = scraper.click_any_other_chat(page)
             if clicked:
-                # No switch back: the chat-to-self is called "Notatki" only in
-                # chat-config.json — Teams renders it as "<owner display name> (Ty)", so
-                # switch_to_chat_by_name(page, "Notatki") could never match and just
+                # No switch back: the chat-to-self has its notes name only in
+                # chat-config.json — Teams renders it as "<owner display name> (You)", so
+                # switch_to_chat_by_name(page, "Notes") could never match and just
                 # burned its full timeout on every single refresh. Nothing needs the
                 # rail to be left on a particular chat; the click above already
                 # produced the chatsvc request we are here for.
-                print(f"[watch] Odswiezam Bearer token — kliknieto {clicked!r}...",
+                print(f"[watch] Refreshing Bearer token — clicked {clicked!r}...",
                       flush=True)
             else:
-                print("[watch] Odswiezam Bearer token — brak innych chatow w railu, robie reload...",
+                print("[watch] Refreshing Bearer token — no other chats in the rail, reloading...",
                       flush=True)
 
             # Fallback if click didn't fire a real navigation or rail was empty.
@@ -4075,19 +4158,19 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                 page.wait_for_timeout(500)
             _last_token_nav_ts = _time_mod.time()
             if api_client._auth_token_gen > gen_before:
-                print(f"[watch] Bearer token odswiezony OK "
+                print(f"[watch] Bearer token refreshed OK "
                       f"(sha={api_client.token_fingerprint(api_client._auth_token)}).",
                       flush=True)
             else:
                 # Teams re-issued the same token. Refreshing again cannot help, so say
                 # so plainly instead of claiming success -- if 401s continue, the cause
                 # is not the token.
-                print(f"[watch] OSTRZEZENIE: token BEZ ZMIANY po nawigacji "
+                print(f"[watch] WARNING: token UNCHANGED after navigation "
                       f"(sha={api_client.token_fingerprint(api_client._auth_token)}) — "
-                      f"jesli 401 wracaja, przyczyna nie jest token.",
+                      f"if 401s keep coming, the token is not the cause.",
                       flush=True)
         except Exception as exc:
-            print(f"[watch] BLAD odswiezania tokenu: {exc}", file=sys.stderr, flush=True)
+            print(f"[watch] ERROR refreshing the token: {exc}", file=sys.stderr, flush=True)
 
     def _relaunch_teams_page() -> bool:
         """Open Teams in a FRESH browser context from session.json (what a manual Bob restart does).
@@ -4116,7 +4199,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                     break
                 new_page.wait_for_timeout(500)
         except Exception as exc:
-            print(f"[watch] BLAD ponownego otwarcia Teams: {exc}", file=sys.stderr, flush=True)
+            print(f"[watch] ERROR reopening Teams: {exc}", file=sys.stderr, flush=True)
         # Swap only to a page that actually loaded Teams; a token that arrived meanwhile through the
         # old page's listener is kept either way.
         if loaded and new_page is not None and api_client._auth_token_gen > gen_before:
@@ -4126,14 +4209,14 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                 old_ctx.close()
             except Exception:
                 pass
-            print("[watch] Teams otwarty od nowa (session.json) — nowy token OK.", flush=True)
+            print("[watch] Teams reopened (session.json) — new token OK.", flush=True)
             return True
         if ctx is not None:
             try:
                 ctx.close()
             except Exception:
                 pass
-        print("[watch] Teams otwarty od nowa, ale token dalej bez zmiany.", file=sys.stderr, flush=True)
+        print("[watch] Teams reopened, but the token is still unchanged.", file=sys.stderr, flush=True)
         return False
 
     def _mac_alert(text: str) -> None:
@@ -4142,7 +4225,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             subprocess.run(["osascript", "-e", f'display notification {json.dumps(text)} with title "Bob"'],
                            timeout=10, check=False)
         except Exception as exc:
-            print(f"[watch] powiadomienie macOS nieudane: {exc}", file=sys.stderr, flush=True)
+            print(f"[watch] macOS notification failed: {exc}", file=sys.stderr, flush=True)
 
     def _token_event(event: str, **extra) -> None:
         _append_log(log_path, {"ts": _ts(), "event": event, **extra})
@@ -4157,13 +4240,13 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                 action = _token_health.after_refresh(True, _time_mod.time())
         elif action == "alert":
             _token_event("teams_token_stuck", minutes=minutes)
-            _mac_alert(f"Token Teams nie odnawia się od {minutes} min — Bob nie czyta czatów. Zaloguj się "
-                       f"w oknie przeglądarki albo zrestartuj Boba.")
+            _mac_alert(f"The Teams token has not renewed for {minutes} min — Bob is not reading chats. Sign in "
+                       f"in the browser window or restart Bob.")
         if action == "recovered":
             _token_event("teams_token_recovered", minutes=minutes)
             if minutes >= 2:
-                api_client.send_message(f"Bob: przez ~{minutes} min nie miałem dostępu do Teams (token się nie "
-                                        f"odnawiał). Odzyskałem go sam — wiadomości z tego czasu czytam teraz.",
+                api_client.send_message(f"Bob: for ~{minutes} min I had no access to Teams (the token did not "
+                                        f"renew). I got it back on my own — reading the messages from that time now.",
                                         api_client.NOTES_CONV_ID)
 
     _token_health = token_health.TokenHealth()
@@ -4206,10 +4289,10 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                                               since_last_refresh=since_last_refresh, base_cooldown=_refresh_cooldown)
             token_expired, needs_refresh_401, expiring = _plan["expired"], _plan["needs_401"], _plan["expiring"]
             if needs_refresh_401 or expiring or token_age >= _TOKEN_REFRESH_INTERVAL_S:
-                reason = ("401 wykryty" if needs_refresh_401 else "token wygasa za <10 min" if expiring
-                          else f"token ma {token_age/60:.0f} min")
+                reason = ("401 detected" if needs_refresh_401 else "token expires in <10 min" if expiring
+                          else f"token is {token_age/60:.0f} min old")
                 if needs_refresh_401 and _noop_refresh_streak:
-                    reason += f", {_noop_refresh_streak}x bez zmiany tokenu"
+                    reason += f", {_noop_refresh_streak}x without a token change"
                 print(f"[watch] Token refresh ({reason})", flush=True)
                 # A proactive refresh that hands back the same, still valid token is normal (Teams caches
                 # it until its renewal window) and must not build up the 401 back-off below.
@@ -4228,7 +4311,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                     if api_client._auth_token_gen > _gen_before_refresh:
                         _noop_refresh_streak = 0  # the relaunch brought a new token
 
-            # Post/edit stats to Notatki every 10 min — run in executor so the
+            # Post/edit stats to the notes chat every 10 min — run in executor so the
             # subprocess call does not block the main poll loop for up to 30 s.
             if _time_mod.time() - _last_stats_ts >= _STATS_POST_INTERVAL_S:
                 _last_stats_ts = _time_mod.time()
@@ -4240,7 +4323,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                             timeout=30,
                         )
                     except Exception as exc:
-                        print(f"[watch] stats post blad: {exc}", file=sys.stderr, flush=True)
+                        print(f"[watch] stats post error: {exc}", file=sys.stderr, flush=True)
                 _executor.submit(_stats_task)
 
             # Fire due notifications every ~60 s — run in executor so the AI call
@@ -4254,18 +4337,18 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                     try:
                         _fire_due_notifications(_convs, args, _lp, chat_config=_cfg)
                     except Exception as exc:
-                        print(f"[watch] notif tick blad: {exc}", file=sys.stderr, flush=True)
+                        print(f"[watch] notif tick error: {exc}", file=sys.stderr, flush=True)
                 _executor.submit(_notif_task)
 
-            # Check SharePoint urlopy XLSX every 60 min — subprocess isolates Playwright
+            # Check the SharePoint leave XLSX every 60 min — subprocess isolates Playwright
             # event-loop from the synchronous watch loop (same pattern as stats task).
             # Poller only re-downloads/converts/pushes when SharePoint's
             # TimeLastModified actually advanced (see sharepoint_meta.py).
-            if (not org_config.URLOPY_SHAREPOINT_URL
+            if (not org_config.LEAVE_SHAREPOINT_URL
                     and _time_mod.time() - _last_sharepoint_ts >= _SHAREPOINT_POLL_INTERVAL_S):
                 # Not configured: say so once, then never spawn the poller.
                 _last_sharepoint_ts = float("inf")
-                print("[watch] URLOPY_SHAREPOINT_URL not configured — urlopy poll disabled", flush=True)
+                print("[watch] LEAVE_SHAREPOINT_URL not configured — leave poll disabled", flush=True)
             if _time_mod.time() - _last_sharepoint_ts >= _SHAREPOINT_POLL_INTERVAL_S:
                 _last_sharepoint_ts = _time_mod.time()
                 _timer_mark("sharepoint", _last_sharepoint_ts)
@@ -4286,32 +4369,32 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                             _append_log(_lp, {
                                 "ts": _ts(),
                                 "event": "sharepoint_poll",
-                                "dest": "knowledge/urlopy/urlopy.json",
+                                "dest": "knowledge/leave/leave.json",
                                 "status": status,
                                 "count": count,
                             })
-                            _verb = "pobrano" if status == "ok" else "brak zmian"
+                            _verb = "downloaded" if status == "ok" else "no changes"
                             print(
-                                f"[watch] sharepoint poll OK ({_verb}) — urlopy.json: {count} rekordow",
+                                f"[watch] sharepoint poll OK ({_verb}) — leave.json: {count} records",
                                 flush=True,
                             )
                         else:
                             print(
-                                f"[watch] sharepoint poll blad (exit {result.returncode}):"
+                                f"[watch] sharepoint poll error (exit {result.returncode}):"
                                 f" {result.stderr.strip()}",
                                 file=sys.stderr,
                                 flush=True,
                             )
                     except Exception as exc:
                         print(
-                            f"[watch] sharepoint poll blad: {exc}",
+                            f"[watch] sharepoint poll error: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )
                 _executor.submit(_sharepoint_task)
 
             # Yes/no requests opened in Bob's panel (Claude Code, automations): each posted to the control chat
-            # once, so the owner can answer "Bob, zatwierdzam apr-..." away from the computer (the panel
+            # once, so the owner can answer "Bob, approve apr-..." away from the computer (the panel
             # is loopback-only).
             if _time_mod.time() - _last_panel_approvals_ts >= _PANEL_APPROVALS_INTERVAL_S:
                 _last_panel_approvals_ts = _time_mod.time()
@@ -4324,7 +4407,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                         _approvals.announce_pending(
                             lambda text: api_client.send_message(text, api_client.NOTES_CONV_ID))
                     except Exception as exc:  # noqa: BLE001
-                        print(f"[watch] panel approvals blad: {exc}", file=sys.stderr, flush=True)
+                        print(f"[watch] panel approvals error: {exc}", file=sys.stderr, flush=True)
                     finally:
                         _PANEL_APPROVALS_LOCK.release()
                 _executor.submit(_panel_approvals_task)
@@ -4339,7 +4422,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                         _broadcast_scheduler_tick(_lp)
                     except Exception as exc:
                         print(
-                            f"[watch] broadcast tick blad: {exc}",
+                            f"[watch] broadcast tick error: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )
@@ -4355,7 +4438,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                 try:
                     _ensure_daemon_servers(restart=False)
                 except Exception as exc:
-                    print(f"[watch] watchdog demonow MCP blad: {exc}", file=sys.stderr, flush=True)
+                    print(f"[watch] MCP daemon watchdog error: {exc}", file=sys.stderr, flush=True)
 
             # Re-warm both SharePoint domains every 6h and re-save session.json.
             # Uses a separate headless Playwright instance (no --proxy-auto-detect)
@@ -4380,17 +4463,17 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                                     any_ok = True
                                 except Exception as exc:
                                     print(
-                                        f"[watch] sp-session-warm blad ({sp_url}): {exc}",
+                                        f"[watch] sp-session-warm error ({sp_url}): {exc}",
                                         file=sys.stderr,
                                         flush=True,
                                     )
                             if any_ok:
                                 save_storage_state(_ctx)
-                                print("[watch] sp-session-warm OK — session.json odswiezony", flush=True)
+                                print("[watch] sp-session-warm OK — session.json refreshed", flush=True)
                             _browser.close()
                     except Exception as exc:
                         print(
-                            f"[watch] sp-session-warm blad: {exc}",
+                            f"[watch] sp-session-warm error: {exc}",
                             file=sys.stderr,
                             flush=True,
                         )
@@ -4418,7 +4501,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
                             persona=_persona_for(cn, chat_config),
                         )
                     except Exception as exc:
-                        print(f"[watch] BLAD {cn!r}: {exc}", file=sys.stderr, flush=True)
+                        print(f"[watch] ERROR {cn!r}: {exc}", file=sys.stderr, flush=True)
                     finally:
                         lk.release()
 
@@ -4426,7 +4509,7 @@ def _run_watch_loop(page, args: argparse.Namespace) -> None:
             _time_mod.sleep(args.poll)
 
         except KeyboardInterrupt:
-            print("\n[watch] Przerwano (Ctrl-C).", flush=True)
+            print("\n[watch] Interrupted (Ctrl-C).", flush=True)
             _executor.shutdown(wait=False, cancel_futures=True)
             _append_log(log_path, {
                 "ts": _ts(),
@@ -4529,7 +4612,7 @@ def _start_api_sniffer(page, log_path: str = _API_SNIFF_FILE) -> None:
 
     page.on("request", _on_request)
     page.on("response", _on_response)
-    print(f"[sniff] Interceptor aktywny — zapisuje do {log_path}", file=sys.stderr, flush=True)
+    print(f"[sniff] Interceptor active — writing to {log_path}", file=sys.stderr, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -4548,7 +4631,7 @@ def _start_ws_sniffer(page, log_path: str = _WS_SNIFF_FILE) -> None:
     """
     def _on_websocket(ws) -> None:
         url = ws.url
-        print(f"[ws-sniff] Nowe polaczenie WS: {url}", file=sys.stderr, flush=True)
+        print(f"[ws-sniff] New WS connection: {url}", file=sys.stderr, flush=True)
         _append_log(log_path, {"ts": _ts(), "event": "ws_open", "url": url})
 
         def _on_frame_sent(payload) -> None:
@@ -4565,31 +4648,31 @@ def _start_ws_sniffer(page, log_path: str = _WS_SNIFF_FILE) -> None:
 
         def _on_close() -> None:
             _append_log(log_path, {"ts": _ts(), "event": "ws_close", "url": url})
-            print(f"[ws-sniff] WS zamkniety: {url}", file=sys.stderr, flush=True)
+            print(f"[ws-sniff] WS closed: {url}", file=sys.stderr, flush=True)
 
         ws.on("framesent", lambda f: _on_frame_sent(f))
         ws.on("framereceived", lambda f: _on_frame_received(f))
         ws.on("close", _on_close)
 
     page.on("websocket", _on_websocket)
-    print(f"[ws-sniff] WebSocket listener aktywny — zapisuje do {log_path}",
+    print(f"[ws-sniff] WebSocket listener active — writing to {log_path}",
           file=sys.stderr, flush=True)
 
 
 def _run_ws_sniff_loop(page, args: argparse.Namespace) -> None:
     """Passive mode: navigate to the watched chat, log WS frames, send nothing."""
     watch_chat = args.watch_chats[0]
-    print("[ws-sniff] Tryb pasywny — tylko nasluch, zero wysylania.", flush=True)
-    print(f"[ws-sniff] Nawiguje do: {watch_chat!r}", flush=True)
+    print("[ws-sniff] Passive mode — listening only, sending nothing.", flush=True)
+    print(f"[ws-sniff] Navigating to: {watch_chat!r}", flush=True)
     scraper.switch_to_chat_by_name(page, watch_chat)
-    print("[ws-sniff] Naslucham. Napisz cos na kanale i obserwuj ws-sniff.jsonl.",
+    print("[ws-sniff] Listening. Write something in the channel and watch ws-sniff.jsonl.",
           flush=True)
-    print("[ws-sniff] Ctrl-C aby zakonczyc.", flush=True)
+    print("[ws-sniff] Ctrl-C to stop.", flush=True)
     try:
         while True:
             _time_mod.sleep(1)
     except KeyboardInterrupt:
-        print("\n[ws-sniff] Przerwano.", flush=True)
+        print("\n[ws-sniff] Interrupted.", flush=True)
 
 
 def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> None:
@@ -4602,12 +4685,12 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
         print(f"\n--- Chat: {chat_name} ---")
 
         if not scraper.switch_to_chat(page, chat_id):
-            print(f"Nie udalo sie otworzyc czatu {chat_name!r} — pomijam.")
+            print(f"Could not open the chat {chat_name!r} — skipping.")
             continue
 
         msgs = scraper.read_messages(page, max_messages=20)
         if not msgs:
-            print("Brak wiadomosci — pomijam.")
+            print("No messages — skipping.")
             continue
 
         # Generate initial draft.
@@ -4619,9 +4702,9 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
 
         while True:
             if draft:
-                print(f"\nSugerowana odpowiedz:\n  {draft}")
+                print(f"\nSuggested reply:\n  {draft}")
             else:
-                print("\n(brak sugestii — sprobuj [r]egen lub [n]ext)")
+                print("\n(no suggestion — try [r]egen or [n]ext)")
 
             raw = input("\n[s]end / [e]dit / [r]egen / [n]ext / [q]uit > ").strip().lower()
             # Treat empty input as 'n' (skip).
@@ -4629,7 +4712,7 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
 
             if choice == 's':
                 if not draft:
-                    print("Nie mozna wyslac pustej wiadomosci. Uzyj [r]egen lub [e]dit.")
+                    print("Cannot send an empty message. Use [r]egen or [e]dit.")
                     continue
                 sent = scraper.send_message(page, draft)
                 _interactive_send_log: dict = {
@@ -4648,15 +4731,15 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
                     _interactive_send_log["retry_attempts"] = 0
                 _append_log(log_path, _interactive_send_log)
                 if sent:
-                    print("Wiadomosc wyslana.")
+                    print("Message sent.")
                 else:
-                    print("Blad wysylania wiadomosci.")
+                    print("Error sending the message.")
                 break
 
             elif choice == 'e':
-                edited = input("Edytuj odpowiedz: ").strip()
+                edited = input("Edit the reply: ").strip()
                 if not edited:
-                    print("Pusta edycja — pomijam wysylanie.")
+                    print("Empty edit — not sending.")
                     _append_log(log_path, {
                         "ts": _ts(),
                         "chat_id": chat_id,
@@ -4682,13 +4765,13 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
                     _interactive_edit_log["retry_attempts"] = 0
                 _append_log(log_path, _interactive_edit_log)
                 if sent:
-                    print("Wiadomosc wyslana.")
+                    print("Message sent.")
                 else:
-                    print("Blad wysylania wiadomosci.")
+                    print("Error sending the message.")
                 break
 
             elif choice == 'r':
-                print("Generuje nowa sugestie...")
+                print("Generating a new suggestion...")
                 draft = ai.draft_reply(
                     chat_context=chat_name,
                     last_messages=msgs,
@@ -4705,7 +4788,7 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
                     "action": "skip",
                     "sent_text": None,
                 })
-                print("Pomijam czat.")
+                print("Skipping the chat.")
                 break
 
             elif choice == 'q':
@@ -4717,11 +4800,11 @@ def _run_approval_loop(page, chats: list[dict], args: argparse.Namespace) -> Non
                     "action": "quit",
                     "sent_text": None,
                 })
-                print("Koniec sesji.")
+                print("End of session.")
                 return
 
             else:
-                print("Nieznana opcja. Wpisz s / e / r / n / q.")
+                print("Unknown option. Type s / e / r / n / q.")
 
 
 def main(argv=None) -> None:
@@ -4731,26 +4814,26 @@ def main(argv=None) -> None:
     os.umask(0o077)
     args = _parse_args(argv)
     if args.poll < 1:
-        args.poll = 1  # floor — nizej nie ma sensu, Teams API ma rate limiting
+        args.poll = 1  # floor — lower makes no sense, the Teams API is rate limited
 
     # Session check / re-login.
     is_fresh = ensure_fresh_session()
     if (not is_fresh or args.force_login) and not sys.stdin.isatty():
         # started by Bob's panel (no terminal): login.py would wait for an Enter nobody can press. The panel
-        # logs in itself ("Zaloguj do Teams", login.py --done-file) and only then starts Bob.
-        print("BLAD: sesja Teams wygasla - zaloguj sie w panelu Boba: "
-              f"http://localhost:{os.environ.get('BOB_PANEL_PORT') or '3006'} (Zaloguj do Teams).",
+        # logs in itself ("Sign in to Teams", login.py --done-file) and only then starts Bob.
+        print("ERROR: the Teams session expired - sign in from Bob's panel: "
+              f"http://localhost:{os.environ.get('BOB_PANEL_PORT') or '3006'} (Sign in to Teams).",
               file=sys.stderr, flush=True)
         sys.exit(4)
     if not is_fresh or args.force_login:
         if args.force_login and SESSION_FILE.exists():
             SESSION_FILE.unlink(missing_ok=True)
-        print("Uruchamiam logowanie SSO...")
+        print("Starting the SSO sign-in...")
         result = subprocess.run(
             [sys.executable, str(Path(__file__).parent / "login.py")],
         )
         if result.returncode != 0:
-            print("Logowanie SSO nie powiodlo sie. Sprobuj ponownie.", file=sys.stderr)
+            print("SSO sign-in failed. Try again.", file=sys.stderr)
             sys.exit(1)
         is_fresh = True
 
@@ -4758,7 +4841,7 @@ def main(argv=None) -> None:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        print("playwright nie jest zainstalowany. Uruchom: pip install playwright", file=sys.stderr)
+        print("playwright is not installed. Run: pip install playwright", file=sys.stderr)
         sys.exit(1)
 
     with sync_playwright() as p:
@@ -4775,9 +4858,9 @@ def main(argv=None) -> None:
             _start_api_sniffer(page)
 
         t0 = _time_mod.time()
-        print("Otwieram Teams...", file=sys.stderr, flush=True)
+        print("Opening Teams...", file=sys.stderr, flush=True)
         page.goto(TEAMS_URL, wait_until="domcontentloaded")
-        print(f"DOM zaladowany ({_time_mod.time() - t0:.1f}s). Czekam na Teams app shell...",
+        print(f"DOM loaded ({_time_mod.time() - t0:.1f}s). Waiting for the Teams app shell...",
               file=sys.stderr, flush=True)
 
         # Race several Teams-ready signals via a single JS poll. networkidle is
@@ -4791,6 +4874,8 @@ def main(argv=None) -> None:
             '[data-tid*="chat-list-item"]',
             '[data-tid="chat-pane-list"]',
             'nav[aria-label*="rail" i]',
+            'nav[aria-label*="chat" i]',
+            'aside[aria-label*="chat" i]',
             'nav[aria-label*="czat" i]',
             'aside[aria-label*="czat" i]',
             '[role="navigation"][aria-label]',
@@ -4803,11 +4888,11 @@ def main(argv=None) -> None:
         }"""
         try:
             page.wait_for_function(teams_ready_js, timeout=30000)
-            print(f"Teams app shell gotowy ({_time_mod.time() - t0:.1f}s)",
+            print(f"Teams app shell ready ({_time_mod.time() - t0:.1f}s)",
                   file=sys.stderr, flush=True)
         except Exception:
-            print(f"Teams app shell nie wykryty w 30s ({_time_mod.time() - t0:.1f}s) — "
-                  f"kontynuuje mimo to", file=sys.stderr, flush=True)
+            print(f"Teams app shell not detected in 30s ({_time_mod.time() - t0:.1f}s) — "
+                  f"continuing anyway", file=sys.stderr, flush=True)
 
         # Small safety buffer for late-rendering chat-list items.
         page.wait_for_timeout(800)
@@ -4829,19 +4914,19 @@ def main(argv=None) -> None:
 
         if _on_login_page():
             print(
-                f"\nBLAD: Teams przekierowal na strone logowania (URL: {page.url}).",
+                f"\nERROR: Teams redirected to the sign-in page (URL: {page.url}).",
                 file=sys.stderr,
             )
             if args.headless:
                 print(
-                    "Wyglada na to, ze winny jest tryb --headless. Uruchom ponownie "
-                    "BEZ --headless (domyslnie):\n"
+                    "It looks like --headless is to blame. Run again "
+                    "WITHOUT --headless (the default):\n"
                     "  python scripts/teams_agent/cli.py",
                     file=sys.stderr,
                 )
             else:
                 print(
-                    "Sesja Teams jest niepoprawna lub wygasla. Zaloguj sie ponownie:\n"
+                    "The Teams session is invalid or expired. Sign in again:\n"
                     "  python scripts/teams_agent/cli.py --force-login",
                     file=sys.stderr,
                 )
@@ -4866,14 +4951,14 @@ def main(argv=None) -> None:
             # --interactive: manual approval loop (original behaviour).
             chats = scraper.list_chats(page)
             if not chats:
-                print("Brak czatow do przetworzenia.")
+                print("No chats to process.")
                 return  # finally block below closes the browser
 
-            print(f"Znaleziono {len(chats)} czatow. Przetwarzam do {args.max_chats}.")
+            print(f"Found {len(chats)} chats. Processing up to {args.max_chats}.")
             _run_approval_loop(page, chats, args)
 
         except KeyboardInterrupt:
-            print("\nPrzerwano przez uzytkownika (Ctrl-C).")
+            print("\nInterrupted by the user (Ctrl-C).")
             _append_log(args.log_file, {
                 "ts": _ts(),
                 "chat_id": None,
@@ -4892,9 +4977,9 @@ def main(argv=None) -> None:
                 if any("teams" in (pg.url or "") for pg in _c.pages):
                     try:
                         save_storage_state(_c)
-                        print("Sesja zapisana (session.json).", file=sys.stderr, flush=True)
+                        print("Session saved (session.json).", file=sys.stderr, flush=True)
                     except Exception as exc:  # noqa: BLE001 -- never block the shutdown
-                        print(f"Nie zapisano sesji: {exc}", file=sys.stderr, flush=True)
+                        print(f"Session not saved: {exc}", file=sys.stderr, flush=True)
                     break
             with contextlib.redirect_stderr(io.StringIO()):
                 try:

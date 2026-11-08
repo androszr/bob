@@ -61,7 +61,7 @@ def test_save_summary_creates_profile(tmp_path, monkeypatch):
 
     fake_result = MagicMock()
     fake_result.returncode = 0
-    fake_result.stdout = "Zdanie pierwsze. Zdanie drugie. Zdanie trzecie."
+    fake_result.stdout = "Sentence one. Sentence two. Sentence three."
     fake_result.stderr = ""
 
     mri = "8:orgid:test-user"
@@ -70,8 +70,8 @@ def test_save_summary_creates_profile(tmp_path, monkeypatch):
             mri=mri,
             display_name="Test User",
             history=[
-                {"sender": "Test User", "text": "Jak sie rejestruje ticket w Jira?"},
-                {"sender": "Bob", "text": "Idz do projektow i kliknij +."},
+                {"sender": "Test User", "text": "How do I log a ticket in Jira?"},
+                {"sender": "Bob", "text": "Go to projects and click +."},
             ],
             session_start=time.time() - 120,
             exchanges=1,
@@ -81,16 +81,16 @@ def test_save_summary_creates_profile(tmp_path, monkeypatch):
     assert profile is not None
     assert profile["display_name"] == "Test User"
     assert profile["sender_mri"] == mri
-    assert "Zdanie pierwsze" in profile["session_summary"]
+    assert "Sentence one" in profile["session_summary"]
     assert profile["exchanges_count"] == 1
     assert "updated_at" in profile
 
 
 def test_save_summary_roundtrip_json_encoding(tmp_path, monkeypatch):
-    """Polish chars must survive JSON serialisation (ensure_ascii=False)."""
+    """Non-ASCII chars (incl. Polish letters) must survive JSON serialisation (ensure_ascii=False)."""
     monkeypatch.setattr(user_memory, "PROFILE_DIR", tmp_path)
 
-    summary_text = "Uzytkownik pyta o urlopy. Lubi krotkie odpowiedzi. Zna Jire."
+    summary_text = "Zoë asks about leave. Likes short answers. Knows Jira — and the Łódź office."
     fake_result = MagicMock()
     fake_result.returncode = 0
     fake_result.stdout = summary_text
@@ -119,7 +119,7 @@ def test_save_summary_rolling_includes_prev_summary(tmp_path, monkeypatch):
 
     fake_result = MagicMock()
     fake_result.returncode = 0
-    fake_result.stdout = "Nowe summary."
+    fake_result.stdout = "New summary."
     fake_result.stderr = ""
 
     mri = "8:orgid:rolling-user"
@@ -128,7 +128,7 @@ def test_save_summary_rolling_includes_prev_summary(tmp_path, monkeypatch):
         user_memory.save_summary(
             mri=mri,
             display_name="Rolling User",
-            history=[{"sender": "Rolling User", "text": "pierwsze pytanie"}],
+            history=[{"sender": "Rolling User", "text": "first question"}],
             session_start=time.time(),
             exchanges=1,
         )
@@ -144,14 +144,14 @@ def test_save_summary_rolling_includes_prev_summary(tmp_path, monkeypatch):
         user_memory.save_summary(
             mri=mri,
             display_name="Rolling User",
-            history=[{"sender": "Rolling User", "text": "drugie pytanie"}],
+            history=[{"sender": "Rolling User", "text": "second question"}],
             session_start=time.time(),
             exchanges=1,
         )
 
     assert len(captured_prompts) == 1
-    assert "Nowe summary." in captured_prompts[0]
-    assert "Poprzedni profil uzytkownika" in captured_prompts[0]
+    assert "New summary." in captured_prompts[0]
+    assert "Previous user profile" in captured_prompts[0]
 
 
 def test_save_summary_haiku_failure_keeps_prev_summary(tmp_path, monkeypatch):
@@ -270,24 +270,24 @@ def test_format_context_empty_summary():
 def test_format_context_valid_profile_with_name():
     profile = {
         "updated_at": time.time(),
-        "session_summary": "Uzytkownik lubi Jire.",
+        "session_summary": "The user likes Jira.",
         "display_name": "Alice",
     }
     ctx = user_memory.format_context(profile)
     assert ctx is not None
     assert "Alice" in ctx
-    assert "Uzytkownik lubi Jire." in ctx
+    assert "The user likes Jira." in ctx
 
 
 def test_format_context_valid_profile_no_name():
     profile = {
         "updated_at": time.time(),
-        "session_summary": "Lubi krotkie odpowiedzi.",
+        "session_summary": "Likes short answers.",
         "display_name": "",
     }
     ctx = user_memory.format_context(profile)
     assert ctx is not None
-    assert "Lubi krotkie odpowiedzi." in ctx
+    assert "Likes short answers." in ctx
 
 
 # ---------------------------------------------------------------------------

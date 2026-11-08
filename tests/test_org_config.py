@@ -72,7 +72,7 @@ def test_env_values_override_defaults():
     cfg = org_config.from_env({
         "OWNER_TEAMS_USER_ID": "00000000-0000-0000-0000-00000000000a",
         "OWNER_DISPLAY_NAME": "Kowalski Jan",
-        "OWNER_ALIAS": "Szef",
+        "OWNER_ALIAS": "Boss",
         "JIRA_URL": "https://jira.example.test/",
         "JIRA_BOARD_ID": "42",
         "JIRA_PROJECT": "OPS",
@@ -80,7 +80,7 @@ def test_env_values_override_defaults():
         "SHAREPOINT_TENANT": "Contoso",
     })
     assert cfg.owner_mri == "8:orgid:00000000-0000-0000-0000-00000000000a"
-    assert (cfg.owner_display_name, cfg.owner_alias) == ("Kowalski Jan", "Szef")
+    assert (cfg.owner_display_name, cfg.owner_alias) == ("Kowalski Jan", "Boss")
     assert cfg.jira_url == "https://jira.example.test"
     assert cfg.jira_browse_url == "https://jira.example.test/browse/"
     assert (cfg.jira_board_id, cfg.jira_project, cfg.jira_teams) == (42, "OPS", ("Alpha", "Beta"))
@@ -114,17 +114,45 @@ def test_load_json_config_missing_or_broken_is_empty(tmp_path, monkeypatch):
 # SharePoint host allow-list (security boundary) — tenant-driven, exact match
 # ---------------------------------------------------------------------------
 
+def test_leave_url_reads_new_env_name():
+    cfg = org_config.from_env({"LEAVE_SHAREPOINT_URL": "https://contoso.sharepoint.com/new"})
+    assert cfg.leave_sharepoint_url == "https://contoso.sharepoint.com/new"
+    assert cfg.urlopy_sharepoint_url == cfg.leave_sharepoint_url
+
+
+def test_leave_url_falls_back_to_old_env_name():
+    cfg = org_config.from_env({"URLOPY_SHAREPOINT_URL": "https://contoso.sharepoint.com/old"})
+    assert cfg.leave_sharepoint_url == "https://contoso.sharepoint.com/old"
+
+
+def test_leave_url_new_env_name_wins():
+    cfg = org_config.from_env({"LEAVE_SHAREPOINT_URL": "https://contoso.sharepoint.com/new",
+                               "URLOPY_SHAREPOINT_URL": "https://contoso.sharepoint.com/old"})
+    assert cfg.leave_sharepoint_url == "https://contoso.sharepoint.com/new"
+
+
+def test_module_keeps_old_leave_attribute_as_alias():
+    assert org_config.URLOPY_SHAREPOINT_URL == org_config.LEAVE_SHAREPOINT_URL
+
+
+def test_timezone_default_and_override():
+    assert org_config.from_env({}).timezone == "Europe/Warsaw"
+    assert org_config.from_env({"BOB_TIMEZONE": " "}).timezone == "Europe/Warsaw"
+    assert org_config.from_env({"BOB_TIMEZONE": "Europe/London"}).timezone == "Europe/London"
+    assert org_config.TIMEZONE == "Europe/Warsaw"  # conftest leaves BOB_TIMEZONE empty
+
+
 def test_sharepoint_hosts_are_exactly_the_tenant_pair():
     hosts = org_config.from_env({"SHAREPOINT_TENANT": "contoso"}).sharepoint_hosts
     assert hosts == ("contoso.sharepoint.com", "contoso-my.sharepoint.com")
 
 
 # ---------------------------------------------------------------------------
-# urlopy poller: every URL derives from URLOPY_SHAREPOINT_URL; unset = skip
+# leave poller: every URL derives from LEAVE_SHAREPOINT_URL; unset = skip
 # ---------------------------------------------------------------------------
 
 _SHARE = ("https://contoso-my.sharepoint.com/:x:/r/personal/jan_kowalski_contoso_com"
-          "/Documents/Urlopy%20-%20live.xlsx?d=w0123456789abcdef0123456789ABCDEF&csf=1&web=1")
+          "/Documents/Leave%20tracker.xlsx?d=w0123456789abcdef0123456789ABCDEF&csf=1&web=1")
 
 
 def test_poller_derives_all_urls_from_share_link():
@@ -135,7 +163,7 @@ def test_poller_derives_all_urls_from_share_link():
         "view": _SHARE,
         "download": f"{site}/_layouts/15/download.aspx?UniqueId=01234567-89ab-cdef-0123-456789abcdef",
         "rest_mtime": (f"{site}/_api/web/GetFileByServerRelativeUrl("
-                       "'/personal/jan_kowalski_contoso_com/Documents/Urlopy - live.xlsx')"
+                       "'/personal/jan_kowalski_contoso_com/Documents/Leave tracker.xlsx')"
                        "?$select=TimeLastModified"),
         "referer": f"{site}/_layouts/15/onedrive.aspx",
     }
@@ -156,7 +184,7 @@ def test_poller_unconfigured_skips_without_network(monkeypatch, capsys):
     monkeypatch.setattr(sharepoint_poller.sharepoint_meta, "fetch_remote_mtime",
                         lambda *a: pytest.fail("must not touch SharePoint"))
     assert sharepoint_poller.poll() == {"status": "not_configured", "count": 7}
-    assert "URLOPY_SHAREPOINT_URL not configured" in capsys.readouterr().err
+    assert "LEAVE_SHAREPOINT_URL not configured" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

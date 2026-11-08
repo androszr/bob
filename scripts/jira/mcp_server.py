@@ -1,4 +1,4 @@
-"""MCP server exposing Acme Jira & Tempo as native Claude tools.
+"""MCP server exposing Jira & Tempo as native Claude tools.
 
 Start: python scripts/jira/mcp_server.py
 Claude connects via stdio (managed automatically by claude --mcp-config).
@@ -21,19 +21,20 @@ from pathlib import Path
 # Ensure jira_client is importable from any working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import logts  # noqa: E402, F401, I001 — patches sys.stderr with CET timestamps
+import logts  # noqa: E402, F401, I001 — patches sys.stderr with local timestamps
 
 import anyio  # noqa: E402
 import jira_client as _jira  # noqa: E402
+import jira_fields  # noqa: E402
 import org_config  # noqa: E402
 import requests  # noqa: E402
 from mcp.server.fastmcp import FastMCP  # noqa: E402
 
-# Jeden plik, dwa serwery MCP (scripts/jira/mcp_read_server.py ustawia toolset "read"):
-#   jira-read-bob -- odczyt (find, jira_issue, jira_search, jira_boards); dziala jako demon HTTP
-#                    (ai._DAEMON_SERVERS), wspolny dla wszystkich czatow.
-#   jira-bob      -- zapisy; zawsze stdio (ai._STDIO_FORCED_SERVERS), osobny proces per wywolanie,
-#                    wiec widzi per-wiadomosciowe env (BOB_SENDER_MRI) i nie dzieli stanu miedzy czatami.
+# One file, two MCP servers (scripts/jira/mcp_read_server.py sets the "read" toolset):
+#   jira-read-bob -- reads (find, jira_issue, jira_search, jira_boards); runs as an HTTP daemon
+#                    (ai._DAEMON_SERVERS), shared by every chat.
+#   jira-bob      -- writes; always stdio (ai._STDIO_FORCED_SERVERS), a separate process per call,
+#                    so it sees the per-message env (BOB_SENDER_MRI) and shares no state between chats.
 _TOOLSET = os.environ.get("JIRA_MCP_TOOLSET", "write").strip().lower()
 _SERVER_NAME = "jira-read-bob" if _TOOLSET == "read" else "jira-bob"
 mcp = FastMCP(_SERVER_NAME)
@@ -101,10 +102,10 @@ def _resolve_editmeta_value_id(
     Reads /rest/api/2/issue/{key}/editmeta -- the per-issue allowed values for `field_name`
     (e.g. "priority", "fixVersions"), NOT any global list endpoint. Global lists can have
     duplicate names across unrelated schemes/projects (e.g. two different priority ids both
-    named "Wysoki"), so resolving per-issue is the only reliable way to get the right id.
+    named "High"), so resolving per-issue is the only reliable way to get the right id.
     Matching by id (not name) in the update payload also sidesteps a real instance quirk found
-    empirically for priority: setting it via {"name": ...} returns HTTP 400 "Nazwa priorytetu
-    jest niepoprawna" for at least "Sredni" even with the exact server-provided name string --
+    empirically for priority: setting it via {"name": ...} returns HTTP 400 "Priority name is
+    invalid" for at least one value even with the exact server-provided name string --
     {"id": ...} works reliably. Applied to fixVersions too for the same robustness.
 
     Returns (id, allowed_names): id is None if value_name doesn't match any allowed value
@@ -133,13 +134,13 @@ def _resolve_priority_id(issue_key: str, priority_name: str) -> tuple[str | None
 
 
 def _set_priority(issue_key: str, priority_name: str) -> str:
-    """Resolve priority_name to an id via _resolve_priority_id and PUT it. Returns OK or BLAD: ..."""
+    """Resolve priority_name to an id via _resolve_priority_id and PUT it. Returns OK or ERROR: ..."""
     import json as _json
     t0 = time.perf_counter()
     priority_id, allowed_names = _resolve_priority_id(issue_key, priority_name)
     if priority_id is None:
-        options = ", ".join(allowed_names) if allowed_names else "brak danych (editmeta niedostepne)"
-        return f'BLAD: nieznany priorytet "{priority_name}" dla {issue_key}. Dostepne: {options}'
+        options = ", ".join(allowed_names) if allowed_names else "no data (editmeta unavailable)"
+        return f'ERROR: unknown priority "{priority_name}" for {issue_key}. Available: {options}'
     payload = _json.dumps({"fields": {"priority": {"id": priority_id}}}).encode("utf-8")
     try:
         resp = requests.put(
@@ -149,7 +150,7 @@ def _set_priority(issue_key: str, priority_name: str) -> str:
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -158,7 +159,7 @@ def _set_priority(issue_key: str, priority_name: str) -> str:
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"_set_priority HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     _tlog("_set_priority done", t0, f"key={issue_key} priority={priority_name} id={priority_id}")
     return "OK"
 
@@ -173,16 +174,16 @@ def _update_fix_version(issue_key: str, version_name: str, action: str = "add") 
     action="remove": {"update": {"fixVersions": [{"remove": {"id": ...}}]}} -- keeps the rest.
     action="set":    {"fields": {"fixVersions": [{"id": ...}]}}            -- REPLACES the
                       whole list with just this one version.
-    Returns OK or BLAD: ...
+    Returns OK or ERROR: ...
     """
     import json as _json
     if action not in _FIX_VERSION_ACTIONS:
-        return f'BLAD: action musi byc "add", "remove" lub "set" (podano: {action!r})'
+        return f'ERROR: action must be "add", "remove" or "set" (got: {action!r})'
     t0 = time.perf_counter()
     version_id, allowed_names = _resolve_editmeta_value_id(issue_key, "fixVersions", version_name)
     if version_id is None:
-        options = ", ".join(allowed_names) if allowed_names else "brak danych (editmeta niedostepne)"
-        return f'BLAD: nieznana wersja "{version_name}" dla {issue_key}. Dostepne: {options}'
+        options = ", ".join(allowed_names) if allowed_names else "no data (editmeta unavailable)"
+        return f'ERROR: unknown version "{version_name}" for {issue_key}. Available: {options}'
     if action == "set":
         payload = _json.dumps({"fields": {"fixVersions": [{"id": version_id}]}}).encode("utf-8")
     else:
@@ -197,7 +198,7 @@ def _update_fix_version(issue_key: str, version_name: str, action: str = "add") 
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -206,7 +207,7 @@ def _update_fix_version(issue_key: str, version_name: str, action: str = "add") 
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"_update_fix_version HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     _tlog(
         "_update_fix_version done", t0,
         f"key={issue_key} version={version_name} id={version_id} action={action}",
@@ -225,7 +226,7 @@ def _agile_get(path: str, params: dict | None = None) -> tuple[dict | list | Non
             verify=_jira.VERIFY_SSL,
         )
     except requests.RequestException as exc:
-        return None, f"problem z polaczeniem do Jiry: {exc}"
+        return None, f"cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 201):
         try:
             body = resp.json()
@@ -237,12 +238,12 @@ def _agile_get(path: str, params: dict | None = None) -> tuple[dict | list | Non
     try:
         return resp.json(), None
     except ValueError:
-        return None, "Jira Agile: odpowiedz nie jest JSON (sesja SSO / strona logowania?)"
+        return None, "Jira Agile: the response is not JSON (SSO session / login page?)"
 
 
 # ---------------------------------------------------------------------------
-# Odczyt i komentarze -- bezposrednio do Jiry. Ksztalt odpowiedzi jest staly, bo prompty
-# Boba i person na nim polegaja; jira_search zwraca tez issue_links.
+# Reads and comments -- straight to Jira. The response shape is fixed because Bob's and the
+# personas' prompts rely on it; jira_search also returns issue_links.
 # ---------------------------------------------------------------------------
 
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
@@ -288,20 +289,20 @@ def _recent_comment_count() -> int:
 
 
 def _jira_error(resp: requests.Response) -> str:
-    """Map a non-2xx Jira response to a BLAD string (token/404/JQL errors made explicit)."""
+    """Map a non-2xx Jira response to an ERROR string (token/404/JQL errors made explicit)."""
     if resp.status_code == 401:
-        return "BLAD: token Jiry nieprawidlowy lub brak (ATLASSIAN_TOKEN)"
+        return "ERROR: Jira token invalid or missing (ATLASSIAN_TOKEN)"
     if resp.status_code == 403:
-        return "BLAD: brak uprawnien w Jirze dla tego tokena"
+        return "ERROR: this token has no permission for that in Jira"
     if resp.status_code == 404:
-        return "BLAD: not_found"
+        return "ERROR: not_found"
     try:
         body = resp.json()
         msgs = body.get("errorMessages", []) + list(body.get("errors", {}).values())
         detail = "; ".join(msgs) if msgs else resp.text[:300]
     except Exception:  # noqa: BLE001
         detail = resp.text[:300]
-    return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+    return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
 
 
 def _jira_get(path: str, params: dict | None = None, timeout: int = 20) -> requests.Response:
@@ -397,23 +398,24 @@ def _fetch_test_steps(key: str, issue_id: str | None) -> dict | None:
 
 @_read_tool
 def jira_issue(key: str) -> str:
-    """Pobierz szczegoly ticketu Jira (bezposrednio z Jiry).
+    """Get the details of a Jira ticket (straight from Jira).
 
-    Zwraca pelne dane: pola ticketu, opis, komentarze, worklogi (zalogowany czas), changelog.
-    fields zawiera tez typ_pracy, dotyczy, rodzaj_zmiany, numer_zamowienia, numer_projektu
-    (customfieldy Acme). Relacje: fields.issue_links [{type, direction, key, summary}]
-    i fields.subtasks [{key, summary, status}]; fields.components to [{id, name}].
-    Dla ticketow typu "Test Case" w odpowiedzi pojawia sie tez `test_steps`
-    {source, steps[{index, action, data, expected}]} -- kroki testowe
-    z QMetry/Xray/Zephyr (na jira.example.com source="qmetry"). Dla pozostalych `test_steps: null`.
+    Returns the full data: ticket fields, description, comments, worklogs (logged time), changelog.
+    fields also holds the org's custom fields configured in config/jira-fields.json (e.g.
+    work_type, affects, change_type, order_number, project_number).
+    Relations: fields.issue_links [{type, direction, key, summary}]
+    and fields.subtasks [{key, summary, status}]; fields.components is [{id, name}].
+    For "Test Case" tickets the response also carries `test_steps`
+    {source, steps[{index, action, data, expected}]} -- the test steps
+    from QMetry/Xray/Zephyr (source says which). For every other ticket `test_steps: null`.
 
     Args:
-        key: Klucz ticketu, np. "PRJ1-123" lub "PRJ2-456".
+        key: Ticket key, e.g. "PRJ1-123" or "PRJ2-456".
     """
     t0 = time.perf_counter()
     key = (key or "").strip().upper()
     if not _ISSUE_KEY_RE.match(key):
-        return "BLAD: key musi miec format PROJEKT-NNN (np. PRJ1-123)"
+        return "ERROR: key must look like PROJECT-NNN (e.g. PRJ1-123)"
     fields_param = _ISSUE_FIELDS + "," + ",".join(_jira.EXTRA_CUSTOM_FIELDS)
     try:
         resp = _jira_get(f"/rest/api/2/issue/{key}", {"expand": "changelog", "fields": fields_param})
@@ -425,7 +427,7 @@ def jira_issue(key: str) -> str:
         wl_data = wl_resp.json() if wl_resp.status_code == 200 else {"worklogs": []}
     except (requests.RequestException, ValueError) as exc:
         _tlog(f"jira_issue error: {exc}", t0)
-        return f"BLAD: problem z polaczeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
 
     f = issue.get("fields") or {}
     status = f.get("status") or {}
@@ -494,10 +496,10 @@ def jira_issue(key: str) -> str:
 
 @_read_tool
 def jira_search(jql: str, max_results: int = 50) -> str:
-    """Szukaj ticketow Jira przez live JQL (bezposrednio z Jiry, max 100 wynikow).
+    """Search Jira tickets with live JQL (straight from Jira, at most 100 results).
 
-    Uzyj gdy musisz filtrowac po etykiecie, komponencie, statusie lub kombinacji.
-    Przykladowe JQL:
+    Use it when you need to filter by label, component, status or a combination.
+    Example JQL:
       labels in (epic-discovery, qa-blocked)
       component in (Checkout, Auth)
       labels = qa-blocked AND component = Checkout AND statusCategory != Done
@@ -505,7 +507,7 @@ def jira_search(jql: str, max_results: int = 50) -> str:
       project = PRJ1 AND remainingEstimate > 0 AND statusCategory != Done
       sprint = "TeamB Sprint 11" AND remainingEstimate > 0
 
-    Odpowiedz: {issues:[{key, url, summary, status, status_category, assignee,
+    Response: {issues:[{key, url, summary, status, status_category, assignee,
                 labels, components:[{id,name}], created, updated,
                 priority, issue_type,
                 parent: {key, summary} | null,
@@ -517,33 +519,33 @@ def jira_search(jql: str, max_results: int = 50) -> str:
                 issue_links: [{type, direction, key, summary}]}],
                 total, returned, jql, _fetched_at}
 
-    issue_links — powiązania ticketu (np. Duplicate, Blocks, Related):
-      type      -- nazwa typu linku, np. "Duplicate", "Blocks", "Related"
-      direction -- "inward" (np. "is duplicated by") lub "outward" (np. "duplicates")
-      key       -- klucz powiązanego ticketu
-      summary   -- tytuł powiązanego ticketu
-    Aby znaleźć duplikaty: filtruj issue_links gdzie type=="Duplicate".
+    issue_links — the ticket's links (e.g. Duplicate, Blocks, Related):
+      type      -- link type name, e.g. "Duplicate", "Blocks", "Related"
+      direction -- "inward" (e.g. "is duplicated by") or "outward" (e.g. "duplicates")
+      key       -- key of the linked ticket
+      summary   -- title of the linked ticket
+    To find duplicates: filter issue_links where type=="Duplicate".
 
-    Pola estymacji:
-      remaining_estimate  — czas pozostaly do konca, czytelny string np. "2h 30m"
-                            (null gdy nie ustawiony). Pokazuj jako "pozostalo: X"
-                            przy listowaniu niedomknionych zadan; pomijaj nawias
-                            calkowicie gdy null.
-      original_estimate   — poczatkowa estymacja, czytelny string (null gdy brak).
-      *_seconds           — te same wartosci w sekundach (int | null).
+    Estimate fields:
+      remaining_estimate  — time left, a readable string e.g. "2h 30m"
+                            (null when not set). Show it as "remaining: X"
+                            when listing open tasks; leave the brackets out
+                            entirely when null.
+      original_estimate   — the original estimate, a readable string (null when missing).
+      *_seconds           — the same values in seconds (int | null).
 
-    Bledy:
-      "BLAD: ..." z trescia errorMessages gdy Jira odrzucila JQL
-      (najczesciej: nieznana etykieta lub komponent -- sprawdz pisownie).
+    Errors:
+      "ERROR: ..." with the errorMessages text when Jira rejected the JQL
+      (most often: an unknown label or component -- check the spelling).
 
     Args:
-        jql:         Zapytanie JQL (wymagane).
-        max_results: Liczba wynikow, 1-100 (domyslnie 50).
+        jql:         JQL query (required).
+        max_results: Number of results, 1-100 (default 50).
     """
     t0 = time.perf_counter()
     jql = (jql or "").strip()
     if not jql:
-        return "BLAD: jql jest wymagane"
+        return "ERROR: jql is required"
     max_results = min(max(int(max_results or 50), 1), 100)
     try:
         resp = _jira_get("/rest/api/2/search",
@@ -554,7 +556,7 @@ def jira_search(jql: str, max_results: int = 50) -> str:
         body = resp.json()
     except (requests.RequestException, ValueError) as exc:
         _tlog(f"jira_search error: {exc}", t0)
-        return f"BLAD: problem z polaczeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
 
     issues = []
     for i in body.get("issues") or []:
@@ -595,35 +597,35 @@ def jira_comment(
     body: str,
     mention: str = "",
 ) -> str:
-    """Opublikuj komentarz do ticketu Jira (bezposrednio w Jirze).
+    """Post a comment on a Jira ticket (straight to Jira).
 
-    key:     Klucz ticketu, np. "PRJ1-123" lub "PRJ2-456".
-    body:    Tresc komentarza (1-32000 znakow).
-    mention: Tryb wzmianki (opcjonalny):
-               "assignee"  -- login assignee pobierany z Jiry automatycznie
-               "reporter"  -- login reportera pobierany z Jiry automatycznie
-               "<login>"   -- np. "a.nowak" -- wstawiony verbatim jako [~a.nowak]
-               ""          -- komentarz bez prefiksu wzmianki (domyslnie)
+    key:     Ticket key, e.g. "PRJ1-123" or "PRJ2-456".
+    body:    Comment text (1-32000 characters).
+    mention: Mention mode (optional):
+               "assignee"  -- the assignee's login, fetched from Jira automatically
+               "reporter"  -- the reporter's login, fetched from Jira automatically
+               "<login>"   -- e.g. "a.nowak" -- inserted verbatim as [~a.nowak]
+               ""          -- comment without a mention prefix (default)
 
-    Wywoluj TYLKO po jawnym potwierdzeniu uzytkownika -- to operacja zapisu.
-    Zwraca JSON: {status, id, jira_url, mention_resolved, entry}.
+    Call ONLY after the user has explicitly confirmed -- this is a write.
+    Returns JSON: {status, id, jira_url, mention_resolved, entry}.
 
-    Rate limit: 30 komentarzy / 60 s.
+    Rate limit: 30 comments / 60 s.
     """
     t0 = time.perf_counter()
     key = (key or "").strip().upper()
     if not _ISSUE_KEY_RE.match(key):
-        return "BLAD: key musi miec format PROJEKT-NNN (np. PRJ1-123)"
+        return "ERROR: key must look like PROJECT-NNN (e.g. PRJ1-123)"
     text = body or ""
     if not 1 <= len(text) <= _COMMENT_MAX_BODY_LEN:
-        return f"BLAD: tresc komentarza musi miec 1-{_COMMENT_MAX_BODY_LEN} znakow"
+        return f"ERROR: the comment text must be 1-{_COMMENT_MAX_BODY_LEN} characters"
 
     if _recent_comment_count() >= _COMMENT_RATE_MAX:
-        return f"BLAD: rate limit — max {_COMMENT_RATE_MAX} komentarzy na {int(_COMMENT_RATE_WINDOW_S)} s"
+        return f"ERROR: rate limit — at most {_COMMENT_RATE_MAX} comments per {int(_COMMENT_RATE_WINDOW_S)} s"
 
     mention = (mention or "").strip()
     if mention and mention not in ("assignee", "reporter") and not _MENTION_LOGIN_RE.match(mention):
-        return "BLAD: mention musi byc 'assignee', 'reporter' albo loginem Jiry (litery, cyfry, . _ @ -)"
+        return "ERROR: mention must be 'assignee', 'reporter' or a Jira login (letters, digits, . _ @ -)"
     resolved_login = None
     if mention in ("assignee", "reporter"):
         try:
@@ -650,7 +652,7 @@ def jira_comment(
         ), retry_statuses={429})
     except requests.RequestException as exc:
         _tlog(f"jira_comment error: {exc}", t0)
-        return f"BLAD: problem z polaczeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     _tlog(f"jira_comment HTTP {resp.status_code}", t0, key)
     if resp.status_code not in (200, 201):
         return _jira_error(resp)
@@ -676,26 +678,26 @@ def jira_comment(
 
 @_read_tool
 def jira_boards(name: str = "", max_results: int = 50, resolve_filter: bool = True) -> str:
-    """Odkryj board Jira po nazwie i pobierz jego filter_jql do uzycia w jira_search.
+    """Find a Jira board by name and get its filter_jql to use in jira_search.
 
-    Dwuetapowy workflow:
-      Krok 1: jira_boards(name='Tydzien Planowy') -> boards[0].filter_jql
-      Krok 2: jira_search(jql=filter_jql)         -> zadania boardu
+    Two-step workflow:
+      Step 1: jira_boards(name='Weekly Planning') -> boards[0].filter_jql
+      Step 2: jira_search(jql=filter_jql)         -> the board's tasks
 
-    Parametry:
-      name:           Filtr substring po nazwie boardu (case-insensitive; pusty = wszystkie).
-      max_results:    Max liczba boardow (1-50, domyslnie 50). Zaciskana do [1,50].
-                      Uzywaj malych wartosci przy resolve_filter=True (kazdy board = 2 dodatkowe
-                      wywolania Jiry: /configuration + /filter).
-      resolve_filter: True (domyslnie) = rozwija filter_jql dla kazdego boardu.
-                      False = szybka lista bez rozwijania JQL (filter_id/filter_jql = null).
+    Parameters:
+      name:           Substring filter on the board name (case-insensitive; empty = all).
+      max_results:    Max number of boards (1-50, default 50). Clamped to [1,50].
+                      Use small values with resolve_filter=True (each board = 2 extra
+                      Jira calls: /configuration + /filter).
+      resolve_filter: True (default) = expands filter_jql for every board.
+                      False = a quick list without expanding the JQL (filter_id/filter_jql = null).
 
-    count: 0 to poprawny wynik (nie blad) — brak boardow o danej nazwie.
-    filter_jql moze byc null gdy board nie ma filtra lub rozwiniecie nie powiodlo sie
-    dla tego boardu (partial-success — pozostale boardy zwracaja sie normalnie).
-    Sprawdzaj filter_jql != null przed przekazaniem do jira_search.
+    count: 0 is a valid result (not an error) — no board with that name.
+    filter_jql can be null when the board has no filter or expanding it failed
+    for that board (partial success — the other boards come back normally).
+    Check filter_jql != null before passing it to jira_search.
 
-    Zwraca JSON:
+    Returns JSON:
       {boards: [{board_id, name, type, filter_id, filter_jql}],
        count, name_filter, _fetched_at}
     """
@@ -705,7 +707,7 @@ def jira_boards(name: str = "", max_results: int = 50, resolve_filter: bool = Tr
     data, err = _agile_get("/rest/agile/1.0/board", {"name": name, "maxResults": max_results})
     if err:
         _tlog(f"jira_boards error: {err}", t0)
-        return f"BLAD: {err}"
+        return f"ERROR: {err}"
 
     def _resolve(b: dict) -> dict:
         entry = {"board_id": b.get("id"), "name": b.get("name") or "", "type": b.get("type"),
@@ -736,12 +738,12 @@ def find(query: str) -> str:
     """Search Jira issues by free text (searches summary and description).
 
     Args:
-        query: Text to search for, e.g. "migracja FieldOps"
+        query: Text to search for, e.g. "FieldOps migration"
     """
     issues = _jira.find_issue(query, max_results=10)
     if not issues:
-        return f"Brak wyników dla: {query}"
-    lines = [f"Znalezione ({len(issues)}):"]
+        return f"No results for: {query}"
+    lines = [f"Found ({len(issues)}):"]
     for i in issues:
         lines.append(f"  {i['key']} [{i['status']}] {i['summary']}")
     return "\n".join(lines)
@@ -752,10 +754,10 @@ _DEFAULT_REPORTER = org_config.OWNER_JIRA_LOGIN
 
 
 def _search_users(query: str) -> list[dict]:
-    """Wyszukaj userow Jiry, probujac kilku wariantow zapytania. Zwraca surowe obiekty Jiry.
+    """Search Jira users, trying several variants of the query. Returns raw Jira objects.
 
-    Wspolne jadro dla jira_search_users() (tool) i _resolve_reporter() (podstawianie
-    zglaszajacego przy tworzeniu ticketu). Kolejnosc: konta @example.com najpierw.
+    Shared core of jira_search_users() (the tool) and _resolve_reporter() (filling in the
+    reporter when a ticket is created). Order: accounts in the org's e-mail domain first.
     """
     def _one(q: str) -> list:
         r = requests.get(
@@ -770,16 +772,16 @@ def _search_users(query: str) -> list[dict]:
     words = query.strip().split()
     queries = [query]
     if len(words) >= 2:
-        # tez probuj w odwroconej kolejnosci i email-style
+        # also try the reversed order and e-mail style
         queries.append(" ".join(reversed(words)))
-        queries.append(f"{words[-1]}.{words[0]}")   # nazwisko.imie
-        queries.append(f"{words[0]}.{words[-1]}")   # imie.nazwisko
+        queries.append(f"{words[-1]}.{words[0]}")   # surname.firstname
+        queries.append(f"{words[0]}.{words[-1]}")   # firstname.surname
 
     seen: dict = {}
     for q in queries:
         try:
             found = _one(q)
-        except Exception:  # noqa: BLE001 — jeden nieudany wariant nie przerywa reszty
+        except Exception:  # noqa: BLE001 — one failed variant does not stop the rest
             continue
         for u in found:
             key = u.get("name", "")
@@ -796,23 +798,23 @@ def _search_users(query: str) -> list[dict]:
 
 
 def _looks_like_login(raw: str) -> bool:
-    """True gdy string to gotowy login Jiry (np. 'jan.kowalski@example.com', 'a.nowak').
+    """True when the string is already a Jira login (e.g. 'jan.kowalski@example.com', 'a.nowak').
 
-    Loginy nie zawieraja spacji. Imie i nazwisko ('Ewa Nowak') zawiera — i wlasnie
-    takie wejscie trzeba dopiero rozwiazac przez wyszukiwanie.
+    Logins contain no spaces. A full name ('Ewa Nowak') does — and that is exactly
+    the input that still has to be resolved by a search.
     """
     return bool(raw) and " " not in raw.strip()
 
 
 def _resolve_reporter(raw: str) -> tuple[str, str]:
-    """Zamien wejsciowe 'reporter' na login Jiry. Zwraca (login, ostrzezenie_lub_pusty_string).
+    """Turn the 'reporter' input into a Jira login. Returns (login, warning_or_empty_string).
 
-    Trzy sciezki:
-      - puste           -> _DEFAULT_REPORTER, bez ostrzezenia (zachowanie historyczne)
-      - gotowy login    -> zwrot bez ruszania (persona kanalowa moze podac login wprost)
-      - imie i nazwisko -> wyszukanie w Jirze; brak trafienia = fallback na _DEFAULT_REPORTER
-                           PLUS ostrzezenie, bo cicha podmiana zglaszajacego to zle
-                           przypisanie, ktorego nikt nie zauwazy.
+    Three paths:
+      - empty      -> _DEFAULT_REPORTER, no warning (historical behaviour)
+      - a login    -> returned untouched (a channel persona may pass the login directly)
+      - a full name -> a Jira search; no hit = fall back to _DEFAULT_REPORTER
+                       PLUS a warning, because silently swapping the reporter is a wrong
+                       assignment nobody would notice.
     """
     raw = (raw or "").strip()
     if not raw:
@@ -823,29 +825,29 @@ def _resolve_reporter(raw: str) -> tuple[str, str]:
     if not matches:
         return (
             _DEFAULT_REPORTER,
-            f"OSTRZEZENIE: nie znalazlem w Jirze konta dla {raw!r} — "
-            f"reporter ustawiony na {_DEFAULT_REPORTER}.",
+            f"WARNING: no Jira account found for {raw!r} — "
+            f"reporter set to {_DEFAULT_REPORTER}.",
         )
     login = matches[0].get("name", "")
     if not login:
         return (
             _DEFAULT_REPORTER,
-            f"OSTRZEZENIE: konto dla {raw!r} bez pola name — "
-            f"reporter ustawiony na {_DEFAULT_REPORTER}.",
+            f"WARNING: the account for {raw!r} has no name field — "
+            f"reporter set to {_DEFAULT_REPORTER}.",
         )
     note = ""
     if len(matches) > 1:
         others = ", ".join(m.get("name", "") for m in matches[1:4])
-        note = f"UWAGA: {raw!r} pasowal do {len(matches)} kont — wybrano {login} (inne: {others})."
+        note = f"NOTE: {raw!r} matched {len(matches)} accounts — picked {login} (others: {others})."
     return login, note
 
 
 def _verify_reporter(issue_key: str, want_login: str) -> str:
-    """Sprawdz czy Jira faktycznie ustawila reportera przy tworzeniu; jesli nie — popraw PUT-em.
+    """Check that Jira really set the reporter on create; if not, fix it with a PUT.
 
-    Jira potrafi zignorowac pole reporter w payloadzie tworzenia (zaleznie od uprawnien i
-    konfiguracji ekranu) i wstawic wlasciciela tokenu. Payload-only test tego nie wyklapie,
-    dlatego po utworzeniu czytamy ticket i w razie rozbieznosci wolamy ten sam PUT, co
+    Jira can ignore the reporter field in the create payload (depending on permissions and
+    screen configuration) and put in the token owner. A payload-only test would not catch
+    that, so after creating we read the ticket back and, on a mismatch, send the same PUT as
     jira_update_reporter.
     """
     try:
@@ -857,10 +859,10 @@ def _verify_reporter(issue_key: str, want_login: str) -> str:
             verify=_jira.VERIFY_SSL,
         )
         if r.status_code != 200:
-            return f"UWAGA: nie udalo sie zweryfikowac reportera (HTTP {r.status_code})."
+            return f"NOTE: could not verify the reporter (HTTP {r.status_code})."
         got = ((r.json().get("fields") or {}).get("reporter") or {}).get("name", "")
     except Exception as exc:  # noqa: BLE001
-        return f"UWAGA: nie udalo sie zweryfikowac reportera ({exc})."
+        return f"NOTE: could not verify the reporter ({exc})."
 
     if got == want_login:
         return ""
@@ -875,20 +877,18 @@ def _verify_reporter(issue_key: str, want_login: str) -> str:
         )
     except Exception as exc:  # noqa: BLE001
         return (
-            f"UWAGA: Jira ustawila reportera na {got!r} zamiast {want_login!r}, "
-            f"a poprawka nie przeszla ({exc})."
+            f"NOTE: Jira set the reporter to {got!r} instead of {want_login!r}, "
+            f"and the fix failed ({exc})."
         )
     if pr.status_code in (200, 204):
-        return f"Reporter poprawiony po fakcie na {want_login} (Jira utworzyla ticket z {got!r})."
+        return f"Reporter corrected afterwards to {want_login} (Jira created the ticket with {got!r})."
     return (
-        f"UWAGA: Jira ustawila reportera na {got!r} zamiast {want_login!r}; "
-        f"poprawka PUT zwrocila HTTP {pr.status_code}."
+        f"NOTE: Jira set the reporter to {got!r} instead of {want_login!r}; "
+        f"the fixing PUT returned HTTP {pr.status_code}."
     )
 
 
-_JIRA_FIELDS = org_config.load_json_config(
-    "JIRA_FIELDS_FILE", org_config.REPO_ROOT / "config" / "jira-fields.json",
-)
+_JIRA_FIELDS = jira_fields.load()
 # {(project, issue_type): issuetype id}, from config/jira-fields.json ("issue_type_ids":
 # {"PROJ": {"task": "3", ...}}). Missing file = no project configured; jira_create says so.
 _ISSUE_TYPE_IDS: dict[tuple[str, str], str] = {
@@ -898,16 +898,16 @@ _ISSUE_TYPE_IDS: dict[tuple[str, str], str] = {
 }
 _PROJECTS = frozenset(proj for proj, _ in _ISSUE_TYPE_IDS)
 # Instance-specific write fields, from config/jira-fields.json "write_fields":
-# {"typ_pracy": "customfield_…", "dotyczy": …, "rodzaj_zmiany": …, "numer_projektu": …,
-#  "numer_zamowienia": …, "stan_obecny": …, "stan_docelowy": …}. A field missing from the
-# file is never sent. "typ_pracy_options" maps a label to its option id (the tool accepts
-# either); "rodzaj_zmiany_default" is set on create in every project except
-# "projects_without_work_type".
+# {"work_type": "customfield_…", "affects": …, "change_type": …, "project_number": …,
+#  "order_number": …, "current_state": …, "target_state": …}. A field missing from the
+# file is never sent. "work_type_options" maps a label to its option id (the tool accepts
+# either); "change_type_default" is set on create in every project except
+# "projects_without_work_type". Older Polish keys are read as aliases (jira_fields.py).
 _WRITE_FIELDS: dict[str, str] = dict(_JIRA_FIELDS.get("write_fields") or {})
-_TYP_PRACY_OPTIONS: dict[str, str] = {
-    str(label).strip().lower(): str(opt) for label, opt in (_JIRA_FIELDS.get("typ_pracy_options") or {}).items()
+_WORK_TYPE_OPTIONS: dict[str, str] = {
+    str(label).strip().lower(): str(opt) for label, opt in (_JIRA_FIELDS.get("work_type_options") or {}).items()
 }
-_RODZAJ_ZMIANY_DEFAULT = str(_JIRA_FIELDS.get("rodzaj_zmiany_default") or "")
+_CHANGE_TYPE_DEFAULT = str(_JIRA_FIELDS.get("change_type_default") or "")
 _NO_WORK_TYPE_PROJECTS = frozenset(p.upper() for p in _JIRA_FIELDS.get("projects_without_work_type") or ())
 
 
@@ -918,27 +918,27 @@ def _set_write_field(fields: dict, name: str, value) -> None:
         fields[field_id] = value
 
 
-def _typ_pracy_option(value: str) -> str:
-    """Option id for a Typ Pracy label (typ_pracy_options), or the value itself (already an id)."""
-    return _TYP_PRACY_OPTIONS.get(value.strip().lower(), value.strip())
+def _work_type_option(value: str) -> str:
+    """Option id for a Work type label (work_type_options), or the value itself (already an id)."""
+    return _WORK_TYPE_OPTIONS.get(value.strip().lower(), value.strip())
 
-# Epic Name (customfield_10004) -- pole wymagane na ekranie tworzenia epika. Sprint
-# (customfield_10020) na tym ekranie NIE wystepuje w zadnym projekcie.
+# Epic Name (customfield_10004) -- a required field on the epic create screen. Sprint
+# (customfield_10020) is NOT on that screen in any project.
 _EPIC_NAME_FIELD = "customfield_10004"
 
 
 @_write_tool
 def jira_search_users(query: str) -> str:
-    """Wyszukaj użytkowników Jiry po imieniu, nazwisku lub adresie e-mail.
+    """Search Jira users by first name, surname or e-mail address.
 
-    Przy podaniu imienia i nazwiska (np. "Ewa Nowak") automatycznie próbuje
-    kilku strategii wyszukiwania i zwraca deduplikowane wyniki z @example.com na górze.
+    Given a full name (e.g. "Ewa Nowak") it automatically tries several search
+    strategies and returns de-duplicated results with the org's e-mail domain first.
 
     Args:
-        query: Imię, nazwisko, pełne imię i nazwisko lub e-mail. Przykłady:
+        query: First name, surname, full name or e-mail. Examples:
                "Nowak", "Ewa Nowak", "ewa.nowak@example.com"
 
-    Zwraca: JSON lista obiektów {name, displayName, email} lub BLAD: ...
+    Returns: a JSON list of {name, displayName, email} objects, or ERROR: ...
     """
     import json as _json
 
@@ -962,62 +962,63 @@ def jira_create(
     epic_key: str = "",
     epic_name: str = "",
     labels: str = "",
-    typ_pracy: str = "",
-    dotyczy: str = "",
+    work_type: str = "",
+    affects: str = "",
     assignee: str = "",
     reporter: str = "",
     sprint_id: str = "",
     link_to: str = "",
     link_type: str = "Related",
     priority: str = "",
-    stan_obecny: str = "",
-    stan_docelowy: str = "",
+    current_state: str = "",
+    target_state: str = "",
 ) -> str:
-    """Utwórz nowy ticket Jira w jednym z projektów z config/jira-fields.json.
+    """Create a new Jira ticket in one of the projects from config/jira-fields.json.
 
-    Wywołuj TYLKO po jawnym potwierdzeniu użytkownika — to operacja zapisu.
+    Call ONLY after the user has explicitly confirmed — this is a write.
 
     Args:
-        project:     Klucz projektu Jira, np. PRJ1 (lista w config/jira-fields.json).
-        summary:     Tytuł ticketu (krótki, do 255 znaków).
-        issue_type:  Typ: "user-story" (Historyjka/Historia), "task" (Zadanie), "bug" (Błąd)
-                     lub "epic" (Epik) — tylko kombinacje projekt/typ z config/jira-fields.json.
-                     Projekt bez typu epic: załóż epik w innym projekcie i podepnij zadania
-                     przez epic_key (epic link działa cross-project).
-        description: Opis ticketu w plain text (opcjonalny).
-        epic_key:    Klucz epika do podpięcia, np. "PRJ1-100" (opcjonalny). Nie używaj razem
-                     z issue_type="epic" — epik nie podpina się pod inny epik.
-        epic_name:   Tylko dla issue_type="epic": nazwa epika (customfield_10004, pole wymagane
-                     przez Jirę). Puste = użyje wartości summary. Dla innych typów ignorowane.
-        labels:      Etykiety oddzielone przecinkami, np. "TEST,serwis" (opcjonalne).
-        typ_pracy:   Typ Pracy: etykieta z config/jira-fields.json (typ_pracy_options), np.
-                     "Prace programistyczne", albo ID opcji. Puste = nie ustawia.
-        dotyczy:     Wartość pola "Dotyczy", np. "FieldOps" (opcjonalna).
-        assignee:    Nazwa użytkownika Jira (pole "name" z jira_search_users), opcjonalna.
-        reporter:    Nazwa użytkownika Jira jako zgłaszający (pole "name" z jira_search_users), opcjonalna.
-                     Puste = domyślnie jan.kowalski@example.com — Jira wymaga tego pola na PRJ1
-                     (i innych projektach) przy tworzeniu, więc puste "reporter" wywala walidację.
-        sprint_id:   Numeryczne ID sprintu (string) do przypisania przy tworzeniu (customfield_10020),
-                     np. "9002". Uzyskaj przez jira_sprint_search. Puste = nie ustawia.
-                     Uwaga: jesli Jira zwroci blad o nieznanym polu, uzyj jira_assign_sprint po fakcie.
-                     Dla issue_type="epic" pomijane — epiki nie maja pola sprintu na ekranie
-                     tworzenia (w odpowiedzi pojawi sie OSTRZEZENIE).
-        link_to:     Klucz istniejącego ticketu do automatycznego powiązania po utworzeniu,
-                     np. "PRJ1-1234". Puste = nie ustawia. Używaj gdy wiesz o powiązanym US/zadaniu.
-        link_type:   Typ powiązania dla link_to: "Related" (domyślny), "Blocks", "Duplicate" itp.
-        priority:    Nazwa priorytetu dokładnie jak w Jirze, np. "Bloker", "Krytyczny", "Wysoki",
-                     "Średni", "Niski". Puste = nie ustawia (Jira użyje domyślnego priorytetu
-                     projektu). Ustawiany OSOBNYM wywołaniem zaraz po utworzeniu ticketu (nie w
-                     payloadzie tworzenia) — jeśli podana nazwa nie pasuje do żadnej dostępnej
-                     wartości dla tego ticketu, ticket i tak powstaje, ale w odpowiedzi pojawi się
-                     OSTRZEZENIE i trzeba będzie doprecyzować priorytet przez jira_update_priority.
-        stan_obecny:   Wymagane dla PRJ2/bug (ekran Błędu nie ma pola description) —
-                     opisuje stan obecny/problem. Puste = nie ustawia.
-        stan_docelowy: Wymagane dla PRJ2/bug — opisuje stan docelowy/
-                     oczekiwane zachowanie. Puste = nie ustawia.
+        project:     Jira project key, e.g. PRJ1 (list in config/jira-fields.json).
+        summary:     Ticket title (short, up to 255 characters).
+        issue_type:  Type: "user-story" (Story), "task" (Task), "bug" (Bug)
+                     or "epic" (Epic) — only project/type combinations from config/jira-fields.json.
+                     A project without the epic type: create the epic in another project and link
+                     the tasks through epic_key (the epic link works across projects).
+        description: Ticket description in plain text (optional).
+        epic_key:    Key of the epic to link to, e.g. "PRJ1-100" (optional). Do not use it together
+                     with issue_type="epic" — an epic does not link under another epic.
+        epic_name:   Only for issue_type="epic": the epic name (customfield_10004, a field Jira
+                     requires). Empty = uses the summary. Ignored for other types.
+        labels:      Comma-separated labels, e.g. "TEST,service" (optional).
+        work_type:   Work type: a label from config/jira-fields.json (work_type_options), e.g.
+                     "Development", or an option ID. Empty = not set.
+        affects:     Value of the "Affects" field, e.g. "FieldOps" (optional).
+        assignee:    Jira user name (the "name" field from jira_search_users), optional.
+        reporter:    Jira user name as the reporter (the "name" field from jira_search_users), optional.
+                     Empty = the default reporter (the owner's login, OWNER_JIRA_LOGIN) — Jira
+                     requires this field on PRJ1 (and other projects) on create, so an empty
+                     "reporter" would fail validation.
+        sprint_id:   Numeric sprint ID (string) to assign on create (customfield_10020),
+                     e.g. "9002". Get it from jira_sprint_search. Empty = not set.
+                     Note: if Jira returns an unknown-field error, use jira_assign_sprint afterwards.
+                     Skipped for issue_type="epic" — epics have no sprint field on the create
+                     screen (the response carries a WARNING).
+        link_to:     Key of an existing ticket to link automatically after creation,
+                     e.g. "PRJ1-1234". Empty = not set. Use it when you know of a related story/task.
+        link_type:   Link type for link_to: "Related" (default), "Blocks", "Duplicate" etc.
+        priority:    Priority name exactly as in Jira, e.g. "Blocker", "Critical", "High",
+                     "Medium", "Low". Empty = not set (Jira uses the project's default
+                     priority). Set in a SEPARATE call right after the ticket is created (not in
+                     the create payload) — if the name matches no available value for this
+                     ticket, the ticket is still created, but the response carries a WARNING
+                     and the priority has to be fixed with jira_update_priority.
+        current_state: Required for PRJ2/bug (the Bug screen has no description field) —
+                     describes the current state / the problem. Empty = not set.
+        target_state:  Required for PRJ2/bug — describes the target state /
+                     expected behaviour. Empty = not set.
 
-    Zwraca: KEY — URL przy sukcesie (z dopiskiem o priorytecie/linku jeśli podano), lub BLAD: ...
-    przy błędzie samego tworzenia ticketu.
+    Returns: KEY — URL on success (with a note about the priority/link if given), or ERROR: ...
+    when creating the ticket itself failed.
     """
     t0 = time.perf_counter()
     proj = project.upper()
@@ -1028,22 +1029,22 @@ def jira_create(
     )
 
     if not _PROJECTS:
-        return "BLAD: jira_create nie jest skonfigurowane — brak issue_type_ids w config/jira-fields.json."
+        return "ERROR: jira_create is not configured — no issue_type_ids in config/jira-fields.json."
     if proj not in _PROJECTS:
-        return f"BLAD: project musi byc jednym z {', '.join(sorted(_PROJECTS))} (podano: {project!r})"
+        return f"ERROR: project must be one of {', '.join(sorted(_PROJECTS))} (got: {project!r})"
     issuetype_id = _ISSUE_TYPE_IDS.get((proj, itype))
     if issuetype_id is None:
         if itype == "epic":
             with_epic = ", ".join(sorted(p for p, t in _ISSUE_TYPE_IDS if t == "epic"))
             return (
-                f"BLAD: w {proj} nie da sie utworzyc epika. Zaloz epik w projekcie, ktory go ma "
-                f"({with_epic}), i podepnij pod niego zadania {proj} przez epic_key "
-                "(epic link dziala cross-project)."
+                f"ERROR: an epic cannot be created in {proj}. Create the epic in a project that has one "
+                f"({with_epic}) and link the {proj} tasks to it through epic_key "
+                "(the epic link works across projects)."
             )
         return (
-            f"BLAD: issue_type musi byc 'user-story', 'task', 'bug' lub 'epic' "
-            f"(dostepne kombinacje projekt/typ: {sorted(_ISSUE_TYPE_IDS)}; "
-            f"podano: project={proj!r}, issue_type={issue_type!r})."
+            f"ERROR: issue_type must be 'user-story', 'task', 'bug' or 'epic' "
+            f"(available project/type combinations: {sorted(_ISSUE_TYPE_IDS)}; "
+            f"got: project={proj!r}, issue_type={issue_type!r})."
         )
     is_epic = itype == "epic"
 
@@ -1055,23 +1056,23 @@ def jira_create(
     if description:
         fields["description"] = description
     if is_epic:
-        # Epic Name jest wymagany przez Jire na ekranie tworzenia epika — brak = HTTP 400.
+        # Jira requires Epic Name on the epic create screen — missing = HTTP 400.
         fields[_EPIC_NAME_FIELD] = (epic_name or summary).strip()
     epic_key_warning = ""
     if epic_key:
         if is_epic:
             epic_key_warning = (
-                " | OSTRZEZENIE: epic_key pominiety — epik nie podpina sie pod inny epik"
+                " | WARNING: epic_key skipped — an epic does not link under another epic"
             )
         else:
             fields["customfield_10001"] = epic_key
     if proj not in _NO_WORK_TYPE_PROJECTS:
-        if _RODZAJ_ZMIANY_DEFAULT:
-            _set_write_field(fields, "rodzaj_zmiany", {"id": _RODZAJ_ZMIANY_DEFAULT})
-        if typ_pracy:
-            _set_write_field(fields, "typ_pracy", {"id": _typ_pracy_option(typ_pracy)})
-        if dotyczy:
-            _set_write_field(fields, "dotyczy", [dotyczy])
+        if _CHANGE_TYPE_DEFAULT:
+            _set_write_field(fields, "change_type", {"id": _CHANGE_TYPE_DEFAULT})
+        if work_type:
+            _set_write_field(fields, "work_type", {"id": _work_type_option(work_type)})
+        if affects:
+            _set_write_field(fields, "affects", [affects])
     if assignee:
         fields["assignee"] = {"name": assignee}
     reporter_login, reporter_note = _resolve_reporter(reporter)
@@ -1082,17 +1083,17 @@ def jira_create(
     sprint_warning = ""
     if sprint_id:
         if is_epic:
-            # customfield_10020 nie wystepuje na ekranie tworzenia epika w zadnym projekcie —
-            # wyslanie go konczy sie HTTP 400 i ticket w ogole nie powstaje.
+            # customfield_10020 is not on the epic create screen in any project —
+            # sending it ends in HTTP 400 and the ticket is not created at all.
             sprint_warning = (
-                f" | OSTRZEZENIE: sprint {sprint_id} pominiety — epiki nie maja pola sprintu"
+                f" | WARNING: sprint {sprint_id} skipped — epics have no sprint field"
             )
         else:
             fields["customfield_10020"] = int(sprint_id)
-    if stan_obecny:
-        _set_write_field(fields, "stan_obecny", stan_obecny)
-    if stan_docelowy:
-        _set_write_field(fields, "stan_docelowy", stan_docelowy)
+    if current_state:
+        _set_write_field(fields, "current_state", current_state)
+    if target_state:
+        _set_write_field(fields, "target_state", target_state)
 
     import json as _json
     payload = _json.dumps({"fields": fields}).encode("utf-8")
@@ -1106,7 +1107,7 @@ def jira_create(
         )
     except requests.RequestException as exc:
         _tlog(f"jira_create error: {exc}", t0)
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
 
     if resp.status_code not in (200, 201):
         _tlog(f"jira_create HTTP {resp.status_code}", t0)
@@ -1116,14 +1117,14 @@ def jira_create(
             detail = "; ".join(msgs) if msgs else resp.text[:300]
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
 
     key = resp.json().get("key", "?")
     ticket_url = f"{_jira.JIRA_URL}/browse/{key}"
     _tlog("jira_create done", t0, f"key={key}")
 
-    # Jira potrafi zignorowac reportera z payloadu tworzenia — sprawdzamy tylko wtedy, gdy
-    # ktos jawnie o kogos poprosil (puste reporter = domyslny wlasciciel, nie ma czego mylic).
+    # Jira can ignore the reporter in the create payload — we check only when somebody
+    # explicitly asked for someone (empty reporter = the default owner, nothing to mix up).
     reporter_fix = ""
     if reporter.strip() and key != "?":
         reporter_fix = _verify_reporter(key, reporter_login)
@@ -1144,11 +1145,11 @@ def jira_create(
                 timeout=20,
             )
             if lr.status_code in (200, 201):
-                link_result = f" | powiązano [{link_type}] {link_to}"
+                link_result = f" | linked [{link_type}] {link_to}"
             else:
-                link_result = f" | OSTRZEZENIE: link do {link_to} nie udał się (HTTP {lr.status_code})"
+                link_result = f" | WARNING: link to {link_to} failed (HTTP {lr.status_code})"
         except requests.RequestException as exc:
-            link_result = f" | OSTRZEZENIE: link do {link_to} nie udał się: {exc}"
+            link_result = f" | WARNING: link to {link_to} failed: {exc}"
 
     priority_result = ""
     if priority and key != "?":
@@ -1157,9 +1158,9 @@ def jira_create(
         # (see _resolve_priority_id docstring). Set it right after creation via id instead.
         pr = _set_priority(key, priority)
         if pr == "OK":
-            priority_result = f" | priorytet: {priority}"
+            priority_result = f" | priority: {priority}"
         else:
-            priority_result = f" | OSTRZEZENIE: priorytet nie ustawiony ({pr})"
+            priority_result = f" | WARNING: priority not set ({pr})"
 
     reporter_result = ""
     for _part in (reporter_note, reporter_fix):
@@ -1174,16 +1175,16 @@ def jira_create(
 
 @_write_tool
 def jira_update_assignee(issue_key: str, assignee: str) -> str:
-    """Zmień osobę przypisaną (Assignee) na istniejącym tickecie Jira.
+    """Change the Assignee on an existing Jira ticket.
 
-    Działa zarówno na nowo utworzonych, jak i starych ticketach.
-    Nazwę użytkownika pobierz z jira_search_users (pole "name").
+    Works on newly created and old tickets alike.
+    Get the user name from jira_search_users (the "name" field).
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-4568".
-        assignee:  Nazwa użytkownika Jira (pole "name" z jira_search_users).
+        issue_key: Ticket key, e.g. "PRJ1-4568".
+        assignee:  Jira user name (the "name" field from jira_search_users).
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     import json as _json
     t0 = time.perf_counter()
@@ -1197,7 +1198,7 @@ def jira_update_assignee(issue_key: str, assignee: str) -> str:
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -1206,23 +1207,23 @@ def jira_update_assignee(issue_key: str, assignee: str) -> str:
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"jira_update_assignee HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     _tlog("jira_update_assignee done", t0, f"key={issue_key} assignee={assignee}")
     return "OK"
 
 
 @_write_tool
 def jira_update_reporter(issue_key: str, reporter: str) -> str:
-    """Zmień zgłaszającego (Reporter) na istniejącym tickecie Jira.
+    """Change the Reporter on an existing Jira ticket.
 
-    Działa zarówno na nowo utworzonych, jak i starych ticketach.
-    Nazwę użytkownika pobierz z jira_search_users (pole "name").
+    Works on newly created and old tickets alike.
+    Get the user name from jira_search_users (the "name" field).
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-4568".
-        reporter:  Nazwa użytkownika Jira (pole "name" z jira_search_users).
+        issue_key: Ticket key, e.g. "PRJ1-4568".
+        reporter:  Jira user name (the "name" field from jira_search_users).
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     import json as _json
     t0 = time.perf_counter()
@@ -1236,7 +1237,7 @@ def jira_update_reporter(issue_key: str, reporter: str) -> str:
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -1245,28 +1246,28 @@ def jira_update_reporter(issue_key: str, reporter: str) -> str:
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"jira_update_reporter HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     _tlog("jira_update_reporter done", t0, f"key={issue_key} reporter={reporter}")
     return "OK"
 
 
 @_write_tool
 def jira_update_priority(issue_key: str, priority: str) -> str:
-    """Zmień priorytet na istniejącym tickecie Jira.
+    """Change the priority on an existing Jira ticket.
 
-    Działa zarówno na nowo utworzonych, jak i starych ticketach. Priorytet jest ustawiany
-    po ID (rozwiązanym z nazwy przez editmeta ticketu), nie po nazwie wprost — na tej
-    instancji Jiry ustawianie priorytetu samą nazwą zawodzi dla niektórych wartości
-    (zweryfikowane empirycznie), mimo ze dokladnie ta sama nazwa jest poprawna.
+    Works on newly created and old tickets alike. The priority is set by ID (resolved
+    from the name through the ticket's editmeta), not by the name directly — on some Jira
+    instances setting the priority by name alone fails for some values (verified
+    empirically), even though exactly the same name is valid.
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-4568".
-        priority:  Nazwa priorytetu dokładnie jak w Jirze, np. "Bloker", "Krytyczny", "Wysoki",
-                   "Średni", "Niski". Nazwy priorytetów są zdefiniowane per-projekt w Jirze —
-                   jeśli podana nazwa nie istnieje w schemacie priorytetów TEGO ticketu,
-                   narzędzie zwraca BLAD z listą dostępnych nazw dla tego ticketu.
+        issue_key: Ticket key, e.g. "PRJ1-4568".
+        priority:  Priority name exactly as in Jira, e.g. "Blocker", "Critical", "High",
+                   "Medium", "Low". Priority names are defined per project in Jira —
+                   if the name does not exist in THIS ticket's priority scheme, the tool
+                   returns ERROR with the list of names available for this ticket.
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     t0 = time.perf_counter()
     result = _set_priority(issue_key, priority)
@@ -1276,21 +1277,21 @@ def jira_update_priority(issue_key: str, priority: str) -> str:
 
 @_write_tool
 def jira_update_fix_version(issue_key: str, version: str, action: str = "add") -> str:
-    """Zarządzaj polem Fix Version/s na istniejącym tickecie Jira: dodaj, usuń lub zastąp.
+    """Manage the Fix Version/s field on an existing Jira ticket: add, remove or replace.
 
-    Działa zarówno na nowo utworzonych, jak i starych ticketach.
+    Works on newly created and old tickets alike.
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-3020".
-        version:   Nazwa wersji dokładnie jak w Jirze, np. "v 2.16n". Wersje są zdefiniowane
-                   per-projekt w Jirze — jeśli podana nazwa nie istnieje w projekcie tego
-                   ticketu, narzędzie zwraca BLAD z listą dostępnych wersji dla tego ticketu.
-        action:    "add" (domyślne) — DODAJE version do listy, nie rusza już ustawionych wersji.
-                   "remove" — USUWA version z listy, reszta zostaje bez zmian.
-                   "set" — ZASTĘPUJE całą listę Fix Version/s wyłącznie przez version
-                   (jedna wersja, wszystkie inne wcześniej ustawione znikają).
+        issue_key: Ticket key, e.g. "PRJ1-3020".
+        version:   Version name exactly as in Jira, e.g. "v 2.16n". Versions are defined
+                   per project in Jira — if the name does not exist in this ticket's
+                   project, the tool returns ERROR with the list of versions available for this ticket.
+        action:    "add" (default) — ADDS version to the list, leaves versions already set alone.
+                   "remove" — REMOVES version from the list, the rest stays unchanged.
+                   "set" — REPLACES the whole Fix Version/s list with version alone
+                   (one version; every other version set before disappears).
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     t0 = time.perf_counter()
     result = _update_fix_version(issue_key, version, action)
@@ -1304,63 +1305,63 @@ def jira_update_fix_version(issue_key: str, version: str, action: str = "add") -
 @_write_tool
 def jira_update_ticket(
     issue_key: str,
-    typ_pracy: str = "",
-    dotyczy: str = "",
-    rodzaj_zmiany: str = "",
+    work_type: str = "",
+    affects: str = "",
+    change_type: str = "",
     labels: str = "",
     epic_link: str = "",
     components: str = "",
-    numer_projektu: str = "",
-    numer_zamowienia: str = "",
+    project_number: str = "",
+    order_number: str = "",
 ) -> str:
-    """Zaktualizuj pola na istniejącym tickecie Jira.
+    """Update fields on an existing Jira ticket.
 
-    Działa na dowolnym istniejącym tickecie. Przekaż tylko te pola, które chcesz zmienić.
+    Works on any existing ticket. Pass only the fields you want to change.
 
     Args:
-        issue_key:     Klucz ticketu, np. "PRJ1-4568".
-        typ_pracy:     Typ Pracy: etykieta z config/jira-fields.json (typ_pracy_options)
-                       albo ID opcji. Puste = nie zmienia.
-        dotyczy:       Wartość pola "Dotyczy", np. "FieldOps". Puste = nie zmienia.
-        rodzaj_zmiany: ID opcji pola "Rodzaj Zmiany". Puste = nie zmienia.
-        labels:        Etykiety oddzielone przecinkami, np. "serwis,zgloszenie-klienta".
-                       ZASTĘPUJE wszystkie istniejące etykiety. Puste = nie zmienia.
-        epic_link:     Klucz epika, np. "PRJ1-4597". Ustawia Epic Link (customfield_10001).
-                       Puste = nie zmienia.
-        components:    Komponenty oddzielone przecinkami, np. "praca_nieplanowana,backend".
-                       ZASTĘPUJE wszystkie istniejące komponenty — jeśli chcesz tylko dodać,
-                       najpierw pobierz istniejące przez jira_issue(key) i dołącz do listy.
-                       Puste = nie zmienia.
-        numer_projektu:   Numer projektu, zwykły tekst, np. "PRJ-123". Puste = nie zmienia.
-        numer_zamowienia: Numer zamówienia, zwykły tekst, np. "ZAM-456".
-                          Puste = nie zmienia.
+        issue_key:     Ticket key, e.g. "PRJ1-4568".
+        work_type:     Work type: a label from config/jira-fields.json (work_type_options)
+                       or an option ID. Empty = unchanged.
+        affects:       Value of the "Affects" field, e.g. "FieldOps". Empty = unchanged.
+        change_type:   Option ID of the "Change type" field. Empty = unchanged.
+        labels:        Comma-separated labels, e.g. "service,customer-report".
+                       REPLACES all existing labels. Empty = unchanged.
+        epic_link:     Epic key, e.g. "PRJ1-4597". Sets the Epic Link (customfield_10001).
+                       Empty = unchanged.
+        components:    Comma-separated components, e.g. "unplanned_work,backend".
+                       REPLACES all existing components — if you only want to add one,
+                       first get the existing ones with jira_issue(key) and append to the list.
+                       Empty = unchanged.
+        project_number: Project number, plain text, e.g. "PRJ-123". Empty = unchanged.
+        order_number:   Order number, plain text, e.g. "PO-456".
+                        Empty = unchanged.
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     import json as _json
     t0 = time.perf_counter()
     fields: dict = {}
-    if typ_pracy:
-        _set_write_field(fields, "typ_pracy", {"id": _typ_pracy_option(typ_pracy)})
-    if dotyczy:
-        _set_write_field(fields, "dotyczy", [dotyczy])
-    if rodzaj_zmiany:
-        _set_write_field(fields, "rodzaj_zmiany", {"id": rodzaj_zmiany})
+    if work_type:
+        _set_write_field(fields, "work_type", {"id": _work_type_option(work_type)})
+    if affects:
+        _set_write_field(fields, "affects", [affects])
+    if change_type:
+        _set_write_field(fields, "change_type", {"id": change_type})
     if labels:
         fields["labels"] = [lb.strip() for lb in labels.split(",") if lb.strip()]
     if epic_link:
         fields["customfield_10001"] = epic_link.strip()
     if components:
         fields["components"] = [{"name": c.strip()} for c in components.split(",") if c.strip()]
-    if numer_projektu:
-        _set_write_field(fields, "numer_projektu", numer_projektu.strip())
-    if numer_zamowienia:
-        _set_write_field(fields, "numer_zamowienia", numer_zamowienia.strip())
+    if project_number:
+        _set_write_field(fields, "project_number", project_number.strip())
+    if order_number:
+        _set_write_field(fields, "order_number", order_number.strip())
     if not fields:
         return (
-            "BLAD: podaj co najmniej jedno pole do zmiany "
-            "(typ_pracy, dotyczy, rodzaj_zmiany, labels, epic_link, components, "
-            "numer_projektu lub numer_zamowienia)"
+            "ERROR: give at least one field to change "
+            "(work_type, affects, change_type, labels, epic_link, components, "
+            "project_number or order_number)"
         )
     payload = _json.dumps({"fields": fields}).encode("utf-8")
     url = f"{_jira.JIRA_URL}/rest/api/2/issue/{issue_key}"
@@ -1372,7 +1373,7 @@ def jira_update_ticket(
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -1381,11 +1382,11 @@ def jira_update_ticket(
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"jira_update_ticket HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     _field_map = {
-        "typ_pracy": typ_pracy, "dotyczy": dotyczy, "rodzaj_zmiany": rodzaj_zmiany,
+        "work_type": work_type, "affects": affects, "change_type": change_type,
         "labels": labels, "epic_link": epic_link, "components": components,
-        "numer_projektu": numer_projektu, "numer_zamowienia": numer_zamowienia,
+        "project_number": project_number, "order_number": order_number,
     }
     changed = ", ".join(k for k, v in _field_map.items() if v)
     _tlog("jira_update_ticket done", t0, f"key={issue_key} changed={changed}")
@@ -1398,17 +1399,17 @@ def jira_update_description(
     description: str = "",
     summary: str = "",
 ) -> str:
-    """Zaktualizuj opis (description) i/lub tytuł (summary) istniejącego ticketu Jira.
+    """Update the description and/or the title (summary) of an existing Jira ticket.
 
-    Używaj wiki markup w description (h2., h3., *, #, {code}, itd.).
-    Przekaż tylko te pola, które chcesz zmienić — puste = bez zmian.
+    Use wiki markup in description (h2., h3., *, #, {code}, etc.).
+    Pass only the fields you want to change — empty = unchanged.
 
     Args:
-        issue_key:   Klucz ticketu, np. "PRJ1-4846".
-        description: Nowa treść opisu w formacie wiki markup Jiry. Puste = nie zmienia.
-        summary:     Nowy tytuł ticketu. Puste = nie zmienia.
+        issue_key:   Ticket key, e.g. "PRJ1-4846".
+        description: New description text in Jira wiki markup. Empty = unchanged.
+        summary:     New ticket title. Empty = unchanged.
 
-    Zwraca: "OK" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK" on success or ERROR: ... on failure.
     """
     import json as _json
     t0 = time.perf_counter()
@@ -1418,7 +1419,7 @@ def jira_update_description(
     if summary:
         fields["summary"] = summary
     if not fields:
-        return "BLAD: podaj co najmniej jedno pole do zmiany (description lub summary)"
+        return "ERROR: give at least one field to change (description or summary)"
     payload = _json.dumps({"fields": fields}).encode("utf-8")
     url = f"{_jira.JIRA_URL}/rest/api/2/issue/{issue_key}"
     try:
@@ -1429,7 +1430,7 @@ def jira_update_description(
             timeout=30,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 204):
         try:
             body = resp.json()
@@ -1438,7 +1439,7 @@ def jira_update_description(
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"jira_update_description HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     changed = ", ".join(f for f, v in [("description", description), ("summary", summary)] if v)
     _tlog("jira_update_description done", t0, f"key={issue_key} changed={changed}")
     return "OK"
@@ -1446,16 +1447,16 @@ def jira_update_description(
 
 @_write_tool
 def jira_transition(issue_key: str, status: str) -> str:
-    """Zmień status (workflow transition) istniejącego ticketu Jira.
+    """Change the status (workflow transition) of an existing Jira ticket.
 
-    Pobiera dostępne przejścia dla ticketu i wykonuje to, którego nazwa pasuje
-    do podanego statusu (dopasowanie case-insensitive, częściowe).
+    Gets the ticket's available transitions and runs the one whose name matches
+    the given status (case-insensitive, partial match).
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-4848".
-        status:    Nazwa docelowego statusu, np. "Anulowane", "In Progress", "Done".
+        issue_key: Ticket key, e.g. "PRJ1-4848".
+        status:    Name of the target status, e.g. "Cancelled", "In Progress", "Done".
 
-    Zwraca: "OK: <nazwa statusu>" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK: <status name>" on success or ERROR: ... on failure.
     """
     import json as _json
     t0 = time.perf_counter()
@@ -1465,7 +1466,7 @@ def jira_transition(issue_key: str, status: str) -> str:
         r.raise_for_status()
         transitions = r.json().get("transitions", [])
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry (pobieranie tranzycji): {exc}"
+        return f"ERROR: cannot connect to Jira (fetching transitions): {exc}"
 
     status_lower = status.strip().lower()
     match = next(
@@ -1474,7 +1475,7 @@ def jira_transition(issue_key: str, status: str) -> str:
     )
     if not match:
         available = ", ".join(t["to"]["name"] for t in transitions)
-        return f"BLAD: nie znaleziono statusu '{status}'. Dostępne: {available}"
+        return f"ERROR: status '{status}' not found. Available: {available}"
 
     transition_id = match["id"]
     target_name = match["to"]["name"]
@@ -1487,7 +1488,7 @@ def jira_transition(issue_key: str, status: str) -> str:
             timeout=15,
         )
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry (wykonanie tranzycji): {exc}"
+        return f"ERROR: cannot connect to Jira (running the transition): {exc}"
 
     if resp.status_code not in (200, 204):
         try:
@@ -1497,7 +1498,7 @@ def jira_transition(issue_key: str, status: str) -> str:
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
         _tlog(f"jira_transition HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
 
     _tlog("jira_transition done", t0, f"key={issue_key} -> {target_name}")
     return f"OK: {issue_key} → {target_name}"
@@ -1505,18 +1506,18 @@ def jira_transition(issue_key: str, status: str) -> str:
 
 @_write_tool
 def jira_sprint_search(query: str, project: str) -> str:
-    """Wyszukaj sprinty Jiry dla danego projektu (tylko active + future).
+    """Search a project's Jira sprints (active + future only).
 
-    Przeszukuje wszystkie boardy projektu przez Agile REST API, filtruje sprinty
-    po nazwie (case-insensitive substring), deduplikuje po ID sprintu.
-    Uzywaj PRZED jira_assign_sprint lub jira_create(sprint_id=...) aby ustalic ID sprintu.
+    Searches every board of the project through the Agile REST API, filters sprints
+    by name (case-insensitive substring), de-duplicates by sprint ID.
+    Use it BEFORE jira_assign_sprint or jira_create(sprint_id=...) to find the sprint ID.
 
     Args:
-        query:   Fragment nazwy sprintu, np. "FieldOps Sprint 13" lub "Sprint 12".
-        project: Klucz projektu Jiry, np. "PRJ2" lub "PRJ1".
+        query:   Part of the sprint name, e.g. "FieldOps Sprint 13" or "Sprint 12".
+        project: Jira project key, e.g. "PRJ2" or "PRJ1".
 
-    Zwraca JSON: {sprints: [{id, name, state, board_id, board_name}], count, query}.
-    Jesli count=0 — brak pasujacych sprintow (poprawny wynik, nie blad).
+    Returns JSON: {sprints: [{id, name, state, board_id, board_name}], count, query}.
+    If count=0 — no matching sprint (a valid result, not an error).
     """
     import json as _json
 
@@ -1529,7 +1530,7 @@ def jira_sprint_search(query: str, project: str) -> str:
     boards_data, err = _agile_get("/rest/agile/1.0/board", {"projectKeyOrId": project})
     if err:
         _tlog(f"jira_sprint_search board discovery error: {err}", t0)
-        return f"BLAD: {err}"
+        return f"ERROR: {err}"
 
     boards = (boards_data or {}).get("values", [])
     if not boards:
@@ -1572,18 +1573,18 @@ def jira_sprint_search(query: str, project: str) -> str:
 
 @_write_tool
 def jira_assign_sprint(issue_key: str, sprint_id: int) -> str:
-    """Przypisz istniejacy ticket Jira do sprintu przez Agile REST API.
+    """Assign an existing Jira ticket to a sprint through the Agile REST API.
 
-    Wywoluj TYLKO po jawnym potwierdzeniu uzytkownika — to operacja zapisu.
-    Sprint ID uzyskaj przez jira_sprint_search. Dziala na active i future sprintach.
-    Mozna przypisac ticket do sprintu rowniez po jego utworzeniu (fallback gdy
-    customfield_10020 nie zadziala przy jira_create dla danego projektu/typu).
+    Call ONLY after the user has explicitly confirmed — this is a write.
+    Get the sprint ID from jira_sprint_search. Works on active and future sprints.
+    A ticket can also be assigned to a sprint after it was created (the fallback when
+    customfield_10020 does not work in jira_create for a given project/type).
 
     Args:
-        issue_key: Klucz ticketu Jira, np. "PRJ2-123".
-        sprint_id: Numeryczne ID sprintu (z jira_sprint_search).
+        issue_key: Jira ticket key, e.g. "PRJ2-123".
+        sprint_id: Numeric sprint ID (from jira_sprint_search).
 
-    Zwraca: "OK" przy sukcesie lub "BLAD: ..." przy bledzie.
+    Returns: "OK" on success or "ERROR: ..." on failure.
     """
     import json as _json
 
@@ -1603,7 +1604,7 @@ def jira_assign_sprint(issue_key: str, sprint_id: int) -> str:
         )
     except requests.RequestException as exc:
         _tlog(f"jira_assign_sprint error: {exc}", t0)
-        return f"BLAD: problem z polaczeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
 
     if resp.status_code not in (200, 204):
         _tlog(f"jira_assign_sprint HTTP {resp.status_code}", t0)
@@ -1613,7 +1614,7 @@ def jira_assign_sprint(issue_key: str, sprint_id: int) -> str:
             detail = "; ".join(msgs) if msgs else resp.text[:300]
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
-        return f"BLAD: Jira Agile HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira Agile HTTP {resp.status_code} — {detail}"
 
     _tlog("jira_assign_sprint done", t0, f"issue_key={issue_key} sprint_id={sprint_id}")
     return "OK"
@@ -1640,28 +1641,28 @@ def _attachment_allowed(p: Path) -> bool:
 
 @_write_tool
 def jira_attach(issue_key: str, file_path: str) -> str:
-    """Dodaj plik lokalny jako załącznik do ticketu Jira.
+    """Add a local file as an attachment to a Jira ticket.
 
-    Używaj po jira_create gdy wiadomość użytkownika zawierała screenshoty lub pliki
-    (przekazane jako ścieżki w kontekście wiadomości).
+    Use it after jira_create when the user's message carried screenshots or files
+    (passed as paths in the message context).
 
     Args:
-        issue_key: Klucz ticketu, np. "PRJ1-1234".
-        file_path: Bezwzględna ścieżka do pliku na dysku, np. "/Users/.../screenshot.png".
+        issue_key: Ticket key, e.g. "PRJ1-1234".
+        file_path: Absolute path to the file on disk, e.g. "/Users/.../screenshot.png".
 
-    Zwraca: "OK: <filename> dodany" przy sukcesie lub BLAD: ... przy błędzie.
+    Returns: "OK: <filename> added" on success or ERROR: ... on failure.
     """
     import mimetypes as _mime
     t0 = time.perf_counter()
     if not _ISSUE_KEY_RE.match((issue_key or "").strip().upper()):
-        return "BLAD: issue_key musi miec format PROJEKT-NNN (np. PRJ1-123)"
+        return "ERROR: issue_key must look like PROJECT-NNN (e.g. PRJ1-123)"
     issue_key = issue_key.strip().upper()
     p = Path(file_path)
     if not p.exists():
-        return f"BLAD: plik nie istnieje: {file_path}"
+        return f"ERROR: file does not exist: {file_path}"
     if not _attachment_allowed(p):
-        _tlog("jira_attach odrzucony (sciezka spoza dozwolonych)", t0, p.name)
-        return "BLAD: mozna dolaczac tylko zalaczniki z wiadomosci Teams (pliki tymczasowe Bota)"
+        _tlog("jira_attach rejected (path not allowed)", t0, p.name)
+        return "ERROR: only attachments from Teams messages can be attached (Bob's temporary files)"
     mime_type = _mime.guess_type(str(p))[0] or "application/octet-stream"
     url = f"{_jira.JIRA_URL}/rest/api/2/issue/{issue_key}/attachments"
     headers = {k: v for k, v in _jira._HEADERS.items() if k != "Content-Type"}
@@ -1679,12 +1680,12 @@ def jira_attach(issue_key: str, file_path: str) -> str:
                 )
             resp = _request_with_retry(_do_request)
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     if resp.status_code not in (200, 201):
         _tlog(f"jira_attach HTTP {resp.status_code}", t0)
-        return f"BLAD: Jira HTTP {resp.status_code} — {resp.text[:200]}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {resp.text[:200]}"
     _tlog("jira_attach done", t0, f"key={issue_key} file={p.name}")
-    return f"OK: {p.name} dodany do {issue_key}"
+    return f"OK: {p.name} added to {issue_key}"
 
 
 @_write_tool
@@ -1693,27 +1694,27 @@ def jira_link(
     outward_key: str,
     link_type: str = "Related",
 ) -> str:
-    """Ustaw natywne powiązanie (link) między dwoma ticketami Jira.
+    """Set a native link between two Jira tickets.
 
-    Używaj gdy użytkownik pyta o powiązanie zadań, "blocks", "relates to", "is blocked by" itp.
-    Wywołuj niezależnie od komentarzy — to osobna akcja na API Jiry.
+    Use it when the user asks to link tasks, "blocks", "relates to", "is blocked by" etc.
+    Call it independently of comments — it is a separate action on the Jira API.
 
-    Typy powiązań (link_type):
-      "Related"       — relates to / relates to  (domyślny)
+    Link types (link_type):
+      "Related"       — relates to / relates to  (default)
       "Blocks"        — blocks / is blocked by
       "Duplicate"     — duplicates / is duplicated by
       "Cloners"       — clones / is cloned by
       "Problem/Incident" — causes / is caused by
 
-    Kierunek: inward_key [link_type] outward_key
-      np. "PRJ1-1" Blocks "PRJ1-2"  → PRJ1-1 blocks PRJ1-2
+    Direction: inward_key [link_type] outward_key
+      e.g. "PRJ1-1" Blocks "PRJ1-2"  → PRJ1-1 blocks PRJ1-2
 
     Args:
-        inward_key:  Klucz ticketu po stronie inward, np. "PRJ1-123".
-        outward_key: Klucz ticketu po stronie outward, np. "PRJ1-456".
-        link_type:   Typ powiązania (patrz wyżej). Domyślnie "Related".
+        inward_key:  Key of the ticket on the inward side, e.g. "PRJ1-123".
+        outward_key: Key of the ticket on the outward side, e.g. "PRJ1-456".
+        link_type:   Link type (see above). Default "Related".
 
-    Zwraca: "OK: PRJ1-123 [Relates] PRJ1-456" lub BLAD: ...
+    Returns: "OK: PRJ1-123 [Relates] PRJ1-456" or ERROR: ...
     """
     t0 = time.perf_counter()
     url = f"{_jira.JIRA_URL}/rest/api/2/issueLink"
@@ -1731,7 +1732,7 @@ def jira_link(
             timeout=20,
         ))
     except requests.RequestException as exc:
-        return f"BLAD: problem z połączeniem do Jiry: {exc}"
+        return f"ERROR: cannot connect to Jira: {exc}"
     _tlog(f"jira_link HTTP {resp.status_code}", t0, f"{inward_key}->{outward_key} type={link_type}")
     if resp.status_code not in (200, 201):
         try:
@@ -1740,7 +1741,7 @@ def jira_link(
             detail = "; ".join(msgs) if msgs else resp.text[:300]
         except Exception:  # noqa: BLE001
             detail = resp.text[:300]
-        return f"BLAD: Jira HTTP {resp.status_code} — {detail}"
+        return f"ERROR: Jira HTTP {resp.status_code} — {detail}"
     return f"OK: {inward_key} [{link_type}] {outward_key}"
 
 

@@ -61,11 +61,11 @@ def fetch_remote_mtime(rest_api_url: str, referer_url: str) -> str:
     try:
         data = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"SharePoint metadata response nie jest JSON: {body[:200]}") from exc
+        raise RuntimeError(f"SharePoint metadata response is not JSON: {body[:200]}") from exc
 
     mtime = data.get("TimeLastModified")
     if not mtime:
-        raise RuntimeError(f"SharePoint metadata response bez TimeLastModified: {data}")
+        raise RuntimeError(f"SharePoint metadata response has no TimeLastModified: {data}")
     return mtime
 
 

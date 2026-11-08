@@ -1,15 +1,18 @@
-"""Date-based availability schedule for Jan — injected into Bob's context for every chat.
+"""Date-based availability schedule for the owner — injected into Bob's context for every chat.
 
 Storage: owner-schedule.json — dict keyed by ISO date "YYYY-MM-DD".
 History is preserved indefinitely; context block shows only today + upcoming entries.
 
-Commands (from Notatki control_chat):
-  Bob, harmonogram dziś: praca zdalna, dostępny od 10
-  Bob, harmonogram jutro: urlop
-  Bob, harmonogram 28.05: biuro
-  Bob, harmonogram 28.05-30.05: konferencja w Krakowie
-  Bob, pokaż harmonogram
-  Bob, harmonogram usuń 28.05
+Commands (from the owner's control_chat; the command parser lives in cli.py):
+  Bob, schedule today: remote work, available from 10
+  Bob, schedule tomorrow: leave
+  Bob, schedule 28.05: office
+  Bob, schedule 28.05-30.05: conference
+  Bob, show schedule
+  Bob, schedule clear 28.05
+
+Date tokens accept English and Polish words: today/dziś, tomorrow/jutro,
+day after tomorrow/pojutrze, yesterday/wczoraj, plus DD.MM, DD.MM.YYYY, YYYY-MM-DD.
 """
 import json
 import re
@@ -17,9 +20,15 @@ from datetime import date, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-_SCHEDULE_FILE = Path(__file__).parent / "owner-schedule.json"
-_CET = ZoneInfo("Europe/Warsaw")
+try:
+    import org_config as _org_config
+except Exception:  # noqa: BLE001 — scripts/ not on sys.path in some entry points
+    _org_config = None
 
+_SCHEDULE_FILE = Path(__file__).parent / "owner-schedule.json"
+_CET = ZoneInfo(getattr(_org_config, "TIMEZONE", "Europe/Warsaw"))
+
+# Polish month names (full and short), kept for parsing Polish input.
 _POLISH_MONTHS = {
     "sty": 1, "styczeń": 1, "styczen": 1,
     "lut": 2, "luty": 2,
@@ -35,9 +44,15 @@ _POLISH_MONTHS = {
     "gru": 12, "grudzień": 12, "grudzien": 12,
 }
 
+# Polish weekday labels: still read by datetime_bob (its `weekday_pl` field).
 _DAY_LABELS_PL = {
     0: "Poniedziałek", 1: "Wtorek", 2: "Środa",
     3: "Czwartek", 4: "Piątek", 5: "Sobota", 6: "Niedziela",
+}
+
+_DAY_LABELS = {
+    0: "Monday", 1: "Tuesday", 2: "Wednesday",
+    3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday",
 }
 
 
@@ -55,7 +70,7 @@ def parse_date(token: str) -> date | None:
         return today
     if t in ("jutro", "tomorrow"):
         return today + timedelta(days=1)
-    if t in ("pojutrze", "pojutrze"):
+    if t in ("pojutrze", "day after tomorrow"):
         return today + timedelta(days=2)
     if t in ("wczoraj", "yesterday"):
         return today - timedelta(days=1)
@@ -157,15 +172,15 @@ def clear_date(date_token: str) -> tuple[bool, list[date]]:
 
 
 def _fmt_date(d: date) -> str:
-    """Format date as 'DD.MM.YYYY (Dzień)'."""
-    return f"{d.day:02d}.{d.month:02d}.{d.year} ({_DAY_LABELS_PL[d.weekday()]})"
+    """Format date as 'DD.MM.YYYY (Weekday)'."""
+    return f"{d.day:02d}.{d.month:02d}.{d.year} ({_DAY_LABELS[d.weekday()]})"
 
 
 def format_full_schedule(past_days: int = 7, future_days: int = 30) -> str:
     """Return human-readable schedule: recent past + upcoming entries."""
     data = _load()
     if not data:
-        return "Brak wpisów w harmonogramie."
+        return "No schedule entries."
 
     today = _today()
     cutoff_past = (today - timedelta(days=past_days)).isoformat()
@@ -175,19 +190,19 @@ def format_full_schedule(past_days: int = 7, future_days: int = 30) -> str:
     if not relevant:
         all_dates = sorted(data.keys())
         return (
-            f"Brak wpisów w oknie ±{past_days}/{future_days} dni.\n"
-            f"Wszystkie wpisy: {all_dates[0]} … {all_dates[-1]} ({len(data)} łącznie)"
+            f"No entries in the ±{past_days}/{future_days} day window.\n"
+            f"All entries: {all_dates[0]} … {all_dates[-1]} ({len(data)} total)"
         )
 
-    lines = [f"Harmonogram Jana (ostatnie {past_days}d + następne {future_days}d):"]
+    lines = [f"Owner's schedule (last {past_days}d + next {future_days}d):"]
     for iso_date in sorted(relevant.keys()):
         d = date.fromisoformat(iso_date)
-        marker = " ◀ DZIŚ" if d == today else ""
+        marker = " ◀ TODAY" if d == today else ""
         lines.append(f"  {_fmt_date(d)}: {relevant[iso_date]}{marker}")
     return "\n".join(lines)
 
 
-def build_context_block(owner_label: str = "WŁAŚCICIELA") -> str | None:
+def build_context_block(owner_label: str = "OWNER") -> str | None:
     """Return context block for injection into Bob's prompt, headed with `owner_label`.
 
     Shows today's entry + upcoming 14 days. Returns None when schedule is empty.
@@ -206,23 +221,23 @@ def build_context_block(owner_label: str = "WŁAŚCICIELA") -> str | None:
 
     today_entry = upcoming.get(today_iso)
     lines = [
-        f"[DOSTĘPNOŚĆ {owner_label.upper()}]",
-        f"Dziś: {_fmt_date(today)}.",
+        f"[{owner_label.upper()} AVAILABILITY]",
+        f"Today: {_fmt_date(today)}.",
     ]
     if today_entry:
-        lines.append(f"Dziś: {today_entry}")
+        lines.append(f"Today: {today_entry}")
     else:
-        lines.append("Dziś: brak wpisu.")
+        lines.append("Today: no entry.")
 
     future = {k: v for k, v in upcoming.items() if k != today_iso}
     if future:
-        lines.append("Najbliższe dni:")
+        lines.append("Coming days:")
         for iso_date in sorted(future.keys()):
             d = date.fromisoformat(iso_date)
             lines.append(f"  {_fmt_date(d)}: {future[iso_date]}")
 
     lines.append(
-        "Jeśli ktoś pyta gdzie jest Jan lub co robi — odpowiedz na podstawie powyższego. "
-        "Zachowaj naturalny ton, nie czytaj sztywno z listy."
+        f"If someone asks where the {owner_label.lower()} is or what they are doing, answer from the above. "
+        "Keep a natural tone; do not read the list out verbatim."
     )
     return "\n".join(lines)

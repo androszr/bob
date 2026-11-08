@@ -136,18 +136,22 @@ def test_load_job_returns_correct_job(runner, tmp_path):
 def test_a_team_only_group_refuses_a_chat_with_outside_people(runner, tmp_path, capsys):
     runner._CHAT_CONFIG_FILE = tmp_path / "chat-config.json"
     runner._CHAT_CONFIG_FILE.write_text(json.dumps({"chats": {
-        "Clients": {"conv_id": "OUTSIDE", "kanal_fr": True}, "Team": {"conv_id": "TEAM"}}}), encoding="utf-8")
+        "Clients": {"conv_id": "OUTSIDE", "external_chat": True}, "Team": {"conv_id": "TEAM"},
+        "Old": {"conv_id": "OLD-OUTSIDE", "kanal_fr": True}}}), encoding="utf-8")
     _write_jobs(runner.JOBS_FILE, [
         {"id": "a", "channel": "OUTSIDE", "enabled": True, "tools": ["snowflake"], "prompt": "x"},
         {"id": "b", "channel": "TEAM", "enabled": True, "tools": ["snowflake"], "prompt": "x"},
         {"id": "c", "channel": "OUTSIDE", "enabled": True, "tools": ["datetime"], "prompt": "x"},
-        {"id": "d", "channel": "NOT-IN-CONFIG", "enabled": True, "tools": ["snowflake"], "prompt": "x"}])
+        {"id": "d", "channel": "NOT-IN-CONFIG", "enabled": True, "tools": ["snowflake"], "prompt": "x"},
+        {"id": "e", "channel": "OLD-OUTSIDE", "enabled": True, "tools": ["snowflake"], "prompt": "x"}])
     with pytest.raises(SystemExit):
         runner.load_job("a")
     assert "snowflake" in capsys.readouterr().err
     assert runner.load_job("b")["id"] == "b"
     assert runner.load_job("c")["id"] == "c"
     assert runner.load_job("d")["id"] == "d", "no flag to read, documented"
+    with pytest.raises(SystemExit):
+        runner.load_job("e")  # the old Polish key kanal_fr still marks an outside chat
 
 
 def test_load_job_returns_none_for_missing_id(runner):
@@ -373,26 +377,37 @@ def test_multi_message_job_sends_multiple(runner, monkeypatch):
 SAMPLE_BRIEF = """\
 # Brief
 
-## Kontekst
-Jakis kontekst.
+## Context
+Some context.
 
-## Wiadomości
+## Messages
+
+### Message 1 — Welcome
+Section 1 description.
+
+### Message 2 — Anecdotes
+Section 2 description.
+
+### Message 3 — GIF
+GIF: sprint vibes
+"""
+
+# A brief written by an older build, with the Polish section header and template label.
+SAMPLE_BRIEF_PL = """\
+# Brief
 
 ### Wiadomość 1 — Powitanie
-Opis sekcji 1.
+**Szablon:** `templates/msg-1-welcome.md`
 
-### Wiadomość 2 — Anegdoty
-Opis sekcji 2.
-
-### Wiadomość 3 — GIF
+### Wiadomosc 2 — GIF
 GIF: sprint vibes
 """
 
 
 def test_parse_brief_sections_preamble(runner):
     preamble, sections = runner._parse_brief_sections(SAMPLE_BRIEF)
-    assert "## Kontekst" in preamble
-    assert "### Wiadomość 1" not in preamble
+    assert "## Context" in preamble
+    assert "### Message 1" not in preamble
 
 
 def test_parse_brief_sections_count(runner):
@@ -402,9 +417,16 @@ def test_parse_brief_sections_count(runner):
 
 def test_parse_brief_sections_headers(runner):
     _, sections = runner._parse_brief_sections(SAMPLE_BRIEF)
-    assert sections[0].startswith("### Wiadomość 1")
-    assert sections[1].startswith("### Wiadomość 2")
-    assert sections[2].startswith("### Wiadomość 3")
+    assert sections[0].startswith("### Message 1")
+    assert sections[1].startswith("### Message 2")
+    assert sections[2].startswith("### Message 3")
+
+
+def test_parse_brief_sections_accepts_the_old_polish_header(runner):
+    _, sections = runner._parse_brief_sections(SAMPLE_BRIEF_PL)
+    assert len(sections) == 2
+    assert runner._TEMPLATE_REF_RE.search(sections[0]).group(1) == "templates/msg-1-welcome.md"
+    assert runner._TEMPLATE_REF_RE.search("**Template:** `t.md`").group(1) == "t.md"
 
 
 def test_parse_brief_sections_no_sections(runner):
@@ -443,7 +465,7 @@ def test_per_section_mode_calls_claude_per_section(runner, tmp_path, monkeypatch
         call_count += 1
         m = MagicMock()
         m.returncode = 0
-        m.stdout = json.dumps({"result": f"Wiadomosc {call_count}", "is_error": False})
+        m.stdout = json.dumps({"result": f"Message {call_count}", "is_error": False})
         m.stderr = ""
         return m
 
@@ -518,7 +540,7 @@ def test_inject_mentions_unresolved_name_stays_plain_bold(runner):
     unresolved bold spans surface here as raw "**...**" markdown, not
     "<strong>" — real markdown-to-HTML conversion happens downstream.)
     """
-    text = "⚠️ Brak logu za poprzedni dzień: **Ola Nowicka**"
+    text = "⚠️ No time logged for the previous day: **Ola Nowicka**"
     html, mentions = runner._inject_name_mentions(text)
     assert "**Ola Nowicka**" in html
     assert mentions == []
@@ -528,7 +550,7 @@ def test_inject_mentions_resolved_name_becomes_chip(runner):
     runner._stub_user_memory.find_profile_by_name.side_effect = (
         lambda name: ("Ola Nowicka", "8:orgid:fake-mri") if name == "Ola Nowicka" else None
     )
-    text = "⚠️ Brak logu za poprzedni dzień: **Ola Nowicka**"
+    text = "⚠️ No time logged for the previous day: **Ola Nowicka**"
     html, mentions = runner._inject_name_mentions(text)
     assert "**Ola Nowicka**" not in html
     assert "mri=\"8:orgid:fake-mri\"" in html
@@ -540,7 +562,7 @@ def test_inject_mentions_header_colon_preserved(runner):
     runner._stub_user_memory.find_profile_by_name.side_effect = (
         lambda name: ("Ola Nowicka", "8:orgid:fake-mri") if name == "Ola Nowicka" else None
     )
-    text = "👤 **Ola Nowicka:**\n- [PRJ1-1](url) — coś"
+    text = "👤 **Ola Nowicka:**\n- [PRJ1-1](url) — something"
     html, _ = runner._inject_name_mentions(text)
     first_line = html.split("\n")[0]
     assert "mri=\"8:orgid:fake-mri\"" in first_line
@@ -552,7 +574,7 @@ def test_inject_mentions_mixed_name_list_partial_resolution(runner):
     runner._stub_user_memory.find_profile_by_name.side_effect = (
         lambda name: ("Ola Nowicka", "8:orgid:fake-mri") if name == "Ola Nowicka" else None
     )
-    text = "Wielkie dzięki dla **Ola Nowicka, Ala Kowalska**!"
+    text = "Big thanks to **Ola Nowicka, Ala Kowalska**!"
     html, mentions = runner._inject_name_mentions(text)
     assert "mri=\"8:orgid:fake-mri\"" in html
     assert "**Ala Kowalska**" in html
@@ -577,7 +599,7 @@ def test_send_one_passes_mentions_to_send_html_message(runner, monkeypatch):
         lambda name: ("Ola Nowicka", "8:orgid:fake-mri") if name == "Ola Nowicka" else None
     )
 
-    ok = runner._send_one("Brak logu: **Ola Nowicka**", "CHAN", 1, 1)
+    ok = runner._send_one("No log: **Ola Nowicka**", "CHAN", 1, 1)
     assert ok is True
     call_args = runner._stub_api.send_html_message.call_args[0]
     html_arg, channel_arg, mentions_arg = call_args
@@ -602,7 +624,7 @@ def _log_send(runner, job_id, channel, when, phase="send", chars=120, success=Tr
 
 def test_sent_before_finds_only_real_successful_sends(runner):
     from datetime import datetime, timedelta  # noqa: PLC0415
-    now = datetime.now(runner._WARSAW)
+    now = datetime.now(runner._LOCAL_TZ)
     assert runner._sent_before("j", "C") is False                         # no log yet
     _log_send(runner, "j", "C", now, success=False)
     _log_send(runner, "j", "C", now, chars=0)                             # nothing was sent
@@ -619,26 +641,36 @@ def test_sent_before_finds_only_real_successful_sends(runner):
 
 def test_generate_send_skips_a_job_that_already_went_out_today(runner):
     from datetime import datetime  # noqa: PLC0415
-    now = datetime.now(runner._WARSAW)
+    now = datetime.now(runner._LOCAL_TZ)
     job = {"id": "j", "channel": "C", "schedule_type": "daily"}
     assert runner._skip_generate_send("j", job, now) == ""
     _log_send(runner, "j", "C", now)
-    assert "juz wyslane" in runner._skip_generate_send("j", job, now)
+    assert "already sent" in runner._skip_generate_send("j", job, now)
 
 
 def test_weekly_job_waits_for_its_weekday(runner):
     from datetime import datetime  # noqa: PLC0415
-    monday = datetime(2026, 10, 26, 11, 0, tzinfo=runner._WARSAW)
+    monday = datetime(2026, 10, 26, 11, 0, tzinfo=runner._LOCAL_TZ)
     job = {"id": "w", "channel": "C", "schedule_type": "weekly", "weekday": 0}
     assert runner._skip_generate_send("w", job, monday) == ""
-    assert "nie dzien" in runner._skip_generate_send("w", {**job, "weekday": 3}, monday)
+    assert "not the job's day" in runner._skip_generate_send("w", {**job, "weekday": 3}, monday)
     assert runner._skip_generate_send("w", {**job, "schedule_type": "daily", "weekday": 3}, monday) == ""
 
 
 def test_run_job_generate_send_does_nothing_twice_a_day(runner, monkeypatch):
     from datetime import datetime  # noqa: PLC0415
     _write_jobs(runner.JOBS_FILE, [{"id": "j", "channel": "C", "enabled": True, "tools": [], "prompt": "x"}])
-    _log_send(runner, "j", "C", datetime.now(runner._WARSAW))
+    _log_send(runner, "j", "C", datetime.now(runner._LOCAL_TZ))
     monkeypatch.setattr(runner, "_run_phase_generate", lambda *a: pytest.fail("generated again"))
     monkeypatch.setattr(runner, "_run_phase_send", lambda *a: pytest.fail("sent again"))
     assert runner.run_job("j", "generate-send") is True
+
+
+def test_job_tools_maps_the_old_polish_leave_group(runner):
+    assert runner._job_tools({"tools": ["jira", "urlopy", "leave"]}) == ["jira", "leave"]
+    assert runner._job_tools({}) == []
+
+
+def test_name_list_splits_on_english_and_polish_conjunctions(runner):
+    assert runner._split_name_candidates("Ola Nowicka and Ala Kowalska") == ["Ola Nowicka", "Ala Kowalska"]
+    assert runner._split_name_candidates("Ola Nowicka i Ala Kowalska") == ["Ola Nowicka", "Ala Kowalska"]

@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Load mcp_server module via importlib (pattern from test_kb_mcp_server.py)
 # ---------------------------------------------------------------------------
@@ -75,10 +77,10 @@ def _make_gemini_response(pcm_bytes: bytes) -> dict:
 
 
 def test_split_chunks_short_text_single_chunk():
-    text = "Krotki tekst."
+    text = "Short text."
     chunks = _split_chunks(text, max_chars=4500)
     assert len(chunks) == 1
-    assert chunks[0] == "Krotki tekst."
+    assert chunks[0] == "Short text."
 
 
 def test_split_chunks_long_text_multiple_chunks():
@@ -158,7 +160,7 @@ def test_sanitize_filename_rejects_too_long():
 
 
 def test_sanitize_filename_rejects_non_ascii_whitelist():
-    assert _sanitize_filename("plik z spacjami", ".mp3") is None
+    assert _sanitize_filename("file with spaces", ".mp3") is None
 
 
 def test_sanitize_filename_empty():
@@ -170,28 +172,47 @@ def test_sanitize_filename_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_get_voice_id_kobieta_default():
-    with patch.dict("os.environ", {}, clear=False):
-        # Remove override if set
-        import os
-        os.environ.pop("MD_TO_MP3_VOICE_KOBIETA_ID", None)
-        assert _get_voice_id("kobieta") == "Kore"
+_VOICE_ENV = ("MD_TO_MP3_VOICE_FEMALE_ID", "MD_TO_MP3_VOICE_KOBIETA_ID",
+              "MD_TO_MP3_VOICE_MALE_ID", "MD_TO_MP3_VOICE_MEZCZYZNA_ID")
 
 
-def test_get_voice_id_mezczyzna_default():
-    import os
-    os.environ.pop("MD_TO_MP3_VOICE_MEZCZYZNA_ID", None)
-    assert _get_voice_id("mezczyzna") == "Charon"
+@pytest.fixture
+def _no_voice_env(monkeypatch):
+    for key in _VOICE_ENV:
+        monkeypatch.delenv(key, raising=False)
 
 
-def test_get_voice_id_kobieta_env_override(monkeypatch):
-    monkeypatch.setenv("MD_TO_MP3_VOICE_KOBIETA_ID", "Aoede")
+@pytest.mark.parametrize("voice,expected", [
+    ("female", "Kore"), ("male", "Charon"),
+    # Older Polish voice names stay accepted
+    ("kobieta", "Kore"), ("mezczyzna", "Charon"), ("mężczyzna", "Charon"), ("Female", "Kore"),
+])
+def test_get_voice_id_default(_no_voice_env, voice, expected):
+    assert _get_voice_id(voice) == expected
+
+
+def test_get_voice_id_female_env_override(_no_voice_env, monkeypatch):
+    monkeypatch.setenv("MD_TO_MP3_VOICE_FEMALE_ID", "Aoede")
+    assert _get_voice_id("female") == "Aoede"
     assert _get_voice_id("kobieta") == "Aoede"
 
 
-def test_get_voice_id_mezczyzna_env_override(monkeypatch):
+def test_get_voice_id_male_env_override(_no_voice_env, monkeypatch):
+    monkeypatch.setenv("MD_TO_MP3_VOICE_MALE_ID", "Puck")
+    assert _get_voice_id("male") == "Puck"
+
+
+def test_get_voice_id_old_env_names_still_read(_no_voice_env, monkeypatch):
+    monkeypatch.setenv("MD_TO_MP3_VOICE_KOBIETA_ID", "Aoede")
     monkeypatch.setenv("MD_TO_MP3_VOICE_MEZCZYZNA_ID", "Puck")
-    assert _get_voice_id("mezczyzna") == "Puck"
+    assert _get_voice_id("female") == "Aoede"
+    assert _get_voice_id("male") == "Puck"
+
+
+def test_get_voice_id_new_env_name_wins(_no_voice_env, monkeypatch):
+    monkeypatch.setenv("MD_TO_MP3_VOICE_FEMALE_ID", "New")
+    monkeypatch.setenv("MD_TO_MP3_VOICE_KOBIETA_ID", "Old")
+    assert _get_voice_id("female") == "New"
 
 
 
@@ -224,7 +245,7 @@ def _make_mock_async_client(pcm_bytes: bytes):
 
 
 def test_convert_md_to_mp3_happy_path(tmp_path, monkeypatch):
-    """Happy path: short text, kobieta voice, mock Gemini + ffmpeg."""
+    """Happy path: short text, female voice, mock Gemini + ffmpeg."""
     monkeypatch.setenv("GOOGLE_GEMINI", "test-key")
     monkeypatch.setenv("MD_TO_MP3_DIR", str(tmp_path))
     monkeypatch.delenv("MD_TO_MP3_TTS_CONCURRENCY", raising=False)
@@ -240,7 +261,7 @@ def test_convert_md_to_mp3_happy_path(tmp_path, monkeypatch):
 
     with patch.object(_mod.httpx, "AsyncClient", return_value=mock_client):
         with patch("subprocess.run", side_effect=fake_subprocess_run):
-            content = asyncio.run(convert_md_to_mp3("Hello world", voice="kobieta"))
+            content = asyncio.run(convert_md_to_mp3("Hello world", voice="female"))
 
     # convert_md_to_mp3 returns [TextContent(json), Audio] for MCP audio delivery
     assert len(content) == 2
@@ -252,8 +273,9 @@ def test_convert_md_to_mp3_happy_path(tmp_path, monkeypatch):
     assert Path(result["absolutePath"]).exists()
 
 
-def test_convert_md_to_mp3_mezczyzna_voice(tmp_path, monkeypatch):
-    """Voice 'mezczyzna' maps to Charon."""
+@pytest.mark.parametrize("voice", ["male", "mezczyzna", "mężczyzna"])
+def test_convert_md_to_mp3_male_voice(tmp_path, monkeypatch, voice):
+    """Voice 'male' (or its Polish alias) maps to Charon; the file name uses 'male'."""
     monkeypatch.setenv("GOOGLE_GEMINI", "test-key")
     monkeypatch.setenv("MD_TO_MP3_DIR", str(tmp_path))
 
@@ -267,10 +289,11 @@ def test_convert_md_to_mp3_mezczyzna_voice(tmp_path, monkeypatch):
 
     with patch.object(_mod.httpx, "AsyncClient", return_value=mock_client):
         with patch("subprocess.run", side_effect=fake_subprocess_run):
-            content = asyncio.run(convert_md_to_mp3("Tekst", voice="mezczyzna"))
+            content = asyncio.run(convert_md_to_mp3("Some text", voice=voice))
 
     result = json.loads(content[0].text)
     assert result["voiceId"] == "Charon"
+    assert result["path"].endswith("-male.mp3")
 
 
 # ---------------------------------------------------------------------------
@@ -363,13 +386,13 @@ def test_list_md_to_mp3_files_empty_dir(tmp_path, monkeypatch):
 def test_list_md_to_mp3_files_with_files(tmp_path, monkeypatch):
     """Returns files found in output dir."""
     monkeypatch.setenv("MD_TO_MP3_DIR", str(tmp_path))
-    (tmp_path / "2026-01-01-120000-test-kobieta.mp3").write_bytes(b"ID3fake")
-    (tmp_path / "2026-01-02-120000-test-mezczyzna.mp3").write_bytes(b"ID3fake2")
+    (tmp_path / "2026-01-01-120000-test-female.mp3").write_bytes(b"ID3fake")
+    (tmp_path / "2026-01-02-120000-test-male.mp3").write_bytes(b"ID3fake2")
     result = json.loads(list_md_to_mp3_files())
     assert result["total"] == 2
     names = [f["name"] for f in result["files"]]
-    assert "2026-01-01-120000-test-kobieta.mp3" in names
-    assert "2026-01-02-120000-test-mezczyzna.mp3" in names
+    assert "2026-01-01-120000-test-female.mp3" in names
+    assert "2026-01-02-120000-test-male.mp3" in names
     for f in result["files"]:
         assert "absolutePath" in f
         assert "bytes" in f
@@ -436,7 +459,7 @@ def test_convert_md_to_mp3_chunk_order_preserved(tmp_path, monkeypatch):
 
     with patch.object(_mod.httpx, "AsyncClient", return_value=mock_client):
         with patch("subprocess.run", side_effect=fake_subprocess_run):
-            asyncio.run(convert_md_to_mp3(text, voice="kobieta"))
+            asyncio.run(convert_md_to_mp3(text, voice="female"))
 
     # The combined PCM must start with chunk_a_marker bytes
     assert len(captured_pcm) == 1

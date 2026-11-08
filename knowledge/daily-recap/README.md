@@ -1,23 +1,23 @@
-# Daily Recap — bieżące podsumowania dnia
+# Daily Recap — running summaries of each day
 
-Folder z krótkimi, datowanymi notatkami o tym co się działo danego dnia: spotkania, decyzje, ustalenia, blokery, postępy prac.
+A folder of short, dated notes about what happened on a given day: meetings, decisions, agreements, blockers, progress.
 
-## Format pliku
+## File format
 
-Pliki nazywaj: `YYYY-MM-DD.md` (np. `2026-05-26.md`).
+Name the files `YYYY-MM-DD.md` (e.g. `2026-05-26.md`).
 
-Każda notatka może zawierać dowolną strukturę, ale przydatne sekcje to:
-- **Spotkania** — kto, o czym, kluczowe ustalenia
-- **Decyzje** — co postanowiono i przez kogo
-- **Blokery / ryzyka** — co stoi w miejscu i dlaczego
-- **Postępy** — co zostało zrobione lub domknięte
-- **Następne kroki** — co zaplanowane na kolejne dni
+Each note can have any structure, but useful sections are:
+- **Meetings** — who, about what, key agreements
+- **Decisions** — what was decided and by whom
+- **Blockers / risks** — what is stuck and why
+- **Progress** — what was done or closed
+- **Next steps** — what is planned for the coming days
 
-## Jak agent powinien z tego korzystać
+## How the agent should use it
 
-Czytaj ten folder gdy:
-- pytasz o "co się ostatnio działo", "co ustalono", "co słychać"
-- szukasz kontekstu do bieżących decyzji lub blokad
-- chcesz wiedzieć jaki jest aktualny stan spraw — uzupełnia pozostałe foldery wiedzy o wymiar dzienny
+Read this folder when:
+- someone asks "what happened lately", "what was agreed", "what's new"
+- you need context for current decisions or blockers
+- you want to know the current state of things — it adds the daily view to the other knowledge folders
 
-Zawsze zaczynaj od najnowszego pliku. Pliki są uzupełniane na bieżąco przez użytkownika — traktuj je jako świeższy sygnał niż inne foldery wiedzy.
+Always start from the newest file. The user keeps these files up to date — treat them as a fresher signal than the other knowledge folders.

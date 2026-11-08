@@ -20,15 +20,15 @@ import polls  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _CHAT_CONFIG = {
-    "Kanal AI": {
+    "AI Channel": {
         "conv_id": "19:chat06@thread.v2",
         "mcp": ["jira", "todos", "datetime"],
         "knowledge": None,
     },
-    "Zespol Wewnetrzny": {
+    "Internal Team": {
         "conv_id": "19:chat32@thread.v2",
         "mcp": ["jira", "todos", "knowledge"],
-        "knowledge": ["projekty"],
+        "knowledge": ["projects"],
     },
 }
 
@@ -103,22 +103,22 @@ class TestBuildPollCardOnoff:
 
 class TestBuildPollCardChatOnoff:
     def test_returns_two_options(self):
-        card, _ = polls.build_poll_card("chat Kanal AI onoff", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel onoff", _CHAT_CONFIG)
         actions = card.get("actions", [])
         assert len(actions) == 2
         values = {a["data"]["value"] for a in actions}
         assert {"on", "off"} == values
 
     def test_action_is_chat_onoff(self):
-        card, _ = polls.build_poll_card("chat Kanal AI onoff", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel onoff", _CHAT_CONFIG)
         for a in card.get("actions", []):
             assert a["data"]["action"] == "chat_onoff"
-            assert a["data"]["chat"] == "Kanal AI"
+            assert a["data"]["chat"] == "AI Channel"
 
 
 class TestBuildPollCardChatMcp:
     def test_five_choices(self):
-        card, _ = polls.build_poll_card("chat Kanal AI mcp", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel mcp", _CHAT_CONFIG)
         # ChoiceSet is in body
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         assert len(body_inputs) == 1
@@ -127,13 +127,13 @@ class TestBuildPollCardChatMcp:
         assert set(values) == set(polls._MCP_CHOICES)
 
     def test_multi_select_true(self):
-        card, _ = polls.build_poll_card("chat Kanal AI mcp", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel mcp", _CHAT_CONFIG)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         assert body_inputs[0]["isMultiSelect"] is True
 
     def test_default_value_from_config(self):
-        cfg = {"Kanal AI": {"mcp": ["jira", "todos"]}}
-        card, _ = polls.build_poll_card("chat Kanal AI mcp", cfg)
+        cfg = {"AI Channel": {"mcp": ["jira", "todos"]}}
+        card, _ = polls.build_poll_card("chat AI Channel mcp", cfg)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         default = body_inputs[0]["value"]
         # CSV order may vary, just check both present
@@ -143,21 +143,21 @@ class TestBuildPollCardChatMcp:
 
 class TestBuildPollCardChatCaller:
     def test_four_buttons(self):
-        card, _ = polls.build_poll_card("chat Kanal AI caller", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel caller", _CHAT_CONFIG)
         actions = card.get("actions", [])
         assert len(actions) == 4
         values = {a["data"]["value"] for a in actions}
         assert {"owner", "all", "auto", "clear"} == values
 
     def test_action_is_chat_caller(self):
-        card, _ = polls.build_poll_card("chat Kanal AI caller", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel caller", _CHAT_CONFIG)
         for a in card.get("actions", []):
             assert a["data"]["action"] == "chat_caller"
 
 
 class TestBuildPollCardChatEpithets:
     def test_eight_epithet_choices_plus_none(self):
-        card, _ = polls.build_poll_card("chat Kanal AI epithets", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel epithets", _CHAT_CONFIG)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         values = [c["value"] for c in body_inputs[0]["choices"]]
         # 8 epithets + __none__ sentinel
@@ -167,21 +167,21 @@ class TestBuildPollCardChatEpithets:
             assert ep in values
 
     def test_multi_select_true(self):
-        card, _ = polls.build_poll_card("chat Kanal AI epithets", _CHAT_CONFIG)
+        card, _ = polls.build_poll_card("chat AI Channel epithets", _CHAT_CONFIG)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         assert body_inputs[0]["isMultiSelect"] is True
 
     def test_default_value_from_config(self):
-        cfg = {"Kanal AI": {"epithets": ["zwiezly", "formalny"]}}
-        card, _ = polls.build_poll_card("chat Kanal AI epithets", cfg)
+        cfg = {"AI Channel": {"epithets": ["concise", "formal"]}}
+        card, _ = polls.build_poll_card("chat AI Channel epithets", cfg)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         default = body_inputs[0]["value"]
-        assert "zwiezly" in default
-        assert "formalny" in default
+        assert "concise" in default
+        assert "formal" in default
 
     def test_empty_epithets_config_has_empty_default(self):
-        cfg = {"Kanal AI": {}}
-        card, _ = polls.build_poll_card("chat Kanal AI epithets", cfg)
+        cfg = {"AI Channel": {}}
+        card, _ = polls.build_poll_card("chat AI Channel epithets", cfg)
         body_inputs = [b for b in card.get("body", []) if b.get("type") == "Input.ChoiceSet"]
         assert body_inputs[0]["value"] == ""
 
@@ -189,13 +189,13 @@ class TestBuildPollCardChatEpithets:
 class TestBuildPollCardUnknownTopic:
     def test_raises_value_error(self):
         import pytest
-        with pytest.raises(ValueError, match="Nieznany temat"):
+        with pytest.raises(ValueError, match="Unknown topic"):
             polls.build_poll_card("unknown_topic", {})
 
     def test_raises_for_unknown_subtopic(self):
         import pytest
         with pytest.raises(ValueError):
-            polls.build_poll_card("chat Kanal AI unknown", {})
+            polls.build_poll_card("chat AI Channel unknown", {})
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ class TestParseVote:
             "poll_id": "mp1",
             "action": "chat_mcp",
             "values": "jira,todos",
-            "chat": "Kanal AI",
+            "chat": "AI Channel",
         })
         assert result is not None
         assert result["values"] == ["jira", "todos"]
@@ -243,7 +243,7 @@ class TestParseVote:
             "poll_id": "mp2",
             "action": "chat_mcp",
             "values": ["jira", "todos"],
-            "chat": "Kanal AI",
+            "chat": "AI Channel",
         })
         assert result["values"] == ["jira", "todos"]
 
@@ -253,9 +253,9 @@ class TestParseVote:
             "poll_id": "cp1",
             "action": "chat_onoff",
             "value": "off",
-            "chat": "Zespol Wewnetrzny",
+            "chat": "Internal Team",
         })
-        assert result["chat"] == "Zespol Wewnetrzny"
+        assert result["chat"] == "Internal Team"
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +292,7 @@ class TestApplyVotePause:
                 {"poll_id": "p2", "action": "pause", "value": "cancel"},
                 "conv1", cfg, args,
             )
-        assert "anulowana" in result.lower()
+        assert "cancelled" in result.lower()
 
 
 class TestApplyVoteModel:
@@ -319,11 +319,11 @@ class TestApplyVoteChatOnoff:
         with patch("cli.disable_chat") as mock_disable:
             result = polls.apply_vote(
                 {"poll_id": "co1", "action": "chat_onoff",
-                 "chat": "Zespol Wewnetrzny", "value": "off"},
+                 "chat": "Internal Team", "value": "off"},
                 "conv1", {}, args,
             )
-        mock_disable.assert_called_once_with("Zespol Wewnetrzny")
-        assert "wylaczony" in result.lower()
+        mock_disable.assert_called_once_with("Internal Team")
+        assert "turned off" in result.lower()
 
     def test_chat_on_calls_enable(self):
         polls._ACTIVE_POLLS["co2"] = {"topic": "chat_onoff", "sent_ts": 0.0}
@@ -331,10 +331,10 @@ class TestApplyVoteChatOnoff:
         with patch("cli.enable_chat") as mock_enable:
             polls.apply_vote(
                 {"poll_id": "co2", "action": "chat_onoff",
-                 "chat": "Kanal AI", "value": "on"},
+                 "chat": "AI Channel", "value": "on"},
                 "conv1", {}, args,
             )
-        mock_enable.assert_called_once_with("Kanal AI")
+        mock_enable.assert_called_once_with("AI Channel")
 
 
 class TestApplyVoteChatMcp:
@@ -348,10 +348,10 @@ class TestApplyVoteChatMcp:
         with patch("cli._save_chat_config") as mock_save:
             polls.apply_vote(
                 {"poll_id": "mcp1", "action": "chat_mcp",
-                 "chat": "Kanal AI", "values": ["jira", "todos"]},
+                 "chat": "AI Channel", "values": ["jira", "todos"]},
                 "conv1", cfg, args,
             )
-        assert cfg["Kanal AI"]["mcp"] == ["jira", "todos"]
+        assert cfg["AI Channel"]["mcp"] == ["jira", "todos"]
         assert mock_save.called
 
 
@@ -366,22 +366,22 @@ class TestApplyVoteChatCaller:
         with patch("cli._save_chat_config"):
             polls.apply_vote(
                 {"poll_id": "cl1", "action": "chat_caller",
-                 "chat": "Kanal AI", "value": "owner"},
+                 "chat": "AI Channel", "value": "owner"},
                 "conv1", cfg, args,
             )
-        assert cfg["Kanal AI"]["caller"] == "owner"
+        assert cfg["AI Channel"]["caller"] == "owner"
 
     def test_clear_removes_caller_key(self):
         polls._ACTIVE_POLLS["cl2"] = {"topic": "chat_caller", "sent_ts": 0.0}
         args = _make_args()
-        cfg = {"Kanal AI": {"mcp": None, "knowledge": None, "caller": "owner"}}
+        cfg = {"AI Channel": {"mcp": None, "knowledge": None, "caller": "owner"}}
         with patch("cli._save_chat_config"):
             polls.apply_vote(
                 {"poll_id": "cl2", "action": "chat_caller",
-                 "chat": "Kanal AI", "value": "clear"},
+                 "chat": "AI Channel", "value": "clear"},
                 "conv1", cfg, args,
             )
-        assert "caller" not in cfg["Kanal AI"]
+        assert "caller" not in cfg["AI Channel"]
 
 
 class TestApplyVoteChatEpithets:
@@ -395,31 +395,31 @@ class TestApplyVoteChatEpithets:
         with patch("cli._save_chat_config"):
             polls.apply_vote(
                 {"poll_id": "ep1", "action": "chat_epithets",
-                 "chat": "Kanal AI", "values": ["zwiezly", "formalny"]},
+                 "chat": "AI Channel", "values": ["concise", "formal"]},
                 "conv1", cfg, args,
             )
-        assert cfg["Kanal AI"]["epithets"] == ["zwiezly", "formalny"]
+        assert cfg["AI Channel"]["epithets"] == ["concise", "formal"]
 
     def test_none_sentinel_removes_key(self):
         polls._ACTIVE_POLLS["ep2"] = {"topic": "chat_epithets", "sent_ts": 0.0}
         args = _make_args()
-        cfg = {"Kanal AI": {"epithets": ["zwiezly"], "knowledge": None}}
+        cfg = {"AI Channel": {"epithets": ["concise"], "knowledge": None}}
         with patch("cli._save_chat_config"):
             polls.apply_vote(
                 {"poll_id": "ep2", "action": "chat_epithets",
-                 "chat": "Kanal AI", "values": ["__none__"]},
+                 "chat": "AI Channel", "values": ["__none__"]},
                 "conv1", cfg, args,
             )
-        assert "epithets" not in cfg["Kanal AI"]
+        assert "epithets" not in cfg["AI Channel"]
 
     def test_empty_values_removes_key(self):
         polls._ACTIVE_POLLS["ep3"] = {"topic": "chat_epithets", "sent_ts": 0.0}
         args = _make_args()
-        cfg = {"Kanal AI": {"epithets": ["rzeczowy"], "knowledge": None}}
+        cfg = {"AI Channel": {"epithets": ["rzeczowy"], "knowledge": None}}
         with patch("cli._save_chat_config"):
             polls.apply_vote(
                 {"poll_id": "ep3", "action": "chat_epithets",
-                 "chat": "Kanal AI", "values": []},
+                 "chat": "AI Channel", "values": []},
                 "conv1", cfg, args,
             )
-        assert "epithets" not in cfg["Kanal AI"]
+        assert "epithets" not in cfg["AI Channel"]

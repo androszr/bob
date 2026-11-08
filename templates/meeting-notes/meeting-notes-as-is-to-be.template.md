@@ -1,203 +1,203 @@
 ---
-title: "Warsztat AS IS → TO BE: {Temat}"
+title: "AS IS → TO BE workshop: {Topic}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Podsumowanie spotkania / warsztatu (Meeting Notes)
+# Template: Meeting / workshop summary (Meeting Notes)
 
-> **Jak używać:**
-> - Template służy do podsumowania spotkań typu **warsztat odkrywczy / discovery / mapowanie procesu AS IS → TO BE** z biznesem (np. technicy serwisowi, dyspozytorzy, kierownicy regionów).
-> - Sekcje AS IS / TO BE / Ograniczenia są opcjonalne — usuń je, jeśli spotkanie miało inny charakter (np. statusowe, decyzyjne, tylko Q&A).
-> - Wypełnij na podstawie transkrypcji audio (`*.mp3.json`) lub własnych notatek; cytaty zostawiaj dosłowne — to mocny dowód intencji uczestników.
-> - **Zawsze dopisuj cytat-klucz + autora przy bólach i wymaganiach** — chroni przed reinterpretacją na etapie analizy.
-> - **Konwertuj relatywne daty na bezwzględne** (np. „w styczniu" → „styczeń 2026"), żeby dokument był czytelny po czasie.
-> - Time-stampy z nagrania w sekcji „Załączniki / źródła" — pomagają wrócić do kontekstu bez ponownego odsłuchu.
-> - Plik nazywaj wg konwencji: `warsztat-{temat-kebab}-podsumowanie.md` lub `spotkanie-{temat-kebab}-{YYYY-MM-DD}.md`.
+> **How to use:**
+> - Use this template to summarise **discovery workshops / AS IS → TO BE process-mapping sessions** with the business (e.g. field service technicians, dispatchers, regional managers).
+> - The AS IS / TO BE / Constraints sections are optional — remove them if the meeting was of a different kind (e.g. a status update, a decision meeting, Q&A only).
+> - Fill it in from the audio transcript (`*.mp3.json`) or your own notes; keep quotes verbatim — they are strong evidence of what participants meant.
+> - **Always add a key quote + its speaker next to pain points and requirements** — it protects against reinterpretation during analysis.
+> - **Convert relative dates to absolute ones** (e.g. "in January" → "January 2026") so the document still reads correctly later.
+> - Put recording timestamps in the "Attachments / sources" section — they help you get back to the context without listening to the whole thing again.
+> - Name the file by convention: `workshop-{topic-kebab}-summary.md` or `meeting-{topic-kebab}-{YYYY-MM-DD}.md`.
 
-> **Kiedy używać:**
-> - po warsztatach z biznesem (zbieranie potrzeb, mapowanie procesu AS IS, definiowanie TO BE)
-> - po sesjach discovery / Q&A z użytkownikami końcowymi
-> - po spotkaniach decyzyjnych, których ustalenia muszą trafić do dalszej analizy / refinementu
-> - jako wejście do późniejszych user stories, taskow w Jira i briefów UX
+> **When to use:**
+> - after workshops with the business (gathering needs, mapping the AS IS process, defining the TO BE)
+> - after discovery / Q&A sessions with end users
+> - after decision meetings whose outcomes must feed further analysis / refinement
+> - as input for later user stories, Jira tasks and UX briefs
 >
-> **Kiedy NIE używać:**
-> - jeśli to był wywiad 1-on-1 / 1-on-2 z jednym rozmówcą (bez mapowania procesu z kilkoma uczestnikami) → użyj `meeting-notes-discovery-interview.template.md`
-> - jeśli to była obserwacja w miejscu pracy / shadowing → użyj `meeting-notes-contextual-inquiry.template.md`
-> - jeśli to był wywiad ewaluacyjny istniejącego produktu → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli celem było wyłącznie podjęcie decyzji → użyj `meeting-notes-decision.template.md`
-> - jeśli to był status / sync → użyj `meeting-notes-status-update.template.md`
-> - jeśli to było rozpoczęcie nowej inicjatywy → użyj `meeting-notes-kickoff.template.md`
-> - jeśli to było podsumowanie zakończonego etapu → użyj `meeting-notes-retrospective.template.md`
+> **When NOT to use:**
+> - if it was a 1-on-1 / 1-on-2 interview with a single interviewee (no process mapping with several participants) → use `meeting-notes-discovery-interview.template.md`
+> - if it was an observation at the workplace / shadowing → use `meeting-notes-contextual-inquiry.template.md`
+> - if it was an evaluation interview about an existing product → use `meeting-notes-product-feedback-interview.template.md`
+> - if the only goal was to make a decision → use `meeting-notes-decision.template.md`
+> - if it was a status update / sync → use `meeting-notes-status-update.template.md`
+> - if it was the start of a new initiative → use `meeting-notes-kickoff.template.md`
+> - if it was a wrap-up of a completed stage → use `meeting-notes-retrospective.template.md`
 
 ---
 
-# {Typ spotkania}: {Temat} — podsumowanie
+# {Meeting type}: {Topic} — summary
 
-**Plik źródłowy:** [{nazwa pliku transkrypcji}]({link-do-pliku})
-**Data spotkania:** {YYYY-MM-DD}
-**Czas trwania:** ~{NN} min
-**Inicjatywa / Epic:** {nazwa inicjatywy, kontekst skąd zgłoszone — np. rada użytkowników pilotażu, ticket PRJ3-XXX}
-**Cel spotkania:** {jedno zdanie: co konkretnie chcieliśmy z tego spotkania wynieść — np. zebranie potrzeb biznesowych do AS IS i TO BE procesu X}
+**Source file:** [{transcript file name}]({link-to-file})
+**Meeting date:** {YYYY-MM-DD}
+**Duration:** ~{NN} min
+**Initiative / Epic:** {initiative name, context of where it came from — e.g. pilot user council, ticket PRJ3-XXX}
+**Meeting goal:** {one sentence: what exactly we wanted to get out of this meeting — e.g. gathering business needs for the AS IS and TO BE of process X}
 
-## Uczestnicy (role)
+## Participants (roles)
 
-- **{Grupa 1, np. Technicy serwisowi / Dyspozytorzy}:** {Imię (rola, krótki kontekst — staż, ekspertyza, rola na spotkaniu)}, {Imię (rola)}
-- **{Grupa 2, np. Strona Acme / produkt}:** {Imię (PO/analiza/UX/Technologia)}, {Imię (rola)}
-- **Wzmianka (osoby nieobecne, ale przywoływane):** {Imię — kontekst, ustalenie, otwarty wątek}
-
----
-
-## TL;DR (jednym akapitem)
-
-_{Maks. 5–8 zdań. Co jest sednem? Jaki problem? Jakie kluczowe ustalenie? Jaki kierunek TO BE? Co eksplicytnie odłożone do osobnego wątku? Pisz tak, żeby ktoś, kto nie był na spotkaniu, zrozumiał kierunek bez czytania reszty dokumentu.}_
+- **{Group 1, e.g. Field service technicians / Dispatchers}:** {Name (role, brief context — seniority, expertise, role in the meeting)}, {Name (role)}
+- **{Group 2, e.g. Acme side / product}:** {Name (PO/analysis/UX/Technology)}, {Name (role)}
+- **Mentioned (people not present but referred to):** {Name — context, agreement, open thread}
 
 ---
 
-## AS IS — kanoniczny model {dokumentów / procesu / domeny}
+## TL;DR (in one paragraph)
 
-_{Opcjonalne — gdy spotkanie mapowało proces. Jeśli pasuje, użyj diagramu ASCII (przepływ dokumentów, stanów, ról). Cel: jeden rzut oka i wiadomo, jak to działa dzisiaj.}_
+_{Max. 5–8 sentences. What is the core of it? What problem? What key finding? What TO BE direction? What was explicitly parked for a separate thread? Write it so that someone who was not in the meeting understands the direction without reading the rest of the document.}_
+
+---
+
+## AS IS — canonical model of {documents / process / domain}
+
+_{Optional — when the meeting mapped a process. If it fits, use an ASCII diagram (flow of documents, states, roles). Goal: one glance and you know how it works today.}_
 
 ```
-{Krok 1} → {Krok 2} → {Krok 3}
+{Step 1} → {Step 2} → {Step 3}
               │
-              ├──> {Wariant A — np. dokument poboczny}
+              ├──> {Variant A — e.g. a side document}
               │
-              └──> {Wariant B}
-                    ├─ {Pod-wariant}
-                    └─ {Pod-wariant}
+              └──> {Variant B}
+                    ├─ {Sub-variant}
+                    └─ {Sub-variant}
 ```
 
-**Kluczowy invariant / reguła biznesowa:** `{zapis formalny, np. zlecenie zamknięte == suma(prac na raporcie serwisowym) ± korekta}`
+**Key invariant / business rule:** `{formal notation, e.g. closed work order == sum(work on the service report) ± correction}`
 
 ---
 
-## AS IS — proces „{nazwa operacji jak nazywa ją biznes}" (krok po kroku)
+## AS IS — the "{operation name as the business calls it}" process (step by step)
 
-_{Wypełnij, jeśli ktoś przeprowadził demo „na żywo" albo opisał przepływ. Numerowana lista czynności + co widzi użytkownik + gdzie sięga „poza system" (drukowany raport serwisowy, kalkulator, Excel, inne aplikacje).}_
+_{Fill in if someone gave a live demo or described the flow. A numbered list of actions + what the user sees + where they reach "outside the system" (printed service report, calculator, Excel, other apps).}_
 
-1. {Krok 1 — gdzie wchodzi, co klika}
-2. {Krok 2 — co wprowadza, jakie pole}
-3. {Krok 3 — co system pokazuje, czego brakuje w widoku}
-4. {Krok N — finalizacja, status dokumentu}
+1. {Step 1 — where they go in, what they click}
+2. {Step 2 — what they enter, which field}
+3. {Step 3 — what the system shows, what is missing from the view}
+4. {Step N — finalisation, document status}
 
-**Cykl realizacji / wolumen:**
+**Cycle / volume:**
 
-- {Persona A}: {częstotliwość — codziennie / tygodniowo / miesięcznie}
-- {Persona B}: {częstotliwość}
-- Wolumen: {np. ~NNN spraw miesięcznie / zlecenie na NN pozycji}
+- {Persona A}: {frequency — daily / weekly / monthly}
+- {Persona B}: {frequency}
+- Volume: {e.g. ~NNN cases per month / a work order with NN line items}
 
-## AS IS — {drugi etap / wariant / powiązany proces — opcjonalne}
+## AS IS — {second stage / variant / related process — optional}
 
-_{Opcjonalne — jeśli na spotkaniu wypłynął równolegle ważny wątek, który nie jest głównym tematem. Streść w 3–6 punktach i jednoznacznie zaznacz status: domknięte / odłożone do osobnego wątku / wymaga decyzji.}_
+_{Optional — if an important parallel thread came up in the meeting that is not the main topic. Summarise it in 3–6 points and state its status clearly: closed / parked for a separate thread / needs a decision.}_
 
-- {Co to jest / czemu służy}
-- {Jak dziś działa}
-- {Realne incydenty wyłapane dzięki temu — z dowodem, np. „technik w marcu — zlecenie zamknięte dwa razy"}
+- {What it is / what it is for}
+- {How it works today}
+- {Real incidents caught thanks to it — with evidence, e.g. "technician in March — work order closed twice"}
 
-**Status w warsztacie:** {np. „zgłoszony jako kolejny równie ważny etap — uczestnicy ustalili, że wrócą do niego osobno"}
+**Status in the workshop:** {e.g. "raised as the next, equally important stage — participants agreed to come back to it separately"}
 
 ---
 
-## AS IS — problemy / „bóle" (lista jednoznacznie wyartykułowanych)
+## AS IS — problems / "pain points" (list of clearly articulated ones)
 
-_{Każdy ból = jedno zdanie + dosłowny cytat lub dowód z warsztatu. Bez interpretacji. Numeruj — później łatwiej odwoływać się w taskach „rozwiązuje ból #3, #7".}_
+_{Each pain point = one sentence + a verbatim quote or evidence from the workshop. No interpretation. Number them — it makes it easier to refer to them in tasks later: "solves pain point #3, #7".}_
 
-| # | Ból | Cytat / dowód z warsztatu |
+| # | Pain point | Quote / evidence from the workshop |
 |---|-----|---------------------------|
-| 1 | {Krótki opis bólu} | {Imię: „dosłowny cytat"} |
-| 2 | {Krótki opis bólu} | {Imię: „dosłowny cytat" / opis sytuacji} |
-| 3 | {Krótki opis bólu} | {Imię: „dosłowny cytat"} |
+| 1 | {Short description of the pain point} | {Name: "verbatim quote"} |
+| 2 | {Short description of the pain point} | {Name: "verbatim quote" / description of the situation} |
+| 3 | {Short description of the pain point} | {Name: "verbatim quote"} |
 
 ---
 
-## TO BE — oczekiwania spisane podczas warsztatu
+## TO BE — expectations captured during the workshop
 
-> **Cytat-klucz ({Imię}):** „{dosłowny cytat, który najlepiej oddaje docelowy kierunek — często pada jako spontaniczne podsumowanie przez uczestnika}".
+> **Key quote ({Name}):** "{verbatim quote that best captures the target direction — often said by a participant as a spontaneous summary}".
 
-### Wymagania funkcjonalne (uporządkowane wg priorytetu z warsztatu)
+### Functional requirements (ordered by priority from the workshop)
 
-1. **{Wymaganie 1 — krótka nazwa}** — {opis, co konkretnie ma się dziać; warunki brzegowe; cytat uczestnika, jeśli pomocny}.
-2. **{Wymaganie 2}** — {opis}:
-   - {pod-warunek},
-   - {pod-warunek},
-   - {pod-warunek}.
-3. **{Wymaganie 3}** — {opis}.
-4. **{Wymaganie N}** — {opis + ewentualne uściślenia w cytacie}.
+1. **{Requirement 1 — short name}** — {description of what exactly should happen; edge conditions; participant quote, if helpful}.
+2. **{Requirement 2}** — {description}:
+   - {sub-condition},
+   - {sub-condition},
+   - {sub-condition}.
+3. **{Requirement 3}** — {description}.
+4. **{Requirement N}** — {description + any clarifications in a quote}.
 
-### Wymagania niefunkcjonalne
+### Non-functional requirements
 
-- {Skala / wolumen — np. zlecenia z setkami pozycji}
-- {Wydajność / czas reakcji — np. dane dostępne natychmiast}
-- {Dostępność / UX dla nowych użytkowników}
-- {Bezpieczeństwo / zgodność / regulacje}
-
----
-
-## Ograniczenia / „rzeczy, które się nie zmienią"
-
-_{Bardzo ważne — uczestnicy wprost wyartykułowali, co JEST regułą biznesową i NIE podlega negocjacji w TO BE. Pomijając, narażasz się na propozycję projektową, która zostanie odrzucona w 5 minut.}_
-
-- **{Reguła 1}** — {dlaczego nie zmieniamy}:
-  1. {powód 1},
-  2. {powód 2}.
-- **{Reguła 2}** — {uzasadnienie}.
-- {Dwoisty / wielowariantowy charakter procesu — rozwiązanie TO BE musi obsłużyć **wszystkie** warianty}.
+- {Scale / volume — e.g. work orders with hundreds of line items}
+- {Performance / response time — e.g. data available immediately}
+- {Accessibility / UX for new users}
+- {Security / compliance / regulations}
 
 ---
 
-## Otwarte pytania (do zaadresowania w mapowaniu procesu / z analitykiem)
+## Constraints / "things that will not change"
 
-_{Wszystko, czego nie udało się rozstrzygnąć na spotkaniu. Każde pytanie powinno mieć właściciela odpowiedzi — albo wyraźnie „do analizy" / „do technologii" / „do biznesu".}_
+_{Very important — participants explicitly stated what IS a business rule and is NOT up for negotiation in the TO BE. Skip this and you risk a design proposal that gets rejected in 5 minutes.}_
 
-1. {Pytanie 1 — konkretne, sformułowane tak, by dało się na nie odpowiedzieć tak/nie lub liczbą}
-2. {Pytanie 2}
-3. {Pytanie N}
+- **{Rule 1}** — {why we are not changing it}:
+  1. {reason 1},
+  2. {reason 2}.
+- **{Rule 2}** — {justification}.
+- {Dual / multi-variant nature of the process — the TO BE solution must handle **all** variants}.
 
 ---
 
-## Action items (kolejne kroki ustalone na warsztacie)
+## Open questions (to address in process mapping / with the analyst)
 
-| # | Co | Kto | Termin |
+_{Everything that could not be settled in the meeting. Each question should have an owner for the answer — or be clearly marked "for analysis" / "for technology" / "for the business".}_
+
+1. {Question 1 — concrete, phrased so it can be answered yes/no or with a number}
+2. {Question 2}
+3. {Question N}
+
+---
+
+## Action items (next steps agreed in the workshop)
+
+| # | What | Who | Due |
 |---|----|-----|--------|
-| 1 | {Konkretna akcja — np. zmapowanie procesu z analitykiem} | {Imię / role} | {YYYY-MM-DD lub „przed kolejnym spotkaniem"} |
-| 2 | {Akcja} | {Imię} | {termin} |
-| 3 | {Akcja} | {Imię} | {termin} |
+| 1 | {Concrete action — e.g. map the process with the analyst} | {Name / roles} | {YYYY-MM-DD or "before the next meeting"} |
+| 2 | {Action} | {Name} | {due date} |
+| 3 | {Action} | {Name} | {due date} |
 
 ---
 
-## Wskazówki dla analizy AS IS
+## Pointers for the AS IS analysis
 
-_{Co konkretnie analityk powinien domknąć po tym spotkaniu — żeby nie zaczynać od zera. Wypunktowane, krótkie.}_
+_{What exactly the analyst should close out after this meeting — so they don't start from scratch. Bulleted, short.}_
 
-- Zmapować **diagram BPMN / sekwencję** procesu „{nazwa}" z artefaktami: {lista dokumentów / encji wymienionych na warsztacie}.
-- Zinwentaryzować **miejsca, w których użytkownik sięga „poza system"** — {przykłady z warsztatu: drukowany raport serwisowy, kalkulator, Excel, e-mail}.
-- Zmierzyć **wolumeny** (jeśli możliwe z danych): {co konkretnie — np. liczba dokumentów per persona miesięcznie, średnia liczba pozycji, rozkład typów rozbieżności}.
-- Skatalogować **klasy {przypadków / rozbieżności / wariantów}** z przykładami z warsztatu jako test cases.
-- Zewidencjonować **zależności zewnętrzne** — {np. uzgodnienia z konkretnymi osobami, integracje z systemami zewnętrznymi}.
+- Map the **BPMN diagram / sequence** of the "{name}" process with its artefacts: {list of documents / entities mentioned in the workshop}.
+- Inventory the **places where the user reaches "outside the system"** — {examples from the workshop: printed service report, calculator, Excel, email}.
+- Measure **volumes** (if possible from data): {what exactly — e.g. number of documents per persona per month, average number of line items, distribution of discrepancy types}.
+- Catalogue the **classes of {cases / discrepancies / variants}** with examples from the workshop as test cases.
+- Record the **external dependencies** — {e.g. arrangements with specific people, integrations with external systems}.
 
-## Wskazówki dla projektu TO BE
+## Pointers for the TO BE design
 
-_{Krótkie hinty dla UX / Product Designera. Nie projekt — kierunki.}_
+_{Short hints for UX / the Product Designer. Not a design — directions.}_
 
-- Domyślny ekran użytkownika: {pomysł na „happy path" — np. lista z flagą zgodności, większość pozycji auto-matched}.
-- Dla {wyjątków / rozbieżności}: {szczegół z etykietą typu + odnośnik do dokumentu źródłowego + „one-click" akcja}.
-- Mechanizm {wykrywania duplikatów / X} oparty na: {atrybuty, poziomy pewności}.
-- Onboarding nowego użytkownika: {tryb prowadzony / tutorial — wprost zgłaszany przez uczestników jako wartość}.
-- {Źródło prawdy} dla {encji}: zaprojektować integrację tak, by zniknęła potrzeba {dzisiejszej obejścia}.
+- The user's default screen: {idea for the "happy path" — e.g. a list with a match flag, most line items auto-matched}.
+- For {exceptions / discrepancies}: {detail with a type label + link to the source document + "one-click" action}.
+- A mechanism for {duplicate detection / X} based on: {attributes, confidence levels}.
+- New-user onboarding: {guided mode / tutorial — explicitly raised by participants as valuable}.
+- {Source of truth} for {entity}: design the integration so the need for {today's workaround} disappears.
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- Transkrypcja audio (segmenty z time-stampami i mówcami): [{nazwa pliku}]({link})
-- Kluczowe momenty w nagraniu:
-  - {MM:SS} — {kto i o czym — np. „wprowadzenie, cel spotkania"}
-  - {MM:SS} — {kto i o czym}
-  - {MM:SS} — {kto i o czym}
-  - {MM:SS} — {ustalenie kolejnych kroków}
-- Powiązane dokumenty:
-  - {link do user story / taska w Jira / poprzedniego podsumowania, jeśli kontynuacja}
-  - {link do ux-brief / task.template, jeśli wynikły bezpośrednio z warsztatu}
+- Audio transcript (segments with timestamps and speakers): [{file name}]({link})
+- Key moments in the recording:
+  - {MM:SS} — {who and about what — e.g. "introduction, meeting goal"}
+  - {MM:SS} — {who and about what}
+  - {MM:SS} — {who and about what}
+  - {MM:SS} — {agreeing on next steps}
+- Related documents:
+  - {link to the user story / Jira task / previous summary, if this is a continuation}
+  - {link to the ux-brief / task.template, if they came directly out of the workshop}

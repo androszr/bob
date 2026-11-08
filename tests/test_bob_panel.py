@@ -66,7 +66,7 @@ def test_panel_login_waits_for_the_button_then_starts_bob(monkeypatch, tmp_path)
     monkeypatch.setattr(supervisor, "LOGIN_DONE", tmp_path / "done")
     script = tmp_path / "fake_login.py"     # stands in for login.py: waits for --done-file, exits 0
     script.write_text("import sys, time, pathlib\nf = pathlib.Path(sys.argv[2])\n"
-                      "while not f.exists(): time.sleep(0.05)\nprint('zapisane')\n")
+                      "while not f.exists(): time.sleep(0.05)\nprint('saved')\n")
     monkeypatch.setattr(supervisor, "LOGIN_REL", str(script))
     shell = tmp_path / "shell.sh"           # like `zsh -il -c CMD` but without sourcing any login profile
     shell.write_text('#!/bin/sh\nexec /bin/sh -c "$3"\n')
@@ -83,7 +83,7 @@ def test_panel_login_waits_for_the_button_then_starts_bob(monkeypatch, tmp_path)
         if started and supervisor.login_status()["exit_code"] is not None:
             break
         time.sleep(0.05)
-    assert started == ["owner (po logowaniu)"] and supervisor.login_status()["exit_code"] == 0
+    assert started == ["owner (after login)"] and supervisor.login_status()["exit_code"] == 0
     assert os.stat(tmp_path / "login.log").st_mode & 0o077 == 0
 
 
@@ -93,8 +93,12 @@ def test_autostart_only_when_bob_was_meant_to_run_and_the_session_is_valid(monke
     monkeypatch.setattr(supervisor, "start", lambda by: {"ok": True, "by": by})
     monkeypatch.setattr(supervisor, "session_ok", lambda: True)
     assert supervisor.autostart() is None                                  # never started from the panel
-    (tmp_path / "s.json").write_text('{"ma_dzialac": true}')
+    (tmp_path / "s.json").write_text('{"should_run": true}')
     assert supervisor.autostart()["by"] == "panel (autostart)"
+    (tmp_path / "s.json").write_text('{"ma_dzialac": true}')               # a state file of an older build
+    assert supervisor.autostart()["by"] == "panel (autostart)"
+    (tmp_path / "s.json").write_text('{"ma_dzialac": true, "should_run": false}')    # the English key wins
+    assert supervisor.autostart() is None
     monkeypatch.setattr(supervisor, "session_ok", lambda: False)
     assert supervisor.autostart() is None
 
@@ -107,19 +111,19 @@ def sup(monkeypatch, tmp_path):
     monkeypatch.setattr(supervisor, "_alive", lambda pid: False)
     monkeypatch.setattr(supervisor, "session_ok", lambda: True)
     monkeypatch.setattr(supervisor.os, "kill", lambda pid, sig: None)
-    supervisor._write_state(ma_dzialac=True)
+    supervisor._write_state(should_run=True)
     return supervisor
 
 
 def test_restart_keeps_bob_meant_to_run(sup, monkeypatch):
     monkeypatch.setattr(sup, "start", lambda by: {"ok": True, "message": "ok"})
     assert sup.restart("t")["ok"]
-    assert sup.read_state()["ma_dzialac"] is True
+    assert sup.read_state()["should_run"] is True
 
 
-def test_manual_stop_clears_ma_dzialac(sup):
+def test_manual_stop_clears_should_run(sup):
     assert sup.stop("owner")["ok"]
-    assert sup.read_state()["ma_dzialac"] is False
+    assert sup.read_state()["should_run"] is False
 
 
 class _Page:
@@ -188,17 +192,19 @@ def test_arith_accepts_numbers_and_refuses_everything_else():
 
 
 def test_chats_expand_all_groups_and_extras(monkeypatch, tmp_path):
-    cfg = {"chats": {"Notatki": {"mcp": None, "mcp_extra": ["urlopy"], "control_chat": True},
-                     "Projekt": {"mcp": ["jira"], "ingest_only": True, "kanal_fr": True}}}
+    cfg = {"chats": {"Notes": {"mcp": None, "mcp_extra": ["leave"], "control_chat": True},
+                     "Project": {"mcp": ["jira"], "ingest_only": True, "external_chat": True},
+                     "Old": {"role": ["asystent"], "kanal_fr": True}}}           # Polish keys of an older build
     (tmp_path / "c.json").write_text(json.dumps(cfg))
-    (tmp_path / "roles.json").write_text(json.dumps({"role": {"asystent": {"nazwa": "A", "dostep": []}}}))
+    (tmp_path / "roles.json").write_text(json.dumps({"roles": {"assistant": {"name": "A", "access": []}}}))
     monkeypatch.setattr(roles, "ROLES_FILE", tmp_path / "roles.json")
     monkeypatch.setattr(data, "CHAT_CONFIG", tmp_path / "c.json")
     monkeypatch.setattr(data, "WATCH_STATE", tmp_path / "missing.json")
     rows = {r["name"]: r for r in data.chats()}
-    assert rows["Notatki"]["all_groups"] and "jira" in rows["Notatki"]["groups"]
-    assert rows["Projekt"]["groups"] == ["jira"] and "ingest_only" in rows["Projekt"]["flags"]
-    assert "kanał zewnętrzny" in rows["Projekt"]["flags"]
+    assert rows["Notes"]["all_groups"] and "jira" in rows["Notes"]["groups"]
+    assert rows["Project"]["groups"] == ["jira"] and "ingest_only" in rows["Project"]["flags"]
+    assert "external chat" in rows["Project"]["flags"]
+    assert rows["Old"]["roles"] == ["assistant"] and "external chat" in rows["Old"]["flags"]
 
 
 def _ts(hours_ago, z=False):
@@ -217,7 +223,7 @@ def test_dashboard_counts_per_chat_and_ignores_old_or_odd_rows(monkeypatch, tmp_
         {"action": "watch_skip_silent_sentinel", "chat_name": "A", "ts": _ts(2)},
         {"action": "watch_send", "chat_name": "A", "ts": _ts(30)},                        # older than 24 h
         {"action": "watch_send", "chat_name": ["A", "B"], "ts": _ts(1)},                  # not a string
-        {"action": "watch_send", "chat_name": "B", "ts": "to nie data"},
+        {"action": "watch_send", "chat_name": "B", "ts": "not a date"},
     ])
     _jsonl(perf, [{"ts": _ts(1), "total_cost_usd": 0.5, "duration_ms": 4000, "ctx": {"chat": "A"}},
                   {"ts": _ts(1), "total_cost_usd": "0.1", "ctx": {"chat": "A"}},         # a string cost still adds up
@@ -228,15 +234,17 @@ def test_dashboard_counts_per_chat_and_ignores_old_or_odd_rows(monkeypatch, tmp_
     d = data.dashboard(24)
     assert [c["name"] for c in d["chats"]] == ["A"]
     a = d["chats"][0]
-    assert a["total"] == 2 and a["odpowiedzi"] == 1 and a["milczenie"] == 1 and a["koszt"] == 0.6
+    assert a["total"] == 2 and a["replies"] == 1 and a["silent"] == 1 and a["cost"] == 0.6
     assert sum(sum(cell) for cell in a["cells"]) == 2
-    assert d["kpi"] == {"obsluzone": 2, "odpowiedzi": 1, "milczenie": 1, "wywolania": 3, "koszt": 0.6,
-                        "kanaly": 1, "czas_mediana": 4.0}
+    assert d["kpi"] == {"handled": 2, "replies": 1, "silent": 1, "calls": 3, "cost": 0.6,
+                        "chats": 1, "median_s": 4.0}
+    assert {f["kind"] for f in d["feed"]} == {"reply", "silent"}
 
 
 def test_dashboard_keeps_both_local_two_oclock_hours_apart_at_the_dst_change(monkeypatch, tmp_path):
     log = tmp_path / "log.jsonl"
-    # 2026-10-25: Warsaw goes from +02:00 to +01:00 at 03:00 local - 02:00 local happens twice
+    # 2026-10-25: Central Europe goes from +02:00 to +01:00 at 03:00 local - 02:00 local happens twice
+    monkeypatch.setattr(data.org_config, "TIMEZONE", "Europe/Warsaw")
     _jsonl(log, [{"action": "watch_send", "chat_name": "A", "ts": "2026-10-25T00:30:00+00:00"},   # 02:30 CEST
                  {"action": "watch_send", "chat_name": "A", "ts": "2026-10-25T01:30:00+00:00"}])  # 02:30 CET
     monkeypatch.setattr(data, "LOG_JSONL", log)
@@ -279,7 +287,7 @@ def test_status_names_the_owner_and_has_only_the_generic_fields(monkeypatch):
 
 def test_generic_approval_lifecycle(monkeypatch, tmp_path):
     monkeypatch.setattr(approvals, "STORE", tmp_path / "approvals.json")
-    req = approvals.create("Restart Boba?", "po wdrożeniu", "Claude Code")
+    req = approvals.create("Restart Bob?", "after the deploy", "Claude Code")
     assert req["status"] == "pending" and approvals.listing()["pending"][0]["id"] == req["id"]
     assert approvals.decide(req["id"], True, "ok")["ok"]
     assert approvals.get(req["id"])["status"] == "approved"
@@ -295,20 +303,21 @@ def test_the_approval_owner_label_comes_from_the_org_config():
 
 def test_new_requests_are_announced_once_and_retried_when_the_send_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(approvals, "STORE", tmp_path / "approvals.json")
-    req = approvals.create("Wdrożyć X?", "szczegóły", "Claude Code")
+    req = approvals.create("Deploy X?", "details", "Claude Code")
     assert approvals.announce_pending(lambda t: False) == 0
     sent = []
     assert approvals.announce_pending(lambda t: sent.append(t) or True) == 1
-    assert f"zatwierdzam {req['id']}" in sent[0] and "Claude Code" in sent[0]
+    assert f"Bob, approve {req['id']}" in sent[0] and f"Bob, reject {req['id']}" in sent[0]
+    assert "Claude Code" in sent[0]
     assert approvals.announce_pending(lambda t: sent.append(t) or True) == 0 and len(sent) == 1
 
 
 def test_announce_pending_truncates_long_details(monkeypatch, tmp_path):
     monkeypatch.setattr(approvals, "STORE", tmp_path / "approvals.json")
-    approvals.create("Duży diff", "x" * 5000, "test")
+    approvals.create("Big diff", "x" * 5000, "test")
     sent = []
     assert approvals.announce_pending(lambda text: sent.append(text) or True) == 1
-    assert len(sent[0]) < 1600 and "panelu" in sent[0]
+    assert len(sent[0]) < 1600 and "in the panel" in sent[0]
     assert approvals.announce_pending(lambda text: sent.append(text) or True) == 0     # once only
 
 
@@ -329,6 +338,11 @@ def test_the_json_list_store_updates_under_a_lock(tmp_path):
 
 
 def test_decision_command_regexes():
+    m = cli._APR_DECIDE_RE.search("Bob, approve apr-0123456789: only after 6 pm")
+    assert m and m.group(2) == "apr-0123456789" and m.group(3) == "only after 6 pm"
+    assert cli._APR_DECIDE_RE.search("bob reject apr-abcdef0123").group(1) == "reject"
+    assert cli._APR_DECIDE_BARE_RE.search("Bob, approve")
+    # the Polish commands of older habits still work
     m = cli._APR_DECIDE_RE.search("Bob, zatwierdzam apr-0123456789: tylko po 18")
     assert m and m.group(2) == "apr-0123456789" and m.group(3) == "tylko po 18"
     m = cli._APR_DECIDE_RE.search("bob odrzucam apr-abcdef0123")
@@ -337,6 +351,7 @@ def test_decision_command_regexes():
     assert cli._APR_DECIDE_BARE_RE.search("Bob zatwierdzam")
     assert cli._APR_DECIDE_BARE_RE.search("Bob, odrzucam: nie teraz").group(2) == "nie teraz"
     assert not cli._APR_DECIDE_BARE_RE.search("Bob zatwierdzam zmianę skryptu Anny")      # the AI handles it
+    assert not cli._APR_DECIDE_BARE_RE.search("Bob approve the script change from Anna")
 
 
 def _args(tmp_path):
@@ -346,7 +361,7 @@ def _args(tmp_path):
 
 
 def _owner_msg(text, seq=2):
-    return {"id": f"msg_{seq}", "sequence_id": seq, "sender": "Szef", "sender_mri": cli.api_client.USER_MRI,
+    return {"id": f"msg_{seq}", "sequence_id": seq, "sender": "Boss", "sender_mri": cli.api_client.USER_MRI,
             "text": text, "raw_html": f"<p>{text}</p>", "timestamp": "2026-10-24T10:00:00Z", "image_urls": []}
 
 
@@ -358,8 +373,8 @@ def _run_control(tmp_path, monkeypatch, text):
     monkeypatch.setattr(ai, "_run_claude_cli", lambda *a, **kw: pytest.fail("real claude CLI called"))
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=20: [_owner_msg(text)])
     monkeypatch.setattr(cli.api_client, "reply_to_message", lambda t, *a, **kw: acks.append(t) or True)
-    monkeypatch.setattr(cli, "_load_chat_config", lambda path: {"Notatki": {"control_chat": True}})
-    cli._process_chat_messages("Notatki", "conv-notatki", _args(tmp_path), {"last_sequence_id": 1}, [0.0],
+    monkeypatch.setattr(cli, "_load_chat_config", lambda path: {"Notes": {"control_chat": True}})
+    cli._process_chat_messages("Notes", "conv-notes", _args(tmp_path), {"last_sequence_id": 1}, [0.0],
                                control_chat=True, caller="owner")
     return acks
 
@@ -370,29 +385,29 @@ def decisions(monkeypatch):
 
     def fake_decide(req_id, approve, note="", by=approvals.OWNER):
         calls.append({"id": req_id, "approve": approve, "note": note, "by": by})
-        return {"ok": True, "message": "Zapisane."}
+        return {"ok": True, "message": "Saved."}
     monkeypatch.setattr(approvals, "decide", fake_decide)
     return calls
 
 
 def test_control_chat_explicit_approval_passes_note_and_by(tmp_path, monkeypatch, decisions):
-    acks = _run_control(tmp_path, monkeypatch, "Bob, zatwierdzam apr-0123456789: notatka")
-    assert decisions == [{"id": "apr-0123456789", "approve": True, "note": "notatka",
+    acks = _run_control(tmp_path, monkeypatch, "Bob, approve apr-0123456789: a note")
+    assert decisions == [{"id": "apr-0123456789", "approve": True, "note": "a note",
                           "by": f"{approvals.OWNER} (chat)"}]
-    assert any("Zatwierdzone" in a for a in acks) and not _run_control.ai_calls
+    assert any("Approved" in a for a in acks) and not _run_control.ai_calls
 
 
 def test_control_chat_bare_reject_resolves_the_single_pending_request(tmp_path, monkeypatch, decisions):
     monkeypatch.setattr(approvals, "listing", lambda *a, **k: {"pending": [{"id": "apr-aaaaaaaaaa"}], "done": []})
-    acks = _run_control(tmp_path, monkeypatch, "Bob odrzucam")
+    acks = _run_control(tmp_path, monkeypatch, "Bob odrzucam")                  # the Polish alias
     assert [(d["id"], d["approve"]) for d in decisions] == [("apr-aaaaaaaaaa", False)]
-    assert any("Odrzucone" in a for a in acks)
+    assert any("Rejected" in a for a in acks)
 
 
 def test_control_chat_bare_decision_is_ambiguous_with_two_requests_waiting(tmp_path, monkeypatch, decisions):
     monkeypatch.setattr(approvals, "listing", lambda *a, **k: {
         "pending": [{"id": "apr-aaaaaaaaaa"}, {"id": "apr-bbbbbbbbbb"}], "done": []})
-    _run_control(tmp_path, monkeypatch, "Bob zatwierdzam")
+    _run_control(tmp_path, monkeypatch, "Bob approve")
     assert decisions == [] and len(_run_control.ai_calls) == 1       # falls through to the AI, which asks
 
 
@@ -403,11 +418,11 @@ def test_control_chat_bare_decision_is_ambiguous_with_two_requests_waiting(tmp_p
 ])
 def test_pause_off_on_keep_disabled_chats(tmp_path, monkeypatch, text, check):
     ctrl = tmp_path / "bob-control.json"
-    ctrl.write_text(json.dumps({"disabled": True, "disabled_chats": ["Stary"]}))
+    ctrl.write_text(json.dumps({"disabled": True, "disabled_chats": ["Old"]}))
     monkeypatch.setattr(cli, "_BOB_CONTROL_FILE", str(ctrl))
     _run_control(tmp_path, monkeypatch, text)
     state = json.loads(ctrl.read_text(encoding="utf-8"))
-    assert state["disabled_chats"] == ["Stary"] and check(state), state
+    assert state["disabled_chats"] == ["Old"] and check(state), state
 
 
 def test_save_control_is_atomic_and_merges(tmp_path, monkeypatch):
@@ -421,11 +436,11 @@ def test_save_control_is_atomic_and_merges(tmp_path, monkeypatch):
 
 def test_explicit_mcp_change_drops_roles_but_keeps_the_external_flag(tmp_path):
     path = tmp_path / "chat-config.json"
-    cfg = {"X": {"role": ["pm"], "bez": ["todos"], "dodatkowo": ["urlopy"], "kanal_fr": True}}
+    cfg = {"X": {"roles": ["pm"], "remove_groups": ["todos"], "add_groups": ["leave"], "external_chat": True}}
     cli._apply_chat_config_change("X", "mcp", ["jira"], cfg, path=path)
     saved = json.loads(path.read_text(encoding="utf-8"))["chats"]["X"]
-    assert saved["mcp"] == ["jira"] and saved["kanal_fr"] is True
-    assert not {"role", "bez", "dodatkowo"} & set(saved)
+    assert saved["mcp"] == ["jira"] and saved["external_chat"] is True
+    assert not {"roles", "remove_groups", "add_groups"} & set(saved)
     assert cfg["X"] == saved
 
 
@@ -436,142 +451,158 @@ def test_explicit_mcp_change_drops_roles_but_keeps_the_external_flag(tmp_path):
 
 @pytest.fixture()
 def chat_files(monkeypatch, tmp_path):
-    cfg = {"_comment": "opis pól", "chats": {
-        "Notatki": {"conv_id": "48:notes", "control_chat": True, "caller": "owner", "mcp": None},
-        "Projekt": {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}}}
+    cfg = {"_comment": "field notes", "chats": {
+        "Notes": {"conv_id": "48:notes", "control_chat": True, "caller": "owner", "mcp": None},
+        "Project": {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}}}
     (tmp_path / "chat-config.json").write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
     monkeypatch.setattr(chatcfg, "CHAT_CONFIG", tmp_path / "chat-config.json")
     monkeypatch.setattr(chatcfg, "CONTROL_FILE", tmp_path / "bob-control.json")
     monkeypatch.setattr(chatcfg, "BACKUP_DIR", tmp_path / "arch")
-    monkeypatch.setattr(data, "_mcp_groups", lambda: ["jira", "datetime", "todos", "urlopy"])
-    (tmp_path / "bob-control.json").write_text(json.dumps({"paused_until": None, "disabled_chats": ["Stary"]}))
+    monkeypatch.setattr(data, "_mcp_groups", lambda: ["jira", "datetime", "todos", "leave"])
+    (tmp_path / "bob-control.json").write_text(json.dumps({"paused_until": None, "disabled_chats": ["Old"]}))
     return chatcfg, tmp_path
 
 
 def test_chat_change_is_previewed_validated_backed_up_and_keeps_the_rest(chat_files):
     chatcfg, tmp = chat_files
     new = {"caller": "auto", "mcp": ["jira", "todos"], "trigger": "bob", "conv_id": "19:abc@thread.v2"}
-    prev = chatcfg.preview("save", "Projekt", new)
+    prev = chatcfg.preview("save", "Project", new)
     assert '+        "todos"' in prev["diff"] and json.loads((tmp / "chat-config.json").read_text())[
-        "chats"]["Projekt"]["caller"] == "all"                       # a preview writes nothing
-    assert chatcfg.apply("save", "Projekt", new)["ok"]
+        "chats"]["Project"]["caller"] == "all"                       # a preview writes nothing
+    assert chatcfg.apply("save", "Project", new)["ok"]
     doc = json.loads((tmp / "chat-config.json").read_text())
-    assert doc["_comment"] == "opis pól" and doc["chats"]["Projekt"]["mcp"] == ["jira", "todos"]
+    assert doc["_comment"] == "field notes" and doc["chats"]["Project"]["mcp"] == ["jira", "todos"]
     assert len(list((tmp / "arch").glob("chat-config.*.json"))) == 1
-    for bad in ({"mcp": ["nie_ma_takiej"]}, {"caller": "każdy"}, {"internet": "tak"}, {"control_chat": True},
-                {"conv_id": "http://evil"}, {"ingest_only": "nie"}, {"persona": "nie-ma"}):
+    for bad in ({"mcp": ["no_such_group"]}, {"caller": "everyone"}, {"internet": "yes"}, {"control_chat": True},
+                {"conv_id": "http://evil"}, {"ingest_only": "no"}, {"persona": "no-such"}):
         with pytest.raises(ValueError):
-            chatcfg.apply("save", "Projekt", bad)
+            chatcfg.apply("save", "Project", bad)
 
 
 def test_added_chat_is_enabled_and_a_removed_one_switched_off_until_the_restart(chat_files):
     chatcfg, tmp = chat_files
-    r = chatcfg.apply("add", "Stary", None)
-    assert r["restart_needed"] and json.loads((tmp / "chat-config.json").read_text())["chats"]["Stary"] == \
+    r = chatcfg.apply("add", "Old one", None)
+    assert r["restart_needed"] and json.loads((tmp / "chat-config.json").read_text())["chats"]["Old one"] == \
         chatcfg.NEW_CHAT
-    assert "Stary" not in chatcfg.disabled()
-    assert chatcfg.apply("remove", "Projekt")["ok"]
-    assert "Projekt" not in json.loads((tmp / "chat-config.json").read_text())["chats"]
-    assert "Projekt" in chatcfg.disabled()          # still watched until the restart, with no config left
+    assert "Old one" not in chatcfg.disabled()
+    assert chatcfg.apply("remove", "Project")["ok"]
+    assert "Project" not in json.loads((tmp / "chat-config.json").read_text())["chats"]
+    assert "Project" in chatcfg.disabled()          # still watched until the restart, with no config left
     ctrl = json.loads((tmp / "bob-control.json").read_text())
     assert ctrl["paused_until"] is None             # the rest of bob-control.json is kept
     with pytest.raises(ValueError):
-        chatcfg.apply("remove", "Notatki")
+        chatcfg.apply("remove", "Notes")
     with pytest.raises(ValueError):
-        chatcfg.set_enabled("Notatki", False)
+        chatcfg.set_enabled("Notes", False)
     with pytest.raises(ValueError):
-        chatcfg.apply("add", "Stary", None)          # already there
+        chatcfg.apply("add", "Old one", None)          # already there
 
 
 def test_renaming_a_switched_off_chat_keeps_it_off(chat_files):
     chatcfg, tmp = chat_files
     base = {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}
-    chatcfg.set_enabled("Projekt", False)
-    assert chatcfg.apply("save", "Projekt", base, new_name="Projekt 2")["ok"]
-    assert {"Projekt", "Projekt 2"} <= chatcfg.disabled()          # the new name is off too
-    chatcfg.set_enabled("Projekt 2", True)
-    assert chatcfg.apply("save", "Projekt 2", base, new_name="Projekt 3")["ok"]
-    assert "Projekt 3" not in chatcfg.disabled() and "Projekt 2" in chatcfg.disabled()
+    chatcfg.set_enabled("Project", False)
+    assert chatcfg.apply("save", "Project", base, new_name="Project 2")["ok"]
+    assert {"Project", "Project 2"} <= chatcfg.disabled()          # the new name is off too
+    chatcfg.set_enabled("Project 2", True)
+    assert chatcfg.apply("save", "Project 2", base, new_name="Project 3")["ok"]
+    assert "Project 3" not in chatcfg.disabled() and "Project 2" in chatcfg.disabled()
 
 
 def test_flipping_listen_only_needs_a_restart_and_says_so(chat_files):
     chatcfg, tmp = chat_files
     base = {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}
-    r = chatcfg.apply("save", "Projekt", {**base, "ingest_only": True})
-    assert r["restart_needed"] and "restarcie" in r["message"]
-    assert not chatcfg.apply("save", "Projekt", {**base, "ingest_only": True, "caller": "owner"})["restart_needed"]
-    back = chatcfg.apply("save", "Projekt", base)                         # and in the other direction
-    assert back["restart_needed"] and "restarcie" in back["message"]
+    r = chatcfg.apply("save", "Project", {**base, "ingest_only": True})
+    assert r["restart_needed"] and "restart" in r["message"]
+    assert not chatcfg.apply("save", "Project", {**base, "ingest_only": True, "caller": "owner"})["restart_needed"]
+    back = chatcfg.apply("save", "Project", base)                         # and in the other direction
+    assert back["restart_needed"] and "restart" in back["message"]
 
 
 def test_changing_a_conv_id_needs_a_restart_and_says_so(chat_files):
     chatcfg, tmp = chat_files
     base = {"conv_id": "19:abc@thread.v2", "caller": "all", "mcp": ["jira"], "trigger": "bob"}
-    r = chatcfg.apply("save", "Projekt", {**base, "conv_id": "19:def@thread.v2"})
-    assert r["restart_needed"] and "restarcie" in r["message"]
-    assert not chatcfg.apply("save", "Projekt", {**base, "conv_id": "19:def@thread.v2", "caller": "owner"})[
+    r = chatcfg.apply("save", "Project", {**base, "conv_id": "19:def@thread.v2"})
+    assert r["restart_needed"] and "restart" in r["message"]
+    assert not chatcfg.apply("save", "Project", {**base, "conv_id": "19:def@thread.v2", "caller": "owner"})[
         "restart_needed"]
 
 
 def test_the_control_chat_is_the_flagged_one_not_a_literal(chat_files):
     chatcfg, tmp = chat_files
     doc = json.loads((tmp / "chat-config.json").read_text())
-    doc["chats"] = {"Centrala": {**doc["chats"]["Notatki"]}, "Projekt": doc["chats"]["Projekt"]}
+    doc["chats"] = {"Control room": {**doc["chats"]["Notes"]}, "Project": doc["chats"]["Project"]}
     (tmp / "chat-config.json").write_text(json.dumps(doc))
-    assert chatcfg.control_chat() == "Centrala"
+    assert chatcfg.control_chat() == "Control room"
     with pytest.raises(ValueError):
-        chatcfg.apply("remove", "Centrala")
-    (tmp / "chat-config.json").write_text(json.dumps({"chats": {"Projekt": {}}}))
-    assert chatcfg.control_chat() == "Notatki"          # none flagged: the default name
+        chatcfg.apply("remove", "Control room")
+    (tmp / "chat-config.json").write_text(json.dumps({"chats": {"Project": {}}}))
+    assert chatcfg.control_chat() == "Notes"          # none flagged: the default name
 
 
 def test_a_missing_chat_config_is_an_empty_one(chat_files):
     chatcfg, tmp = chat_files
     (tmp / "chat-config.json").unlink()
     assert chatcfg.listing()["chats"] == []
-    assert chatcfg.apply("add", "Pierwszy", None)["ok"] and (tmp / "chat-config.json").exists()
+    assert chatcfg.apply("add", "First", None)["ok"] and (tmp / "chat-config.json").exists()
 
 
 @pytest.fixture()
 def role_chats(monkeypatch, tmp_path):
-    cfg = {"chats": {"Notatki": {"conv_id": "48:notes", "control_chat": True, "caller": "owner", "mcp": None},
-                     "Projekt": {"role": ["pm"], "mcp": ["jira"]}}}
+    cfg = {"chats": {"Notes": {"conv_id": "48:notes", "control_chat": True, "caller": "owner", "mcp": None},
+                     "Project": {"roles": ["pm"], "mcp": ["jira"]}}}
     (tmp_path / "chat-config.json").write_text(json.dumps(cfg, indent=2) + "\n")
     (tmp_path / "roles.json").write_text(json.dumps(
-        {"role": {"asystent": {"nazwa": "A", "dostep": []}, "pm": {"nazwa": "PM", "dostep": ["jira"]}}}))
+        {"roles": {"assistant": {"name": "A", "access": []}, "pm": {"name": "PM", "access": ["jira"]}}}))
     monkeypatch.setattr(roles, "ROLES_FILE", tmp_path / "roles.json")
     monkeypatch.setattr(chatcfg, "CHAT_CONFIG", tmp_path / "chat-config.json")
     monkeypatch.setattr(chatcfg, "CONTROL_FILE", tmp_path / "bob-control.json")
     monkeypatch.setattr(chatcfg, "BACKUP_DIR", tmp_path / "arch")
-    monkeypatch.setattr(data, "_mcp_groups", lambda: ["jira", "datetime", "todos", "urlopy"])
+    monkeypatch.setattr(data, "_mcp_groups", lambda: ["jira", "datetime", "todos", "leave"])
     return tmp_path
 
 
 def test_role_chat_save_strips_hand_written_mcp(role_chats):
-    new = {"role": ["pm"], "mcp": ["jira"], "mcp_extra": ["todos"], "bez": ["todos"]}
-    assert chatcfg.preview("save", "Projekt", new)["ok"]
-    assert chatcfg.apply("save", "Projekt", new)["ok"]
-    saved = json.loads((role_chats / "chat-config.json").read_text())["chats"]["Projekt"]
-    assert saved == {"role": ["pm"], "bez": ["todos"]}
+    new = {"roles": ["pm"], "mcp": ["jira"], "mcp_extra": ["todos"], "remove_groups": ["todos"]}
+    assert chatcfg.preview("save", "Project", new)["ok"]
+    assert chatcfg.apply("save", "Project", new)["ok"]
+    saved = json.loads((role_chats / "chat-config.json").read_text())["chats"]["Project"]
+    assert saved == {"roles": ["pm"], "remove_groups": ["todos"]}
+
+
+def test_a_polish_keyed_chat_is_read_and_saved_back_with_english_keys(role_chats):
+    doc = json.loads((role_chats / "chat-config.json").read_text())
+    doc["chats"]["Old"] = {"role": ["asystent"], "kanal_fr": True, "dodatkowo": ["urlopy"], "bez": ["todos"],
+                           "caller": "all"}
+    (role_chats / "chat-config.json").write_text(json.dumps(doc))
+    listed = {c["name"]: c["config"] for c in chatcfg.listing()["chats"]}
+    assert listed["Old"] == {"roles": ["assistant"], "external_chat": True, "add_groups": ["leave"],
+                             "remove_groups": ["todos"], "caller": "all"}
+    assert chatcfg.listing()["new_chat"] == {"caller": "all", "roles": [], "add_groups": ["datetime"]}
+    assert chatcfg.apply("save", "Old", {"role": ["asystent"], "kanal_fr": True, "caller": "owner"})["ok"]
+    saved = json.loads((role_chats / "chat-config.json").read_text())["chats"]
+    assert saved["Old"] == {"roles": ["assistant"], "external_chat": True, "caller": "owner"}
+    assert saved["Project"] == {"roles": ["pm"], "mcp": ["jira"]}                # other chats untouched
 
 
 @pytest.mark.parametrize("bad", [
-    {"role": ["nie_ma"]},
-    {"role": ["pm"], "kanal_fr": "tak"},
-    {"role": ["pm"], "trigger": 5},
-    {"role": ["pm"], "bez": ["nie_ma"]},
+    {"roles": ["no_such"]},
+    {"roles": ["pm"], "external_chat": "yes"},
+    {"roles": ["pm"], "trigger": 5},
+    {"roles": ["pm"], "remove_groups": ["no_such"]},
+    {"role": ["pm"], "kanal_fr": "tak"},                                       # the Polish keys are checked too
 ])
 def test_role_chat_validation_errors(role_chats, bad):
     for fn in (chatcfg.preview, chatcfg.apply):
         with pytest.raises(ValueError):
-            fn("save", "Projekt", bad)
-    assert "pm" in json.loads((role_chats / "chat-config.json").read_text())["chats"]["Projekt"]["role"]
+            fn("save", "Project", bad)
+    assert "pm" in json.loads((role_chats / "chat-config.json").read_text())["chats"]["Project"]["roles"]
 
 
 def test_panel_sees_the_same_groups_and_access_as_bob():
     known, default = rolecfg.groups()
     assert known == list(ai._MCP_GROUPS) and default == list(ai._ALL_GROUPS)
-    cc = {"A": {"mcp": ["jira"]}, "B": {"mcp": None}, "C": {"mcp": ["jira"], "mcp_extra": ["urlopy"]}}
+    cc = {"A": {"mcp": ["jira"]}, "B": {"mcp": None}, "C": {"mcp": ["jira"], "mcp_extra": ["leave"]}}
     for name, cfg in cc.items():
         assert rolecfg.effective(cfg) == cli._mcp_for(name, cc), name
 
@@ -583,19 +614,21 @@ def test_panel_sees_the_same_groups_and_access_as_bob():
 
 @pytest.fixture()
 def rfiles(monkeypatch, tmp_path):
+    # written by an older build: Polish keys - the panel reads them and writes English back
     doc = {"grupy": {}, "role": {"asystent": {"nazwa": "A", "dostep": []},
                                  "pm": {"nazwa": "PM", "dostep": ["jira"], "wiedza": [
                                      {"id": "w", "nazwa": "W", "plik": "knowledge/role/pm/w.md",
                                       "wpiecie": "prompt"}]}}}
     (tmp_path / "roles.json").write_text(json.dumps(doc))
     (tmp_path / "knowledge" / "role" / "pm").mkdir(parents=True)
-    (tmp_path / "knowledge" / "role" / "pm" / "w.md").write_text("# W\nstara treść\n")
-    (tmp_path / "chat-config.json").write_text(json.dumps({"chats": {"Projekt": {"role": ["pm"]}}}))
+    (tmp_path / "knowledge" / "role" / "pm" / "w.md").write_text("# W\nold text\n")
+    (tmp_path / "chat-config.json").write_text(json.dumps({"chats": {"Project": {"role": ["pm"]}}}))
     monkeypatch.setattr(roles, "ROLES_FILE", tmp_path / "roles.json")
     monkeypatch.setattr(roles, "REPO", tmp_path)
     for name, val in (("REPO", tmp_path), ("CHAT_CONFIG", tmp_path / "chat-config.json"),
                       ("ARCHIVE", tmp_path / "arch"), ("KNOWLEDGE_ARCHIVE", tmp_path / "karch"),
-                      ("PROPOSALS", tmp_path / "prop"), ("JOBS_FILE", tmp_path / "jobs.json")):
+                      ("PROPOSALS", tmp_path / "prop"), ("JOBS_FILE", tmp_path / "jobs.json"),
+                      ("LEGACY_PROPOSALS", tmp_path / "old-prop"), ("LEGACY_JOBS_FILE", tmp_path / "old-jobs.json")):
         monkeypatch.setattr(rolecfg, name, val)
     monkeypatch.setattr(approvals, "STORE", tmp_path / "approvals.json")
     monkeypatch.setattr(rolecfg.threading, "Thread", lambda target, args, daemon: type(
@@ -604,53 +637,59 @@ def rfiles(monkeypatch, tmp_path):
 
 
 def test_roles_are_saved_validated_and_a_used_role_is_not_deleted(rfiles):
-    new = {"nazwa": "Kadry", "dostep": ["urlopy"], "umiejetnosci": [{"nazwa": "x"}]}
-    assert rolecfg.save_role("kadry", new, new=True)["ok"]
-    assert roles.load()["role"]["kadry"]["dostep"] == ["urlopy"] and list((rfiles / "arch").glob("roles.*.json"))
+    new = {"name": "HR", "access": ["leave"], "skills": [{"name": "x"}]}
+    assert rolecfg.save_role("hr", new, new=True)["ok"]
+    assert roles.load()["roles"]["hr"]["access"] == ["leave"] and list((rfiles / "arch").glob("roles.*.json"))
+    on_disk = json.loads((rfiles / "roles.json").read_text())
+    assert set(on_disk) == {"groups", "roles"} and "assistant" in on_disk["roles"]     # written back in English
+    assert on_disk["roles"]["pm"]["knowledge"][0]["file"] == "knowledge/role/pm/w.md"
+    assert rolecfg.save_role("hr2", {"nazwa": "Old page", "dostep": ["leave"]}, new=True)["ok"]   # Polish body keys
+    assert roles.load()["roles"]["hr2"]["name"] == "Old page"
     with pytest.raises(ValueError):
-        rolecfg.save_role("kadry", {"nazwa": "K", "dostep": ["nie_ma"]})            # unknown group
+        rolecfg.save_role("hr", {"name": "K", "access": ["no_such"]})               # unknown group
     with pytest.raises(ValueError):
-        rolecfg.save_role("kadry2", {"nazwa": "X", "wiedza": [{"id": "a", "plik": "../../etc/passwd"}]}, new=True)
+        rolecfg.save_role("hr3", {"name": "X", "knowledge": [{"id": "a", "file": "../../etc/passwd"}]}, new=True)
     with pytest.raises(ValueError):
-        rolecfg.delete_role("pm")                                                   # Projekt has it
+        rolecfg.delete_role("pm")                                                   # Project has it
     with pytest.raises(ValueError):
-        rolecfg.delete_role("asystent")
-    assert rolecfg.delete_role("kadry")["ok"] and "kadry" not in roles.load()["role"]
+        rolecfg.delete_role("assistant")
+    assert rolecfg.delete_role("hr")["ok"] and "hr" not in roles.load()["roles"]
 
 
 def test_knowledge_change_goes_through_approvals_and_new_knowledge_joins_the_role(rfiles):
-    rolecfg.start_knowledge("pm", "dopisz nową regułę", kid="w", claude=lambda s, p: "# W\nstara treść\n- nowa reguła")
+    rolecfg.start_knowledge("pm", "add a new rule", kid="w", claude=lambda s, p: "# W\nold text\n- new rule")
     req = approvals.listing()["pending"][0]
-    assert "+- nowa reguła" in req["details"] and "stara treść" in (rfiles / "knowledge/role/pm/w.md").read_text()
+    assert "+- new rule" in req["details"] and "old text" in (rfiles / "knowledge/role/pm/w.md").read_text()
     assert approvals.decide(req["id"], True)["ok"]
-    assert "nowa reguła" in (rfiles / "knowledge/role/pm/w.md").read_text()
-    assert list((rfiles / "karch").rglob("*.przed-*.md"))                           # old version kept
-    rolecfg.start_knowledge("pm", "zasady kolejki zgłoszeń", new={"nazwa": "Kolejka zgłoszeń", "tylko_zespol": True},
-                            claude=lambda s, p: "# Kolejka\n- odpowiadamy w 1 dzień")
+    assert "new rule" in (rfiles / "knowledge/role/pm/w.md").read_text()
+    assert list((rfiles / "karch").rglob("*.before-*.md"))                          # old version kept
+    rolecfg.start_knowledge("pm", "rules of the ticket queue", new={"name": "Ticket queue", "team_only": True},
+                            claude=lambda s, p: "# Queue\n- we answer within 1 day")
     req = approvals.listing()["pending"][0]
-    assert roles.load()["role"]["pm"]["wiedza"][-1]["id"] == "w"                    # not before the approval
+    assert roles.load()["roles"]["pm"]["knowledge"][-1]["id"] == "w"                # not before the approval
     approvals.decide(req["id"], True)
-    entry = roles.load()["role"]["pm"]["wiedza"][-1]
-    assert entry["plik"] == "knowledge/role/pm/kolejka-zgloszen.md" and entry["tylko_zespol"]
-    assert "1 dzień" in roles.knowledge_text(roles.knowledge_for({"role": ["pm"]}, roles.load()))
+    entry = roles.load()["roles"]["pm"]["knowledge"][-1]
+    assert entry["file"] == "knowledge/role/pm/ticket-queue.md" and entry["team_only"]
+    assert "1 day" in roles.knowledge_text(roles.knowledge_for({"roles": ["pm"]}, roles.load()))
+    assert rolecfg.listing()["jobs"][0]["name"] == "Ticket queue"
 
 
 def test_new_knowledge_with_an_unknown_wiring_is_refused_before_claude_runs(rfiles):
     with pytest.raises(ValueError):
-        rolecfg.start_knowledge("pm", "zasady kolejki", new={"nazwa": "Kolejka", "wpiecie": "magia"},
+        rolecfg.start_knowledge("pm", "rules of the queue", new={"name": "Queue", "wiring": "magic"},
                                 claude=lambda s, p: pytest.fail("Claude must not be asked"))
     assert approvals.listing()["pending"] == []
 
 
 def test_a_knowledge_proposal_that_loses_most_of_the_file_is_refused(rfiles):
     (rfiles / "knowledge/role/pm/w.md").write_text("# W\n" + "x" * 1000)
-    rolecfg.start_knowledge("pm", "skróć", kid="w", claude=lambda s, p: "# W\nkrótko")
+    rolecfg.start_knowledge("pm", "make it short", kid="w", claude=lambda s, p: "# W\nshort")
     assert approvals.listing()["pending"] == []
     assert next(iter(rolecfg._jobs().values()))["status"] == "failed"
 
 
 def _propose():
-    rolecfg.start_knowledge("pm", "dopisz regułę", kid="w", claude=lambda s, p: "# W\nstara treść\n- nowa reguła")
+    rolecfg.start_knowledge("pm", "add a rule", kid="w", claude=lambda s, p: "# W\nold text\n- new rule")
     req = approvals.listing()["pending"][0]
     job = next(j for j in rolecfg._jobs().values() if j.get("approval_id") == req["id"])
     return req["id"], job["id"]
@@ -659,10 +698,10 @@ def _propose():
 def test_knowledge_file_changed_after_the_proposal_is_refused(rfiles):
     apr, jid = _propose()
     target = rfiles / "knowledge/role/pm/w.md"
-    target.write_text("# W\nktoś zmienił\n")
+    target.write_text("# W\nsomebody changed it\n")
     res = approvals.decide(apr, True)
-    assert "zmienił się" in res["message"]
-    assert target.read_text() == "# W\nktoś zmienił\n"
+    assert "changed in the meantime" in res["message"]
+    assert target.read_text() == "# W\nsomebody changed it\n"
     assert rolecfg._jobs()[jid]["status"] == "failed"
 
 
@@ -670,26 +709,27 @@ def test_rejected_knowledge_leaves_the_file_and_drops_the_proposal(rfiles):
     apr, jid = _propose()
     assert (rfiles / "prop" / f"{apr}.json").exists()
     approvals.decide(apr, False)
-    assert (rfiles / "knowledge/role/pm/w.md").read_text() == "# W\nstara treść\n"
+    assert (rfiles / "knowledge/role/pm/w.md").read_text() == "# W\nold text\n"
     assert not (rfiles / "prop" / f"{apr}.json").exists()
     assert rolecfg._jobs()[jid]["status"] == "rejected"
 
 
 def test_group_info_team_only_and_unknown_group(rfiles):
-    assert rolecfg.save_group_info("urlopy", "x", True)["ok"]
-    assert "urlopy" in roles.team_only(roles.load())
-    rolecfg.save_group_info("urlopy", "x", False)
-    assert "urlopy" not in roles.team_only(roles.load())
+    assert rolecfg.save_group_info("leave", "x", True)["ok"]
+    assert "leave" in roles.team_only(roles.load())
+    rolecfg.save_group_info("leave", "x", False)
+    assert "leave" not in roles.team_only(roles.load())
     with pytest.raises(ValueError):
-        rolecfg.save_group_info("nie_ma_takiej", "x", True)
+        rolecfg.save_group_info("no_such_group", "x", True)
+    assert json.loads((rfiles / "roles.json").read_text())["groups"]["leave"] == {"description": "x"}
 
 
 def test_a_role_wears_a_bob_from_the_shipped_set_only(rfiles):
     assert "bob-happy" in rolecfg.bob_images() and len(rolecfg.bob_images()) == 20
-    rolecfg.save_role("pm", {"nazwa": "PM", "dostep": ["jira"], "obraz": "bob-happy"})
-    assert roles.load()["role"]["pm"]["obraz"] == "bob-happy"
-    rolecfg.save_role("pm", {"nazwa": "PM", "dostep": ["jira"], "obraz": "../../etc/passwd"})
-    assert "obraz" not in roles.load()["role"]["pm"]
+    rolecfg.save_role("pm", {"name": "PM", "access": ["jira"], "image": "bob-happy"})
+    assert roles.load()["roles"]["pm"]["image"] == "bob-happy"
+    rolecfg.save_role("pm", {"name": "PM", "access": ["jira"], "image": "../../etc/passwd"})
+    assert "image" not in roles.load()["roles"]["pm"]
 
 
 def test_every_group_has_a_listing_of_its_real_tools():
@@ -793,14 +833,15 @@ def test_static_serves_svg_and_css_with_their_type(panel):
 @pytest.mark.parametrize("path", [
     "/static/../server.py", "/static/%2e%2e/server.py", "/static/index.html",
     "/api/roles/knowledge?plik=../chat-config.json", "/api/roles/knowledge?plik=scripts/org_config.py",
+    "/api/roles/knowledge?file=../chat-config.json", "/api/roles/knowledge?file=scripts/org_config.py",
 ])
 def test_static_and_knowledge_reject_traversal(panel, path):
     assert _get(panel, path)[0] in (404, 400)
 
 
 def test_chat_config_api_needs_the_origin(panel, chat_files):
-    assert _post(panel, "/api/chat-config/apply", {"op": "remove", "name": "Projekt"}, None)[0] == 403
-    code, body = _post(panel, "/api/chat-config/apply", {"op": "save", "name": "Projekt", "config": {"caller": "x"}},
+    assert _post(panel, "/api/chat-config/apply", {"op": "remove", "name": "Project"}, None)[0] == 403
+    code, body = _post(panel, "/api/chat-config/apply", {"op": "save", "name": "Project", "config": {"caller": "x"}},
                        f"http://localhost:{panel}")
     assert code == 400 and "caller" in body["message"]
 
@@ -857,3 +898,92 @@ def test_logs_view_filters_by_level_source_and_text(monkeypatch, tmp_path):
     assert len(q) == 1 and "zepsulo" in q[0]["text"]
     assert logs.view(hours=1, level="debug")["counts"]["debug"] == 1
     assert warn["problems"][0]["level"] == "error"
+
+
+def test_log_levels_understand_the_english_lines_too():
+    assert logs.level_of("[api] ERROR: send failed") == "error"
+    assert logs.level_of("[watch] path refused") == "error"
+    assert logs.level_of("[jira] WARNING: field missing") == "warn"
+    assert logs.level_of("[api] get_messages error [ReadTimeout status=None]") == "warn"   # transient
+    assert logs.level_of("[api] sent (200)") == "debug" and logs.level_of("[api] token updated") == "debug"
+    assert logs.level_of("[watch] hello world") == "info"
+    e = logs.parse("===== start 2026-10-24T10:00:00 (panel) =====\n10:00:01 [watch] x", date(2026, 10, 24))
+    assert e[0]["text"] == "Bob start (panel)"
+
+
+# ---------------------------------------------------------------------------
+# state written by older builds
+# ---------------------------------------------------------------------------
+
+
+def test_a_pending_proposal_of_an_older_build_is_still_applied(rfiles):
+    (rfiles / "old-prop").mkdir()
+    req = approvals.create("Old proposal", "", "Panel", action="knowledge_apply")
+    (rfiles / "old-prop" / f"{req['id']}.json").write_text(json.dumps(
+        {"job": "wz-1", "rola": "pm", "nowy": True, "tekst": "# N\nnew\n", "przed": "",
+         "wpis": {"id": "n", "nazwa": "N", "plik": "knowledge/role/pm/n.md", "wpiecie": "prompt"}}))
+    (rfiles / "old-jobs.json").write_text(json.dumps({"wz-1": {"id": "wz-1", "status": "awaiting", "rola": "pm",
+                                                              "nazwa": "N", "polecenie": "x"}}))
+    assert rolecfg._jobs()["wz-1"] == {"id": "wz-1", "status": "awaiting", "role": "pm", "name": "N",
+                                       "instruction": "x"}
+    assert "added to the role" in approvals.decide(req["id"], True)["message"]
+    assert (rfiles / "knowledge/role/pm/n.md").read_text() == "# N\nnew\n"
+    assert roles.load()["roles"]["pm"]["knowledge"][-1] == {"id": "n", "name": "N", "file": "knowledge/role/pm/n.md",
+                                                            "wiring": "prompt", "description": ""}
+    assert rolecfg._jobs()["wz-1"]["status"] == "applied" and (rfiles / "jobs.json").exists()
+
+
+def test_the_knowledge_api_takes_the_english_and_the_old_query_and_body(panel, monkeypatch):
+    seen = []
+    monkeypatch.setattr(rolecfg, "read_knowledge", lambda rel: seen.append(rel) or {"file": rel, "text": "t"})
+    for q in ("file", "plik"):
+        code, _, body, _ = _get(panel, f"/api/roles/knowledge?{q}=knowledge/x.md")
+        assert code == 200 and json.loads(body) == {"file": "knowledge/x.md", "text": "t"}
+    monkeypatch.setattr(rolecfg, "save_group_info", lambda *a: seen.append(a) or {"ok": True})
+    monkeypatch.setattr(rolecfg, "start_knowledge", lambda *a: seen.append(a) or {"ok": True})
+    origin = f"http://localhost:{panel}"
+    _post(panel, "/api/roles/group", {"group": "jira", "description": "d", "team_only": True}, origin)
+    _post(panel, "/api/roles/group", {"group": "jira", "opis": "d", "tylko_zespol": True}, origin)
+    _post(panel, "/api/roles/knowledge", {"role": "pm", "instruction": "do it", "new": {"name": "N"}}, origin)
+    _post(panel, "/api/roles/knowledge", {"rola": "pm", "polecenie": "do it", "nowy": {"name": "N"}}, origin)
+    assert seen[:2] == ["knowledge/x.md", "knowledge/x.md"]
+    assert seen[2] == seen[3] == ("jira", "d", True, "panel")
+    assert seen[4] == seen[5] == ("pm", "do it", None, {"name": "N"}, "panel")
+
+
+def test_the_roles_listing_uses_the_english_keys(rfiles):
+    listing = rolecfg.listing()
+    assert {"roles", "groups", "known_groups", "default_groups", "team_only", "wirings", "jobs", "images", "tools",
+            "without_roles", "no_file"} <= set(listing)
+    pm = next(r for r in listing["roles"] if r["id"] == "pm")
+    assert pm["knowledge"][0]["exists"] and pm["knowledge"][0]["file"] == "knowledge/role/pm/w.md"
+    assert pm["channels"][0]["chat"] == "Project" and pm["channels"][0]["external_chat"] is False
+    assert listing["wirings"] == ["code", "prompt", "tool"]
+    assert rolecfg.read_knowledge("knowledge/role/pm/w.md") == {"file": "knowledge/role/pm/w.md",
+                                                               "text": "# W\nold text\n"}
+
+
+def test_adopt_legacy_moves_old_archive_once_and_renames_its_log(tmp_path):
+    """An archive kept under the older Polish folder name is moved to the English one, its log renamed."""
+    old, new = tmp_path / "roles-archiwum", tmp_path / "roles-archive"
+    old.mkdir()
+    (old / "zmiany.jsonl").write_text('{"what": "old"}\n', encoding="utf-8")
+    (old / "roles.20260101-000000.json").write_text("{}", encoding="utf-8")
+    assert supervisor.adopt_legacy(old, new, {"zmiany.jsonl": "changes.jsonl"}) == new
+    assert not old.exists()
+    assert (new / "changes.jsonl").read_text(encoding="utf-8") == '{"what": "old"}\n'
+    assert (new / "roles.20260101-000000.json").exists()
+    old.mkdir()                                            # a new archive already exists: the old one stays put
+    (old / "x").write_text("", encoding="utf-8")
+    supervisor.adopt_legacy(old, new)
+    assert (old / "x").exists() and not (new / "x").exists()
+
+
+def test_control_chat_falls_back_to_the_notes_chat_by_its_old_or_new_name(monkeypatch):
+    monkeypatch.delenv("BOB_NOTES_CHAT", raising=False)
+    assert chatcfg.control_chat({"chats": {"Team": {}, "Notatki": {}}}) == "Notatki"
+    assert chatcfg.control_chat({"chats": {"Notes": {}, "Notatki": {}}}) == "Notes"
+    assert chatcfg.control_chat({"chats": {"Team": {}, "Mine": {"control_chat": True}}}) == "Mine"
+    assert chatcfg.control_chat({"chats": {"Team": {}}}) == "Notes"
+    monkeypatch.setenv("BOB_NOTES_CHAT", "Inbox")
+    assert chatcfg.control_chat({"chats": {"Inbox": {}, "Notes": {}}}) == "Inbox"

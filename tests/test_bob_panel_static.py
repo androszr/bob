@@ -51,7 +51,8 @@ def test_no_private_name_in_the_panel_files():
 def test_no_brand_token_or_design_system_folder():
     assert not re.search(r"--[a-z]+-brand-\d+", PAGE + LAYOUT_CSS + TOKENS)
     assert not (STATIC / "ds").exists()
-    assert not list((STATIC / "bob").glob("ZRODLO*"))
+    for leftover in ("ZRODLO*", "SOURCE*"):                      # the drawing sources (older Polish name) stay out
+        assert not list((STATIC / "bob").glob(leftover))
 
 
 def test_exactly_the_twenty_shipped_mascots_and_none_named_after_a_person():
@@ -84,3 +85,11 @@ def test_one_tree_stacked_by_width_not_a_second_mobile_tree():
 
 def test_the_page_sends_a_neutral_actor_name():
     assert "by:'panel'" in PAGE
+
+
+def test_the_page_is_english_and_uses_the_documented_sign_in_labels():
+    assert '<html lang="en">' in PAGE and "pl-PL" not in PAGE
+    assert not re.search(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]", PAGE)
+    for label in ("Sign in to Teams", "Sign in and start Bob", "I\\'m signed in", "Chats", "Roles", "Approvals"):
+        assert label in PAGE, label
+    assert "?file=" in PAGE and "?plik=" not in PAGE

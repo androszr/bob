@@ -6,9 +6,10 @@
     GET  /api/bob/login | POST /api/bob/login {"then_start"?} | POST /api/bob/login/confirm   Teams SSO from the panel
     POST /api/approvals                {"title", "details", "source", "options"?}  -> the request (id)
     POST /api/approvals/<id>/decide    {"approve": true|false, "note"?}
-    GET  /api/roles | /api/roles/knowledge?plik=   roles.json: roles, access, skills, knowledge, names per channel
-    POST /api/roles/save {"id", "role", "new"?} | /api/roles/delete {"id"} | /api/roles/group {"group", "opis",
-         "tylko_zespol"} | /api/roles/knowledge {"rola", "polecenie", "wpis"? | "nowy"?}   (rolecfg.py)
+    GET  /api/roles | /api/roles/knowledge?file=   roles.json: roles, access, skills, knowledge, names per channel
+    POST /api/roles/save {"id", "role", "new"?} | /api/roles/delete {"id"} | /api/roles/group {"group",
+         "description", "team_only"} | /api/roles/knowledge {"role", "instruction", "entry"? | "new"?}   (rolecfg.py)
+         (the older Polish keys - ?plik=, "opis", "tylko_zespol", "rola", "polecenie", "wpis", "nowy" - still work)
     GET  /api/chat-config | POST /api/chat-config/preview | /api/chat-config/apply | /api/chat-config/enable
          {"op": "add"|"save"|"remove", "name", "config"?, "new_name"?} / {"name", "on"}   (chatcfg.py)
 
@@ -110,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/roles":
                 return self._send(200, rolecfg.listing())
             if p == "/api/roles/knowledge":
-                return self._send(200, rolecfg.read_knowledge((q.get("plik") or [""])[0]))
+                return self._send(200, rolecfg.read_knowledge((q.get("file") or q.get("plik") or [""])[0]))
             if p == "/api/bob/login":
                 return self._send(200, supervisor.login_status())
             if p == "/api/bob/logs":
@@ -133,7 +134,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return None
         if self.headers.get("Origin") not in _ALLOWED_ORIGINS:
-            return self._send(403, {"error": "origin", "message": f"Wymagany nagłówek Origin: http://localhost:{PORT}"})
+            return self._send(403, {"error": "origin", "message": f"Origin header required: http://localhost:{PORT}"})
         p = urlparse(self.path).path
         try:
             body = self._body()
@@ -159,12 +160,15 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/roles/delete":
                 return self._send(200, rolecfg.delete_role(str(body.get("id") or ""), by))
             if p == "/api/roles/group":
-                return self._send(200, rolecfg.save_group_info(str(body.get("group") or ""), body.get("opis", ""),
-                                                               bool(body.get("tylko_zespol")), by))
+                desc = body["description"] if "description" in body else body.get("opis", "")
+                team = body["team_only"] if "team_only" in body else body.get("tylko_zespol")
+                return self._send(200, rolecfg.save_group_info(str(body.get("group") or ""), desc, bool(team), by))
             if p == "/api/roles/knowledge":
+                one = lambda k, alias: body[k] if k in body else body.get(alias)  # noqa: E731
+                new = one("new", "nowy")
                 return self._send(200, rolecfg.start_knowledge(
-                    str(body.get("rola") or ""), body.get("polecenie", ""), body.get("wpis") or None,
-                    body.get("nowy") if isinstance(body.get("nowy"), dict) else None, by))
+                    str(one("role", "rola") or ""), one("instruction", "polecenie") or "", one("entry", "wpis") or None,
+                    new if isinstance(new, dict) else None, by))
             if p == "/api/chat-config/enable":
                 return self._send(200, chatcfg.set_enabled(str(body.get("name") or ""), bool(body.get("on")), by))
             if p == "/api/approvals":
@@ -186,7 +190,7 @@ def _async_or_wait(fn, by: str, body: dict) -> dict:
     if body.get("wait", True):
         return fn(by)
     threading.Thread(target=fn, args=(by,), daemon=True).start()
-    return {"ok": True, "message": "Restart w toku - status odświeży się sam."}
+    return {"ok": True, "message": "Restart in progress - the status refreshes on its own."}
 
 
 def main() -> None:

@@ -41,24 +41,32 @@ def test_continuation_window_is_two_minutes():
 
 
 # ---------------------------------------------------------------------------
-# [BOB-REAKCJA]
+# [BOB-REACT] (Polish alias [BOB-REAKCJA])
 # ---------------------------------------------------------------------------
 
 
 def test_reaction_token_puts_a_thumbs_up_and_strips_itself(monkeypatch):
     calls = []
     monkeypatch.setattr(cli.api_client, "add_reaction", lambda *a: calls.append(a) or True)
-    assert cli._handle_reaction("[BOB-REAKCJA]", "m1", "conv") == ""
+    assert cli._handle_reaction("[BOB-REACT]", "m1", "conv") == ""
     assert calls == [("m1", "conv", "like")]
-    assert cli._handle_reaction("Zrobione. [bob-reakcja]", "m2", "conv") == "Zrobione."
-    assert cli._is_silent_reply(cli._handle_reaction("[BOB-REAKCJA]", "m3", "conv"))    # nothing is sent
+    assert cli._handle_reaction("Done. [bob-react]", "m2", "conv") == "Done."
+    assert cli._is_silent_reply(cli._handle_reaction("[BOB-REACT]", "m3", "conv"))    # nothing is sent
+
+
+def test_reaction_token_polish_alias_still_works(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli.api_client, "add_reaction", lambda *a: calls.append(a) or True)
+    assert cli._handle_reaction("[BOB-REAKCJA]", "m1", "conv") == ""
+    assert cli._handle_reaction("Done. [bob-reakcja]", "m2", "conv") == "Done."
+    assert calls == [("m1", "conv", "like"), ("m2", "conv", "like")]
 
 
 def test_reply_without_the_token_is_untouched_and_a_missing_id_reacts_to_nothing(monkeypatch):
     calls = []
     monkeypatch.setattr(cli.api_client, "add_reaction", lambda *a: calls.append(a) or True)
-    assert cli._handle_reaction("Zwykła odpowiedź", "m1", "conv") == "Zwykła odpowiedź"
-    assert cli._handle_reaction("[BOB-REAKCJA]", "", "conv") == "" and calls == []
+    assert cli._handle_reaction("A plain reply", "m1", "conv") == "A plain reply"
+    assert cli._handle_reaction("[BOB-REACT]", "", "conv") == "" and calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -75,10 +83,10 @@ def test_still_working_posts_edits_and_marks_done_only_when_a_reply_went_out(mon
         deadline = time.time() + 2
         while len(edited) < 1 and time.time() < deadline:
             time.sleep(0.02)
-    assert sent and sent[0][1] == "conv-1" and "Nadal pracuję" in sent[0][0]
-    assert not any("Gotowe" in h for _, h in edited)                    # leaving the block says nothing yet
+    assert sent and sent[0][1] == "conv-1" and "Still working" in sent[0][0]
+    assert not any("Done after" in h for _, h in edited)                    # leaving the block says nothing yet
     sw.finish(True)
-    assert edited[-1][0] == "m-1" and "Gotowe" in edited[-1][1]
+    assert edited[-1][0] == "m-1" and "Done after" in edited[-1][1]
 
 
 def test_a_dropped_reply_deletes_the_note_and_falls_back_to_an_edit(monkeypatch):
@@ -90,13 +98,13 @@ def test_a_dropped_reply_deletes_the_note_and_falls_back_to_an_edit(monkeypatch)
     with sw:
         time.sleep(0.15)
     sw.finish(False)
-    assert deleted == ["m-9"] and not any("Gotowe" in h for h in edited)
+    assert deleted == ["m-9"] and not any("Done after" in h for h in edited)
     sw2 = cli._StillWorking("conv-1", first_s=0.01, every_s=5)
     monkeypatch.setattr(cli.api_client, "delete_message", lambda mid, conv: False)
     with sw2:
         time.sleep(0.15)
     sw2.finish(False)
-    assert "bez odpowiedzi" in edited[-1] and "Gotowe" not in edited[-1]
+    assert "no answer this time" in edited[-1] and "Done after" not in edited[-1]
 
 
 def test_a_failing_reply_never_says_the_answer_is_below(monkeypatch):
@@ -160,13 +168,13 @@ def test_timers_persist_across_restarts_and_survive_a_broken_file(tmp_path, monk
 # receive-only chats
 # ---------------------------------------------------------------------------
 
-_CFG = {"Czytany": {"conv_id": "19:ro@thread.v2", "ingest_only": True}, "Zwykly": {"conv_id": "19:rw@thread.v2"},
-        "Bez id": {"ingest_only": True}}
+_CFG = {"Read only": {"conv_id": "19:ro@thread.v2", "ingest_only": True}, "Plain": {"conv_id": "19:rw@thread.v2"},
+        "No id": {"ingest_only": True}}
 
 
 def test_ingest_only_chats_are_found_in_the_config():
-    assert cli._ingest_only_for("Czytany", _CFG) and not cli._ingest_only_for("Zwykly", _CFG)
-    assert not cli._ingest_only_for("Nie ma", _CFG)
+    assert cli._ingest_only_for("Read only", _CFG) and not cli._ingest_only_for("Plain", _CFG)
+    assert not cli._ingest_only_for("Missing", _CFG)
     assert cli._receive_only_conv_ids(_CFG) == {"19:ro@thread.v2"}
 
 
@@ -243,12 +251,12 @@ def test_mention_profile_fallback_can_be_switched_off(monkeypatch):
                         lambda key: looked_up.append(key) or ("Ewa Nowak", "8:orgid:ewa"))
     monkeypatch.setattr(cli.api_client, "build_mentions_html",
                         lambda people: ("<chip/>", [{"mri": p[1]} for p in people]))
-    reply = "Sprawdź. [BOB-WYWOLAJ: ewa]"
+    reply = "Check this. [BOB-CALL: ewa]"
     clean, html, entries = cli._resolve_mentions(reply, cli._BOB_MENTION_RE, {})
     assert html == "<chip/>" and entries == [{"mri": "8:orgid:ewa"}] and looked_up == ["ewa"]
     looked_up.clear()
     clean, html, entries = cli._resolve_mentions(reply, cli._BOB_MENTION_RE, {}, profile_fallback=False)
-    assert clean == "Sprawdź." and html == "" and entries == [] and looked_up == []
+    assert clean == "Check this." and html == "" and entries == [] and looked_up == []
 
 
 # ---------------------------------------------------------------------------
@@ -262,16 +270,16 @@ def test_a_sent_file_is_recorded_and_noted_in_the_chat_history(tmp_path, monkeyp
     monkeypatch.setattr(cli, "_HISTORY_DIR", tmp_path / "history")
     monkeypatch.setattr(cli, "_CHAT_HISTORY", {})
     url = "https://contoso.sharepoint.com/sites/Team/Shared%20Documents/Bob/20261024T100000_plan.md"
-    cli._remember_bob_file("plan.md", url, "Projekt", b"# Plan\n")
+    cli._remember_bob_file("plan.md", url, "Project", b"# Plan\n")
     assert (tmp_path / "files" / "20261024T100000_plan.md").read_bytes() == b"# Plan\n"
-    assert cli._CHAT_HISTORY["Projekt"][-1]["sender"] == "Bob" and "plan.md" in cli._CHAT_HISTORY["Projekt"][-1]["text"]
-    assert "# Plan" in bob_files.note_for(f"popraw {url}", "", "Projekt")
-    assert bob_files.note_for(f"popraw {url}", "", "Inny czat") == ""
+    assert cli._CHAT_HISTORY["Project"][-1]["sender"] == "Bob" and "plan.md" in cli._CHAT_HISTORY["Project"][-1]["text"]
+    assert "# Plan" in bob_files.note_for(f"fix {url}", "", "Project")
+    assert bob_files.note_for(f"fix {url}", "", "Other chat") == ""
 
 
 def test_remembering_a_file_never_breaks_the_send(monkeypatch, capsys):
     monkeypatch.setattr(bob_files, "record", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
-    cli._remember_bob_file("a.md", "https://x/a.md", "Projekt", b"x")
+    cli._remember_bob_file("a.md", "https://x/a.md", "Project", b"x")
     assert "bob_files" in capsys.readouterr().err
 
 
@@ -279,7 +287,7 @@ def test_note_bot_post_ignores_empty_input(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_HISTORY_DIR", tmp_path / "history")
     monkeypatch.setattr(cli, "_CHAT_HISTORY", {})
     cli._note_bot_post("", "<p>x</p>")
-    cli._note_bot_post("Projekt", "<p></p>")
+    cli._note_bot_post("Project", "<p></p>")
     assert cli._CHAT_HISTORY == {}
 
 
@@ -327,17 +335,17 @@ def test_an_error_after_the_reply_still_closes_the_still_working_note(tmp_path, 
         def finish(self, sent):
             finished.append(sent)
 
-    msg = {"id": "m1", "sequence_id": 2, "sender": "Szef", "sender_mri": cli.api_client.USER_MRI,
-           "text": "Bob, hej", "raw_html": "<p>Bob, hej</p>", "timestamp": "2026-10-24T10:00:00Z", "image_urls": []}
+    msg = {"id": "m1", "sequence_id": 2, "sender": "Boss", "sender_mri": cli.api_client.USER_MRI,
+           "text": "Bob, hi", "raw_html": "<p>Bob, hi</p>", "timestamp": "2026-10-24T10:00:00Z", "image_urls": []}
     args = cli.argparse.Namespace(
         model="claude-haiku-4-5", max_chats=1, force_login=False, log_file=str(tmp_path / "log.jsonl"),
         watch_chat=None, poll=10, watch_state=str(tmp_path / "state.json"), rate_limit=0, caller="owner")
     monkeypatch.setattr(cli, "_StillWorking", FakeNote)
     monkeypatch.setattr(cli.ai, "freeform_reply", lambda *a, **k: "Czesc")
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv, n=20: [msg])
-    monkeypatch.setattr(cli, "_load_chat_config", lambda path: {"Projekt": {}})
+    monkeypatch.setattr(cli, "_load_chat_config", lambda path: {"Project": {}})
     monkeypatch.setattr(cli, "_extract_and_send_files", lambda *a: (_ for _ in ()).throw(OSError("boom")))
     with pytest.raises(OSError):
-        cli._process_chat_messages("Projekt", "conv-1", args, {"last_sequence_id": 1}, [0.0],
+        cli._process_chat_messages("Project", "conv-1", args, {"last_sequence_id": 1}, [0.0],
                                    control_chat=False, caller="owner")
     assert finished == [False]

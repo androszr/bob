@@ -5,16 +5,16 @@ broadcast_runner.run_job). Data sources:
 
 - roster:    scripts/broadcast/worklog-teams.json (Bob's own copy, edit it there)
 - worklogs:  Jira Tempo REST, queried PER PERSON (all projects), straight from Jira
-- vacations: the vacation calendar (SharePoint list -> knowledge/urlopy/urlopy.json),
+- vacations: the vacation calendar (SharePoint list -> knowledge/leave/leave.json),
              matched by e-mail; a person on leave is only marked 🌴, never shown with hours
 - summary:   one Claude call per team (no tools) turns the fetched worklogs into
              1-2 sentences per person; the post itself is assembled here.
 
 Coverage guarantee: every roster member ends up in exactly one bucket (logged /
 missing / vacation / no Jira account / fetch error). A fetch error after retries
-blocks posting to the team channel — the preview goes to Notatki instead.
+blocks posting to the team channel — the preview goes to the owner's notes chat instead.
 
-Only Monday-Friday: on Monday the post covers Friday; Polish public holidays are
+Only Monday-Friday: on Monday the post covers Friday; public holidays (pl_holidays) are
 skipped both as "today" (no post) and as the reported day.
 """
 
@@ -38,19 +38,26 @@ import org_config  # noqa: E402
 _BROADCAST_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _BROADCAST_DIR.parents[1]
 ROSTER_FILE = _BROADCAST_DIR / "worklog-teams.json"
-URLOPY_FILE = _PROJECT_ROOT / "knowledge" / "urlopy" / "urlopy.json"
+LEAVE_FILE = _PROJECT_ROOT / "knowledge" / "leave" / "leave.json"
+# Written by older builds; read only when LEAVE_FILE is missing.
+LEGACY_LEAVE_FILE = _PROJECT_ROOT / "knowledge" / "urlopy" / "urlopy.json"
 JIRA_BROWSE = org_config.JIRA_BROWSE_URL
 
 _FETCH_ATTEMPTS = 3
 _FETCH_RETRY_S = 2
-_URLOPY_STALE_DAYS = 3
+_LEAVE_STALE_DAYS = 3
 _MAX_KEYS = 4  # ticket links per person, largest first
 
 _NAME_NOISE = {"x", *org_config.NAME_NOISE_PREFIXES}  # "x" = the inactive marker "[X]"
 
-_WEEKDAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
-_WEEKDAYS_PL_LOC = ["w poniedziałek", "we wtorek", "w środę", "w czwartek", "w piątek",
-                    "w sobotę", "w niedzielę"]
+_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+# Leave row keys: English canonical <- the older Polish spellings, still accepted on read.
+_LEAVE_KEY_ALIASES = {
+    "first_day": ("Pierwszy dzień urlopu", "Pierwszy_dzien_urlopu", "Pierwszy_dzień_urlopu"),
+    "last_day": ("Ostatni dzień urlopu", "Ostatni_dzien_urlopu", "Ostatni_dzień_urlopu"),
+    "email": ("Adres e-mail", "Adres_e-mail", "Adres_email"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +86,7 @@ def pl_holidays(year: int) -> set[date]:
     days = {date(year, mo, d) for mo, d in fixed}
     days |= {easter, easter + timedelta(days=1), easter + timedelta(days=49), easter + timedelta(days=60)}
     if year >= 2025:
-        days.add(date(year, 12, 24))  # Wigilia -- dzien wolny od 2025
+        days.add(date(year, 12, 24))  # Christmas Eve -- a day off since 2025
     return days
 
 
@@ -126,26 +133,41 @@ def load_roster(team: str, path: Path = ROSTER_FILE) -> list[dict]:
     data = json.loads(path.read_text(encoding="utf-8"))
     team_cfg = data.get("teams", {}).get(team)
     if team_cfg is None:
-        raise KeyError(f"Brak zespolu '{team}' w {path.name}")
+        raise KeyError(f"No team '{team}' in {path.name}")
     return [m for m in team_cfg.get("members", []) if not m.get("skip")]
 
 
-def load_vacations(day: date, path: Path = URLOPY_FILE) -> tuple[set[str], str]:
+def _leave_record(rec: dict) -> dict:
+    """A copy of a leave row with English keys; the English key wins when both exist."""
+    out = dict(rec)
+    for key, aliases in _LEAVE_KEY_ALIASES.items():
+        for alias in aliases:
+            if alias in out:
+                out.setdefault(key, out.pop(alias))
+    return out
+
+
+def load_vacations(day: date, path: Path | None = None) -> tuple[set[str], str]:
     """E-mails (lowercase) on vacation on *day*, plus the data's fetched_at ('' if unknown)."""
+    if path is None:
+        path = LEAVE_FILE
+        if not path.exists() and LEGACY_LEAVE_FILE.exists():
+            path = LEGACY_LEAVE_FILE
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[worklog-daily] urlopy niedostepne: {exc}", file=sys.stderr, flush=True)
+        print(f"[worklog-daily] leave data unavailable: {exc}", file=sys.stderr, flush=True)
         return set(), ""
     out: set[str] = set()
-    for rec in data.get("records", []):
+    for raw in data.get("records", []):
+        rec = _leave_record(raw)
         try:
-            first = datetime.fromisoformat(rec["Pierwszy dzień urlopu"]).date()
-            last = datetime.fromisoformat(rec["Ostatni dzień urlopu"]).date()
+            first = datetime.fromisoformat(rec["first_day"]).date()
+            last = datetime.fromisoformat(rec["last_day"]).date()
         except (KeyError, TypeError, ValueError):
             continue
         if first <= day <= last:
-            out.add(str(rec.get("Adres e-mail", "")).strip().lower())
+            out.add(str(rec.get("email", "")).strip().lower())
     return out, str(data.get("fetched_at", ""))
 
 
@@ -200,7 +222,7 @@ def _fetch_worklogs(jira_get: Callable, username: str, day: date) -> list[Worklo
         author = str((e.get("author") or {}).get("name", "")).lower()
         if author != username.lower():
             # Tempo ignoring the username filter would silently mix people -- refuse.
-            print(f"[worklog-daily] Tempo zwrocilo worklog {author!r} dla {username!r}",
+            print(f"[worklog-daily] ERROR: Tempo returned a worklog by {author!r} for {username!r}",
                   file=sys.stderr, flush=True)
             return None
         if not str(e.get("dateStarted", "")).startswith(iso):
@@ -284,22 +306,20 @@ def fmt_hours(h: float) -> str:
     return f"{hh}h {mm}m"
 
 
-_SUMMARY_PROMPT = """Jesteś Bob, asystent zespołu {team}. Poniżej worklogi z Tempo za {day_label} \
-(JSON: id osoby -> imię i lista zadań z tytułem, czasem i komentarzem do worklogu).
+_SUMMARY_PROMPT = """You are Bob, the assistant of team {team}. Below are the Tempo worklogs for {day_label} \
+(JSON: person id -> first name and a list of tasks with title, time and worklog comment).
 
-Dla KAŻDEJ osoby napisz MAKSYMALNIE 2 krótkie zdania (łącznie do ~220 znaków) po polsku, co \
-robiła — naturalnie, jak kolega na daily, w 3. osobie, bez imienia (imię jest już w poście). \
-Rodzaj gramatyczny dopasuj do imienia z pola "imie" (Adrian -> "pracował", Ewa -> \
-"pracowała"); gdy imię nie przesądza płci, użyj form bezosobowych ("praca nad..."). Przy \
-głównych zadaniach podaj czas w nawiasie dokładnie tak, jak w polu "czas", np. "(2h 30m)". \
-Drobne rzeczy (daily, spotkania, refinement, code review) zbierz w jedno krótkie "plus \
-spotkania". Nie podawaj kluczy Jira. Nie wymyślaj niczego, czego nie ma w danych.
+For EACH person write AT MOST 2 short sentences (up to ~220 characters in total) in English on what \
+they did — naturally, like a colleague at the daily, in the 3rd person, without the name (the name \
+is already in the post). For the main tasks give the time in brackets exactly as in the "time" \
+field, e.g. "(2h 30m)". Gather small things (daily, meetings, refinement, code review) into one \
+short "plus meetings". Do not give Jira keys. Do not make up anything that is not in the data.
 
-Dodatkowo pole "_intro": jedno krótkie zdanie o tym, czym zespół żył tego dnia (główne wątki).
+Also a "_intro" field: one short sentence on what the team was busy with that day (the main threads).
 
-Zwróć WYŁĄCZNIE obiekt JSON {{"_intro": "...", "<id>": "...", ...}} — bez markdownu, bez komentarza.
+Return ONLY a JSON object {{"_intro": "...", "<id>": "...", ...}} — no markdown, no comment.
 
-Dane:
+Data:
 {data}
 """
 
@@ -313,9 +333,9 @@ def summarize(team: str, day: date, members: list[MemberDay],
     if not logged:
         return ""
     payload = {
-        str(i): {"imie": m.name.split()[0],
-                 "zadania": [{"tytul": w.summary, "czas": fmt_hours(w.hours),
-                              "komentarz": w.comment[:300]} for w in m.worklogs]}
+        str(i): {"first_name": m.name.split()[0],
+                 "tasks": [{"title": w.summary, "time": fmt_hours(w.hours),
+                            "comment": w.comment[:300]} for w in m.worklogs]}
         for i, m in enumerate(logged)
     }
     prompt = _SUMMARY_PROMPT.format(team=team, day_label=_day_label(day),
@@ -323,7 +343,7 @@ def summarize(team: str, day: date, members: list[MemberDay],
     raw = call_claude(prompt)
     parsed = _parse_json_object(raw)
     if not parsed:
-        print("[worklog-daily] streszczenie AI nieudane -- uzywam tytulow zadan.",
+        print("[worklog-daily] AI summary failed -- using task titles.",
               file=sys.stderr, flush=True)
         return ""
     for i, m in enumerate(logged):
@@ -356,7 +376,7 @@ def _fallback_summary(m: MemberDay) -> str:
 
 
 def _day_label(day: date) -> str:
-    return f"{_WEEKDAYS_PL[day.weekday()]} {day.strftime('%d.%m')}"
+    return f"{_WEEKDAYS[day.weekday()]} {day.strftime('%d.%m')}"
 
 
 @dataclass
@@ -381,21 +401,22 @@ def build_post(team: str, day: date, members: list[MemberDay], intro: str = "") 
     total = sum(m.hours for m in logged)
     expected = len(members) - len(vacation) - sum(1 for m in members if m.status == "no_jira")
 
-    lines = [f"**📋 Daily {team} — co działo się {_WEEKDAYS_PL_LOC[day.weekday()]} "
+    when = f"on {_WEEKDAYS[day.weekday()]}"
+    lines = [f"**📋 Daily {team} — what happened {when} "
              f"({day.strftime('%d.%m')})**", ""]
-    lines.append(f"Zalogowane: **{fmt_hours(total)}** · {len(logged)}/{max(expected, 0)} osób"
-                 + (f" · 🌴 urlop: {len(vacation)}" if vacation else ""))
+    lines.append(f"Logged: **{fmt_hours(total)}** · {len(logged)}/{max(expected, 0)} people"
+                 + (f" · 🌴 on leave: {len(vacation)}" if vacation else ""))
     if intro:
         lines += ["", intro]
     lines.append("")
     if missing:
         who = ", ".join(person(m, True) for m in missing)
-        lines.append(f"⏰ **Brak logu {_WEEKDAYS_PL_LOC[day.weekday()]}:** {who} — "
-                     f"uzupełnijcie proszę Tempo 🙏")
+        lines.append(f"⏰ **No log {when}:** {who} — "
+                     f"please fill in Tempo 🙏")
     else:
-        lines.append(f"✅ Wszyscy obecni zalogowali czas {_WEEKDAYS_PL_LOC[day.weekday()]} — dzięki!")
+        lines.append(f"✅ Everyone present logged time {when} — thanks!")
     if vacation:
-        lines.append("🌴 Urlop: " + ", ".join(m.name for m in vacation))
+        lines.append("🌴 On leave: " + ", ".join(m.name for m in vacation))
     for m in logged:
         keys = " · ".join(f"[{w.key}]({JIRA_BROWSE}{w.key})"
                           for w in m.worklogs[:_MAX_KEYS] if w.key)
@@ -407,35 +428,35 @@ def build_post(team: str, day: date, members: list[MemberDay], intro: str = "") 
     return Post("\n".join(lines), people, tag)
 
 
-def control_report(team: str, day: date, members: list[MemberDay], urlopy_fetched_at: str,
+def control_report(team: str, day: date, members: list[MemberDay], leave_fetched_at: str,
                    untagged: list[str]) -> str:
-    """Short status for Notatki: coverage, problems the team post does not show."""
+    """Short status for the owner's notes chat: coverage, problems the team post does not show."""
     counts: dict[str, int] = {}
     for m in members:
         counts[m.status] = counts.get(m.status, 0) + 1
-    parts = [f"[worklog-daily] {team} za {day.isoformat()}: "
+    parts = [f"[worklog-daily] {team} for {day.isoformat()}: "
              + ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
-             + f" (sklad: {len(members)})"]
+             + f" (members: {len(members)})"]
     errors = [m.name for m in members if m.status == "error"]
     if errors:
-        parts.append("❌ Blad pobierania z Jiry (po ponowieniach): " + ", ".join(errors)
-                     + " — post NIE poszedl na kanal zespolu.")
+        parts.append("❌ ERROR fetching from Jira (after retries): " + ", ".join(errors)
+                     + " — the post did NOT go to the team channel.")
     no_jira = [m.name for m in members if m.status == "no_jira"]
     if no_jira:
-        parts.append("⚠️ Brak konta w Jirze (pominieci): " + ", ".join(no_jira))
+        parts.append("⚠️ No Jira account (skipped): " + ", ".join(no_jira))
     if untagged:
-        parts.append("⚠️ Bez @tagu (brak MRI w worklog-teams.json / profilach Boba): "
+        parts.append("⚠️ No @tag (no MRI in worklog-teams.json / Bob's profiles): "
                      + ", ".join(untagged))
-    if urlopy_fetched_at:
+    if leave_fetched_at:
         try:
-            age = (datetime.now(datetime.fromisoformat(urlopy_fetched_at).tzinfo)
-                   - datetime.fromisoformat(urlopy_fetched_at)).days
-            if age >= _URLOPY_STALE_DAYS:
-                parts.append(f"⚠️ Dane urlopowe sprzed {age} dni — braki moga byc urlopami.")
+            age = (datetime.now(datetime.fromisoformat(leave_fetched_at).tzinfo)
+                   - datetime.fromisoformat(leave_fetched_at)).days
+            if age >= _LEAVE_STALE_DAYS:
+                parts.append(f"⚠️ Leave data is {age} days old — missing logs may be leave.")
         except ValueError:
             pass
     else:
-        parts.append("⚠️ Brak danych urlopowych — braki moga byc urlopami.")
+        parts.append("⚠️ No leave data — missing logs may be leave.")
     return "\n".join(parts)
 
 
@@ -451,21 +472,21 @@ def build_missing_post(day: date, by_team: dict[str, list[MemberDay]]) -> Post:
         tag.append(mention)
         return f"\x00P{len(people) - 1}\x00"
 
-    when = _WEEKDAYS_PL_LOC[day.weekday()]
-    lines = [f"**⏰ Logowanie czasu — stan na 12:00 za {_day_label(day)}**", ""]
+    when = f"on {_WEEKDAYS[day.weekday()]}"
+    lines = [f"**⏰ Time logging — status at 12:00 for {_day_label(day)}**", ""]
     n_missing = 0
     for team, members in by_team.items():
         missing = [m for m in members if m.status == "missing"]
         n_missing += len(missing)
         lines.append(f"**{team}:** " + (", ".join(person(m, False) for m in missing)
-                                        if missing else "✅ komplet"))
+                                        if missing else "✅ complete"))
     vacation = [m.name for ms in by_team.values() for m in ms if m.status == "vacation"]
-    lines += ["", "🌴 **Urlop " + when + ":** " + (", ".join(vacation) if vacation else "nikt")]
+    lines += ["", "🌴 **On leave " + when + ":** " + (", ".join(vacation) if vacation else "nobody")]
     if n_missing:
-        lines += ["", f"Przekażcie proszę zespołom — te osoby muszą uzupełnić Tempo za "
-                      f"{_WEEKDAYS_PL[day.weekday()]} 🙏"]
+        lines += ["", f"Please pass this on to the teams — these people need to fill in Tempo for "
+                      f"{_WEEKDAYS[day.weekday()]} 🙏"]
     else:
-        lines += ["", f"✅ Wszyscy obecni zalogowali czas {when} — dzięki!"]
+        lines += ["", f"✅ Everyone present logged time {when} — thanks!"]
     return Post("\n".join(lines), people, tag)
 
 

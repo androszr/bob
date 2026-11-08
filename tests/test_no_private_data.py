@@ -283,6 +283,7 @@ plans/2026-10-13-x.md
 scout/2026-10-14-x/report.md
 .github/workflows/deploy.yml
 knowledge/risks/r.md
+knowledge/leave/leave.json
 knowledge/urlopy/urlopy.json
 knowledge/daily-recap/2026-10-13.md
 scripts/teams_agent/log.jsonl
@@ -327,4 +328,21 @@ def test_sensitive_runtime_paths_are_gitignored():
         out = subprocess.run([git, f"--git-dir={gd}/.git", f"--work-tree={ROOT}", "check-ignore", "--no-index",
                               "--stdin"], input="\n".join(SENSITIVE_PATHS), capture_output=True, text=True,
                              cwd=ROOT).stdout
+    assert sorted(set(SENSITIVE_PATHS) - set(out.split())) == []
+
+
+def test_sensitive_runtime_paths_are_ignored_by_the_committed_gitignore():
+    """The same paths against the .gitignore in git's index, so a rule that exists only in a local copy (for example
+    one hidden by skip-worktree) cannot pass for a public clone."""
+    git = shutil.which("git")
+    if not git:
+        pytest.skip("git not available")
+    staged = subprocess.run([git, "show", ":.gitignore"], capture_output=True, text=True, cwd=ROOT)
+    if staged.returncode != 0:
+        pytest.skip("no .gitignore in the index")
+    with tempfile.TemporaryDirectory() as gd:
+        subprocess.run([git, "init", "-q", gd], check=True)
+        Path(gd, ".gitignore").write_text(staged.stdout, encoding="utf-8")
+        out = subprocess.run([git, "check-ignore", "--no-index", "--stdin"], input="\n".join(SENSITIVE_PATHS),
+                             capture_output=True, text=True, cwd=gd).stdout
     assert sorted(set(SENSITIVE_PATHS) - set(out.split())) == []

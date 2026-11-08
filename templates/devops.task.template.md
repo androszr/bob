@@ -1,80 +1,80 @@
-# Template: Zadanie DevOps (Task)
+# Template: DevOps Task
 
-> **Jak używać:**
-> - Zadanie DevOps to konkretna jednostka pracy infrastrukturalnej lub operacyjnej
-> - Zespół DevOps nie stosuje procesu Discovery — zadania trafiają bezpośrednio do backlogu
-> - Zadanie w Jira **Delivery (PRJ4)**
-> - Każde zadanie powinno być podpięte pod konkretny epik
-> - Zadanie powinno być wycenione w story pointach na refinemencie
-> - Wypełnij nagłówek i sekcje przed refinementem
-> - Sprawdź zgodność z Definition of Ready przed przeniesieniem na Ready for Planning
+> **How to use:**
+> - A DevOps task is a concrete unit of infrastructure or operations work
+> - The DevOps team does not use the Discovery process — tasks go straight to the backlog
+> - The task lives in Jira **Delivery (PRJ4)**
+> - Every task should be linked to a specific epic
+> - The task should be estimated in story points at refinement
+> - Fill in the header and sections before refinement
+> - Check it against the Definition of Ready before moving it to Ready for Planning
 
-> **Kiedy używać:**
-> - konkretna czynność infrastrukturalna: konfiguracja, migracja, automatyzacja, monitoring
-> - praca nie wymaga formuły User Story — nie dostarcza wartości bezpośrednio użytkownikowi końcowemu
-> - mniejszy element pracy wspierający realizację US lub epika DevOps
-> - zadanie operacyjne: aktualizacja, patching, rotacja sekretów, optymalizacja
+> **When to use:**
+> - a concrete infrastructure activity: configuration, migration, automation, monitoring
+> - the work does not need the User Story form — it does not deliver value directly to the end user
+> - a smaller piece of work that supports a DevOps US or epic
+> - an operational task: upgrade, patching, secret rotation, optimisation
 
 ---
 
-## 📋 Nagłówek
+## 📋 Header
 
-| Pole | Wartość |
+| Field | Value |
 |------|---------|
-| **Epic** | {link do Epica} |
-| **Typ zadania** | { np. Analiza, Zadanie } |
-| **Powiązana User Story** | {link do US, z której wynika to zadanie — jeśli dotyczy} |
-| **Komponent / Warstwa** | _(BRAK)_ |
-| **Rodzaj zmiany** | { Praca Projektowa } |
-| **Dotyczy** | _(nazwa produktu lub obszaru)_ |
-| **Typ pracy** | { Prace programistyczne } |
+| **Epic** | {link to the Epic} |
+| **Task type** | { e.g. Analysis, Task } |
+| **Related User Story** | {link to the US this task comes from — if any} |
+| **Component / Layer** | _(NONE)_ |
+| **Change type** | { Project work } |
+| **Affects** | _(product or area name)_ |
+| **Work type** | { Development } |
 
 ---
 
-## Cel zadania
+## Task goal
 
-_{Jedno zdanie: co i po co. Skąd to zadanie wynika — odniesienie do problemu, incydentu lub wymagania z US/epika.}_
+_{One sentence: what and why. Where this task comes from — a reference to the problem, incident or requirement in the US/epic.}_
 
-> {np. "Konfiguracja alertów Prometheus dla mikroserwisu Zlecenia w celu wykrywania degradacji wydajności przed wpływem na użytkowników."}
-
----
-
-## Zakres prac
-
-_{Numerowana lista konkretnych czynności do wykonania. Powinna być wystarczająco szczegółowa, żeby można było estymować i śledzić postęp.}_
-
-### 1. {Obszar prac}
-
-- {Konkretna zmiana / akcja}
-- {Konkretna zmiana / akcja}
-
-### 2. {Obszar prac}
-
-- {Konkretna zmiana / akcja}
+> {e.g. "Set up Prometheus alerts for the Orders microservice to catch performance degradation before it affects users."}
 
 ---
 
-## Definicja ukończenia
+## Scope of work
 
-_{Warunki, po których spełnieniu zadanie można uznać za Done. Powinny być weryfikowalne.}_
+_{A numbered list of concrete things to do. Detailed enough to estimate and to track progress.}_
 
-- [ ] {np. Alert skonfigurowany i przetestowany na środowisku staging}
-- [ ] {np. Runbook zaktualizowany o nowy scenariusz}
-- [ ] {np. Zmiana wdrożona na PROD i zweryfikowana przez 24h}
+### 1. {Work area}
 
----
+- {Concrete change / action}
+- {Concrete change / action}
 
-## Zależności i ryzyka
+### 2. {Work area}
 
-_{Opcjonalne — co może zablokować realizację, co musi być gotowe przed rozpoczęciem.}_
-
-- {Zależność / ryzyko}
+- {Concrete change / action}
 
 ---
 
-## Plan rollbacku
+## Definition of done
 
-_{Opcjonalne — jak cofnąć zmianę w przypadku problemów. Wymagane dla zmian na PROD.}_
+_{The conditions under which the task counts as Done. They should be verifiable.}_
 
-- {np. Revert Helm release do wersji X: `helm rollback <release> <revision>`}
-- {np. Przywrócenie poprzedniej konfiguracji z backup: {ścieżka/link}}
+- [ ] {e.g. Alert configured and tested on the staging environment}
+- [ ] {e.g. Runbook updated with the new scenario}
+- [ ] {e.g. Change deployed to PROD and verified for 24h}
+
+---
+
+## Dependencies and risks
+
+_{Optional — what could block the work, what has to be ready before it starts.}_
+
+- {Dependency / risk}
+
+---
+
+## Rollback plan
+
+_{Optional — how to undo the change if something goes wrong. Required for PROD changes.}_
+
+- {e.g. Revert the Helm release to version X: `helm rollback <release> <revision>`}
+- {e.g. Restore the previous configuration from backup: {path/link}}

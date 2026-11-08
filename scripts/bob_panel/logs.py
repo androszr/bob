@@ -21,23 +21,29 @@ _TS_RE = re.compile(r"^(\d\d):(\d\d):(\d\d) ?(.*)$")
 _SRC_RE = re.compile(r"^\[([\w./-]+)\]\s*")
 _CHAT_RE = re.compile(r"\[([^|\]]+?) \|")
 
-ERROR_RE = re.compile(r"\bblad\b|\bBLAD\b|błąd|Traceback|Exception|timed? ?out|Timeout \d+ms|connection error|"
-                      r"\bstatus=5\d\d|\(5\d\d\)|refused|nie powiod|nieudan|odrzucon", re.I)
-WARN_RE = re.compile(r"OSTRZEZENIE|ostrzeżenie|\bretry\b|ponawiam|ponowie|wygasl|stuck|relaunch", re.I)
+# Bob's older builds logged in Polish (BLAD, błąd, OSTRZEZENIE ...): both languages are matched
+ERROR_RE = re.compile(r"\bblad\b|\bBLAD\b|błąd|\bERROR\b|Traceback|Exception|timed? ?out|Timeout \d+ms|"
+                      r"connection error|\bstatus=5\d\d|\(5\d\d\)|refused|failed|\brejected\b|\brejecting\b|"
+                      r"nie powiod|nieudan|odrzucon", re.I)
+WARN_RE = re.compile(r"OSTRZEZENIE|ostrzeżenie|\bWARN(ING)?\b|\bretry\b|\bretrying\b|ponawiam|ponowie|wygasl|"
+                     r"\bexpired\b|stuck|relaunch", re.I)
 # routine lines: polling, health checks, start-up listing, token refresh - hidden unless asked for
 DEBUG_RE = re.compile(
-    r"pomijam stare wiadomosci|: caller = |Historia '.*' wpis|\+0 wiad, \+0 obrazow|"
-    r"edit_message \(200\)|wiadomosc edytowana|wyslano \(20\d\)|"
-    r"Token refresh|Odswiezam Bearer|click_any_other_chat|token BEZ ZMIANY|Aktywuje chat|demon MCP .*: dziala|"
-    r"-> historia:|prompt \d+ch -> claude|ingest-only|Rate-limit|Polling co|Ctrl-C aby|silent_sentinel|"
-    r"sharepoint_poll|token zaktualizowany|Bearer token OK|^\s*$")
-_ROUTINE_WARN_RE = re.compile(r"token BEZ ZMIANY po nawigacji")
-_STOP_RE = re.compile(r"Przerwano \(Ctrl-C\)|KeyboardInterrupt")
-_TRANSIENT_RE = re.compile(r"get_messages blad \[(ReadTimeout|ConnectionError|ChunkedEncodingError)|"
-                           r"_post blad \[ConnectionError status=None\] — retry")
+    r"pomijam stare wiadomosci|skipping old messages|: caller = |Historia '.*' wpis|History '.*' entr|"
+    r"\+0 wiad, \+0 obrazow|\+0 msgs?, \+0 images|"
+    r"edit_message \(200\)|wiadomosc edytowana|message edited|wyslano \(20\d\)|sent \(20\d\)|"
+    r"Token refresh|Odswiezam Bearer|Refreshing Bearer|click_any_other_chat|token BEZ ZMIANY|token UNCHANGED|"
+    r"Aktywuje chat|Activating chat|demon MCP .*: dziala|MCP daemon .*: running|"
+    r"-> historia:|-> history:|prompt \d+ch -> claude|ingest-only|Rate-limit|Polling co|Polling every|"
+    r"Ctrl-C aby|Ctrl-C to|silent_sentinel|"
+    r"sharepoint_poll|token zaktualizowany|token updated|Bearer token OK|^\s*$")
+_ROUTINE_WARN_RE = re.compile(r"token BEZ ZMIANY po nawigacji|token UNCHANGED after navigation", re.I)
+_STOP_RE = re.compile(r"Przerwano \(Ctrl-C\)|Interrupted \(Ctrl-C\)|KeyboardInterrupt")
+_TRANSIENT_RE = re.compile(r"get_messages (?:blad|error) \[(ReadTimeout|ConnectionError|ChunkedEncodingError)|"
+                           r"_post (?:blad|error) \[ConnectionError status=None\] — retry", re.I)
 _NORM_RE = re.compile(r"\d+([.,]\d+)?|[0-9a-f]{8,}", re.I)
-SOURCES = {"watch": "Czaty", "api": "Teams API", "teams/ai": "Claude", "stats": "Statystyki", "teams": "Teams",
-           "control": "Sterowanie", "broadcast": "Harmonogram", "start": "Start Boba", "bob": "Bob"}
+SOURCES = {"watch": "Chats", "api": "Teams API", "teams/ai": "Claude", "stats": "Statistics", "teams": "Teams",
+           "control": "Control", "broadcast": "Schedule", "start": "Bob start", "bob": "Bob"}
 
 
 def _source(text: str) -> tuple[str, str]:
@@ -79,7 +85,7 @@ def parse(raw: str, today: date | None = None) -> list[dict]:
                 started = None
             run = {"start": m.group(1), "by": m.group(2)}
             entries.append({"ts": m.group(1), "source": "start", "level": "info", "chat": None,
-                            "text": f"Start Boba ({m.group(2)})", "run": run["start"], "extra": []})
+                            "text": f"Bob start ({m.group(2)})", "run": run["start"], "extra": []})
             continue
         m = _TS_RE.match(line)
         if not m:                                   # continuation: Call log, traceback, indented details
@@ -141,7 +147,8 @@ def view(hours: float = 6, level: str = "info", source: str = "", q: str = "") -
     allE = parse(raw)
     if size > MAX_BYTES:
         # the tail starts mid-run: dates of lines before the first "===== start" are guesses - drop them
-        first = next((i for i, e in enumerate(allE) if e["source"] == "start" and e["text"].startswith("Start")), None)
+        first = next((i for i, e in enumerate(allE)
+                      if e["source"] == "start" and e["text"].startswith("Bob start")), None)
         allE = allE[first:] if first is not None else allE
     now = datetime.now()
     since = (now - timedelta(hours=hours)).isoformat() if hours else ""
@@ -158,7 +165,7 @@ def view(hours: float = 6, level: str = "info", source: str = "", q: str = "") -
              and (not ql or ql in e["text"].lower() or ql in " ".join(e["extra"]).lower())]
     problems = collapse_by_text([e for e in allE if e["ts"] >= day_ago and e["level"] in ("error", "warn")])
     runs = [{"start": e["ts"], "by": e["text"]} for e in allE
-            if e["source"] == "start" and e["text"].startswith("Start")]
+            if e["source"] == "start" and e["text"].startswith("Bob start")]
     return {"entries": collapse(shown)[-800:], "problems": problems[:30], "counts": counts,
             "sources": dict(sorted(sources.items(), key=lambda kv: -kv[1])), "runs": runs[-10:],
             "labels": SOURCES, "total": len(win)}

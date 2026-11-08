@@ -99,6 +99,16 @@ def test_jira_user_name_fallback_ignores_vendor_prefix_and_inactive_marker():
 
 
 def test_load_vacations_by_email(tmp_path):
+    f = tmp_path / "leave.json"
+    f.write_text(json.dumps({"fetched_at": "2026-10-08T10:00:00+00:00", "records": [
+        {"email": "A@example.com", "first_day": "2026-10-07T00:00:00", "last_day": "2026-10-09T00:00:00"},
+        {"email": "b@example.com", "first_day": "2026-10-09T00:00:00", "last_day": "2026-10-09T00:00:00"},
+    ]}), encoding="utf-8")
+    emails, fetched = wd.load_vacations(THU, f)
+    assert emails == {"a@example.com"} and fetched.startswith("2026-10-08")
+
+
+def test_load_vacations_accepts_the_old_polish_row_keys(tmp_path):
     f = tmp_path / "urlopy.json"
     f.write_text(json.dumps({"fetched_at": "2026-10-08T10:00:00+00:00", "records": [
         {"Adres e-mail": "A@example.com", "Pierwszy dzień urlopu": "2026-10-07T00:00:00",
@@ -110,12 +120,33 @@ def test_load_vacations_by_email(tmp_path):
     assert emails == {"a@example.com"} and fetched.startswith("2026-10-08")
 
 
+def test_load_vacations_accepts_the_underscore_polish_keys_and_english_wins(tmp_path):
+    f = tmp_path / "leave.json"
+    f.write_text(json.dumps({"records": [
+        {"email": "a@example.com", "Pierwszy_dzien_urlopu": "2026-10-07", "Ostatni_dzien_urlopu": "2026-10-09"},
+        {"email": "b@example.com", "first_day": "2026-10-01", "Pierwszy_dzien_urlopu": "2026-10-08",
+         "last_day": "2026-10-02"},
+    ]}), encoding="utf-8")
+    emails, _ = wd.load_vacations(THU, f)
+    assert emails == {"a@example.com"}
+
+
+def test_load_vacations_falls_back_to_the_legacy_file(tmp_path, monkeypatch):
+    legacy = tmp_path / "urlopy" / "urlopy.json"
+    legacy.parent.mkdir()
+    legacy.write_text(json.dumps({"records": [
+        {"email": "a@example.com", "first_day": "2026-10-08", "last_day": "2026-10-08"}]}), encoding="utf-8")
+    monkeypatch.setattr(wd, "LEAVE_FILE", tmp_path / "leave" / "leave.json")
+    monkeypatch.setattr(wd, "LEGACY_LEAVE_FILE", legacy)
+    assert wd.load_vacations(THU)[0] == {"a@example.com"}
+
+
 # --- summary + post -------------------------------------------------------
 
 
 def _members():
     a = wd.MemberDay("Ala Kot", "a@example.com", status="logged",
-                     worklogs=[wd.Worklog("PRJ1-1", "Logowanie", 6.0), wd.Worklog("PRJ1-2", "Daily", 0.25)])
+                     worklogs=[wd.Worklog("PRJ1-1", "Login", 6.0), wd.Worklog("PRJ1-2", "Daily", 0.25)])
     b = wd.MemberDay("Bob Pies", "b@example.com", status="missing")
     c = wd.MemberDay("Cyryl Ryba", "c@example.com", status="vacation")
     return [a, b, c]
@@ -123,11 +154,11 @@ def _members():
 
 def test_summarize_uses_ai_json_and_falls_back_on_garbage():
     ms = _members()
-    intro = wd.summarize("T", THU, ms, lambda p: 'ok {"_intro": "Logowanie.", "0": "Robiła logowanie (6h)."}')
-    assert intro == "Logowanie." and ms[0].summary == "Robiła logowanie (6h)."
+    intro = wd.summarize("T", THU, ms, lambda p: 'ok {"_intro": "Login.", "0": "Worked on login (6h)."}')
+    assert intro == "Login." and ms[0].summary == "Worked on login (6h)."
     ms = _members()
-    assert wd.summarize("T", THU, ms, lambda p: "nie json") == ""
-    assert ms[0].summary == "Logowanie (6h); Daily (15m)"
+    assert wd.summarize("T", THU, ms, lambda p: "not json") == ""
+    assert ms[0].summary == "Login (6h); Daily (15m)"
 
 
 def test_post_tags_missing_and_marks_vacation_without_hours():
@@ -136,17 +167,17 @@ def test_post_tags_missing_and_marks_vacation_without_hours():
     post = wd.build_post("TeamA", THU, ms)
     tagged = [m.name for m, t in zip(post.people, post.tag, strict=True) if t]
     assert tagged == ["Bob Pies"]
-    assert "w czwartek (08.10)" in post.markdown
-    assert "🌴 Urlop: Cyryl Ryba" in post.markdown
+    assert "on Thursday (08.10)" in post.markdown
+    assert "🌴 On leave: Cyryl Ryba" in post.markdown
     assert "Cyryl Ryba" not in [m.name for m in post.people]
-    assert "6h 15m" in post.markdown and "1/2 osób" in post.markdown
+    assert "6h 15m" in post.markdown and "1/2 people" in post.markdown
     assert "[PRJ1-1](https://jira.example.com/browse/PRJ1-1)" in post.markdown
 
 
 def test_control_report_flags_errors():
     ms = _members() + [wd.MemberDay("Ewa Err", "e@example.com", status="error")]
     rep = wd.control_report("T", THU, ms, "", ["Bob Pies"])
-    assert "Ewa Err" in rep and "NIE poszedl" in rep and "Bez @tagu" in rep
+    assert "Ewa Err" in rep and "did NOT go" in rep and "No @tag" in rep
 
 
 def test_fmt_hours():
@@ -156,12 +187,12 @@ def test_fmt_hours():
 def test_missing_recap_lists_missing_per_team_and_vacations():
     ms = _members()
     ok = [wd.MemberDay("Ida Ok", "i@example.com", status="logged")]
-    post = wd.build_missing_post(THU, {"TeamA": ms, "Incident Managerowie": ok})
+    post = wd.build_missing_post(THU, {"TeamA": ms, "Incident Managers": ok})
     assert [m.name for m in post.people] == ["Bob Pies"] and post.tag == [False]
-    assert "**Incident Managerowie:** ✅ komplet" in post.markdown
-    assert "🌴 **Urlop w czwartek:** Cyryl Ryba" in post.markdown
-    assert "Przekażcie proszę zespołom" in post.markdown
-    assert "Tempo za czwartek" in post.markdown
+    assert "**Incident Managers:** ✅ complete" in post.markdown
+    assert "🌴 **On leave on Thursday:** Cyryl Ryba" in post.markdown
+    assert "Please pass this on to the teams" in post.markdown
+    assert "Tempo for Thursday" in post.markdown
 
 
 def test_harvest_mris_matches_names_and_skips_ambiguous(tmp_path):

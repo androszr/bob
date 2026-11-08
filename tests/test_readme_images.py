@@ -111,15 +111,18 @@ PANEL = ROOT / "scripts" / "bob_panel" / "static" / "index.html"
 
 @pytest.mark.skipif(not PANEL.is_file(), reason="panel not in tree")
 def test_the_panel_picture_shows_the_real_tabs():
-    # The page speaks Polish, the picture English: the README's panel table pairs the two names.
+    # The picture draws the panel's tab names, shortened ("Logs" for "Logs and problems").
+    # An older README paired a non-English page label with the drawn name as "| Drawn (Label) |".
     pages = re.search(r"const PAGES = \[(.*?)\n\];", PANEL.read_text(encoding="utf-8"), flags=re.S).group(1)
     real = re.findall(r"\['[a-z]+','([^']+)','[a-z]+'\]", pages)
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    english = {pl: en for en, pl in re.findall(r"^\| (\w+) \(([^)]+)\) \|", readme, flags=re.M)}
+    paired = {label: drawn for drawn, label in re.findall(r"^\| (\w+) \(([^)]+)\) \|", readme, flags=re.M)}
     source = (IMAGES / "src" / "bob-panel.html").read_text(encoding="utf-8")
     drawn = re.findall(r'<div class="ptab[^"]*">([^<]+)<', source)
-    assert len(real) == 7
-    assert drawn == [english[label] for label in real]
+    assert len(real) == 7 and len(drawn) == 7
+    for label, name in zip(real, drawn, strict=True):
+        expected = paired.get(label, label)
+        assert expected == name or expected.startswith(name + " "), (label, name)
 
 
 def test_strip_chunks_drops_metadata():

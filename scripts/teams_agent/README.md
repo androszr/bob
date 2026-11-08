@@ -1,103 +1,103 @@
-# Bob — AI assistant dla Jana na Teams
+# Bob — an AI assistant for Jan on Teams
 
-Bob to agent AI działający w tle i odpowiadający na wiadomości Teams w imieniu Jana Kowalskiego. Czyta i wysyła wiadomości przez Teams REST API (nie przez DOM), generuje odpowiedzi przez Claude CLI.
+Bob is an AI agent that runs in the background and answers Teams messages on behalf of Jan Kowalski. It reads and sends messages through the Teams REST API (not through the DOM) and generates replies through the Claude CLI.
 
-**Persona:** Bob, wymyślona maskotka-asystent zespołu. Zna się na product discovery, Scrum, OKR-ach — nie na programowaniu.
+**Persona:** Bob, the team's made-up assistant mascot. He knows product discovery, Scrum and OKRs — not programming.
 
-## Pierwsze uruchomienie
+## First run
 
 ```
 python scripts/teams_agent/login.py
 ```
 
-Otwiera Chromium z widocznym oknem. Zaloguj się do Teams przez Microsoft SSO (MFA jeśli wymagane).
-**Zaznacz "Pozostać zalogowanym" = Tak** — bez tego Microsoft nie zapisuje trwałego cookie.
-Poczekaj aż zobaczysz Teams (lista czatów po lewej), wróć do terminala i naciśnij Enter.
+It opens Chromium in a visible window. Sign in to Teams with Microsoft SSO (MFA if required).
+**Choose "Stay signed in" = Yes** — without it Microsoft does not save a lasting cookie.
+Wait until you see Teams (the chat list on the left), go back to the terminal and press Enter.
 
-Sesja zapisuje się do `session.json` (tryb 600, gitignored). Ważna ~7 dni.
+The session is saved to `session.json` (mode 600, gitignored). It is valid for ~7 days.
 
-## Normalne uruchomienie
+## Normal run
 
 ```
 python scripts/teams_agent/cli.py
 ```
 
-Bob startuje w trybie daemon na kanale **Kanal AI**:
-- Czyta nowe wiadomości przez REST API (nie scraping DOM)
-- Odpowiada na każdą wiadomość jako Bob
-- Kursor oparty na `sequence_id` — restarty nie powodują powtórzeń
-- Własne wiadomości są ignorowane (echo prevention przez `sender_mri`)
+Bob starts in daemon mode on the chats in `chat-config.json` (or **Notes** when there is none):
+- Reads new messages through the REST API (no DOM scraping)
+- Answers every message addressed to him as Bob
+- A cursor based on `sequence_id` — restarts cause no repeats
+- His own messages are ignored (echo prevention through `sender_mri`)
 
-Ctrl-C żeby zatrzymać.
+Ctrl-C to stop.
 
-## Bezpośrednie pytanie do Boba
+## Asking Bob directly
 
-Jan może pisać do Boba bezpośrednio z Teams:
-
-```
-Bob, co sądzisz o tym roadmapie?
-Bob: kiedy mamy retrospektywę?
-```
-
-Bob odpowie tylko na wiadomości zaadresowane do niego — pozostałe własne wiadomości są ignorowane.
-
-## Opcje
+Jan can write to Bob straight from Teams:
 
 ```
---model MODEL        Model Claude (domyślnie: claude-sonnet-5-5)
---force-login        Wymuś ponowne logowanie SSO
---log-file PATH      Ścieżka do logu JSONL (domyślnie: log.jsonl)
---headless           Chromium bez okna. Niezalecane — Teams odrzuca headless sesje.
---watch NAME         Nazwa kanału do obserwowania (domyślnie: "Kanal AI")
---poll N             Interwał pollingu w sekundach (domyślnie: 5, min 1)
---rate-limit N       Minimalny czas między odpowiedziami w sekundach (domyślnie: 3)
---watch-state PATH   Plik stanu (domyślnie: watch-state.json)
---interactive        Tryb ręczny z menu zatwierdzania zamiast daemona
---sniff-api          Loguj HTTP requests Teams do api-sniff.jsonl (diagnostyka)
---sniff-ws           Tryb pasywny: loguj WebSocket frames do ws-sniff.jsonl, zero wysyłania
+Bob, what do you think of this roadmap?
+Bob: when is our retrospective?
 ```
 
-## Tryb pasywny (WebSocket sniff)
+Bob answers only messages addressed to him — the owner's other messages are ignored.
+
+## Options
+
+```
+--model MODEL        Claude model (default: claude-sonnet-5-5)
+--force-login        Force a new SSO sign-in
+--log-file PATH      Path to the JSONL log (default: log.jsonl)
+--headless           Chromium without a window. Not recommended — Teams rejects headless sessions.
+--watch NAME         Names of the chats to watch (default: every chat in chat-config.json)
+--poll N             Polling interval in seconds (default: 5, min 1)
+--rate-limit N       Minimum time between replies in seconds (default: 3)
+--watch-state PATH   State file (default: watch-state.json)
+--interactive        Manual mode with an approval menu instead of the daemon
+--sniff-api          Log Teams HTTP requests to api-sniff.jsonl (diagnostics)
+--sniff-ws           Passive mode: log WebSocket frames to ws-sniff.jsonl, sends nothing
+```
+
+## Passive mode (WebSocket sniff)
 
 ```
 python scripts/teams_agent/cli.py --sniff-ws
 ```
 
-Bob tylko nasłuchuje — nie odpowiada na nic. Wszystkie WebSocket frames Teams trafiają do `ws-sniff.jsonl`. Przydatne do odkrycia formatu eventów real-time przed implementacją trybu push (bez pollingu).
+Bob only listens — he answers nothing. Every Teams WebSocket frame goes to `ws-sniff.jsonl`. Useful for learning the format of real-time events before building a push mode (no polling).
 
-## Tryb interaktywny
+## Interactive mode
 
 ```
 python scripts/teams_agent/cli.py --interactive
 ```
 
-Klasyczny tryb z menu zatwierdzania: `[s]end / [e]dit / [r]egen / [n]ext / [q]uit`
+The classic mode with an approval menu: `[s]end / [e]dit / [r]egen / [n]ext / [q]uit`
 
-## Architektura
+## Architecture
 
-| Komponent | Rola |
+| Component | Role |
 |-----------|------|
-| `login.py` | Jednorazowe logowanie SSO przez Playwright, zapisuje `session.json` |
-| `api_client.py` | REST API Teams — czytanie i wysyłanie wiadomości przez cookies z `session.json` |
-| `ai.py` | Wywołuje Claude CLI (`--tools` + `--allowedTools` + `--permission-mode dontAsk`) — zero Bash, `Read` tylko dla obrazów (katalog per wywołanie) |
-| `scraper.py` | Playwright DOM — używany tylko do nawigacji (keepalive sesji) |
-| `cli.py` | Orkiestrator: watch loop, sniffery, tryb interaktywny |
-| `session.py` | Zarządzanie świeżością `session.json` |
-| `roles.py` | Role czatów (`roles.json`): dostęp do grup narzędzi, umiejętności, wiedza doklejana do promptu; czysty moduł, ten sam dla Boba i panelu |
-| `token_health.py` | Maszyna stanów odnawiania tokenu Teams: kiedy otworzyć przeglądarkę od nowa, kiedy wysłać alert na pulpit |
-| `bob_files.py` | Pamięć plików wysłanych przez Boba (`user-data/bob-files/`): gdy ktoś wskaże plik, Bob dostaje jego treść |
+| `login.py` | One-time SSO sign-in through Playwright, saves `session.json` |
+| `api_client.py` | Teams REST API — reads and sends messages with the cookies from `session.json` |
+| `ai.py` | Calls the Claude CLI (`--tools` + `--allowedTools` + `--permission-mode dontAsk`) — no Bash, `Read` only for images (a folder per call) |
+| `scraper.py` | Playwright DOM — used only for navigation (session keepalive) |
+| `cli.py` | Orchestrator: watch loop, sniffers, interactive mode |
+| `session.py` | Keeps track of how fresh `session.json` is |
+| `roles.py` | Chat roles (`roles.json`): access to tool groups, skills, knowledge appended to the prompt; a pure module, the same for Bob and the panel |
+| `token_health.py` | State machine for renewing the Teams token: when to reopen the browser, when to raise a desktop alert |
+| `bob_files.py` | Memory of the files Bob sent (`user-data/bob-files/`): when someone points at a file, Bob gets its content |
 
-## Pliki (gitignored)
+## Files (gitignored)
 
-- `session.json` — cookies Playwright (nie commitować)
-- `log.jsonl` — audit log wysłanych wiadomości
-- `watch-state.json` — ostatni `sequence_id` per kanał (pozwala wznowić po restarcie)
-- `timers-state.json` — kiedy ostatnio ruszyły wolne zadania cykliczne (rozgrzewka SharePoint, odpytywanie urlopów); restart ich nie powtarza
-- `perf-metrics.jsonl` — czas i koszt każdego wywołania Claude (źródło dla statystyk i panelu)
-- `bob-control.json` — pauza / wyłączenie Boba i lista wyłączonych czatów (zapisywane atomowo, czyta je też panel)
-- `api-sniff.jsonl` — logi HTTP z `--sniff-api`
-- `ws-sniff.jsonl` — logi WebSocket z `--sniff-ws`
+- `session.json` — Playwright cookies (never commit)
+- `log.jsonl` — audit log of sent messages
+- `watch-state.json` — the last `sequence_id` per chat (lets Bob resume after a restart)
+- `timers-state.json` — when the slow recurring jobs last ran (SharePoint warm-up, leave sheet polling); a restart does not repeat them
+- `perf-metrics.jsonl` — time and cost of every Claude call (the source for stats and the panel)
+- `bob-control.json` — Bob's pause / off state and the list of switched-off chats (written atomically, the panel reads it too)
+- `api-sniff.jsonl` — HTTP logs from `--sniff-api`
+- `ws-sniff.jsonl` — WebSocket logs from `--sniff-ws`
 
-## Bezpieczeństwo
+## Security
 
-Claude CLI wywołuje się z `--tools` (definiuje wbudowane narzędzia: puste albo tylko WebSearch/WebFetch/Read), `--allowedTools` (jawne narzędzia MCP) i zawsze z `--permission-mode dontAsk` (co nie jest na liście, jest odrzucane). Model nie może wykonać poleceń shell ani niczego zapisać. `Read` jest tylko w wywołaniach z obrazami i działa wyłącznie w katalogu `bob_read_*` utworzonym na to jedno wywołanie (kopie obrazów, to samo co cwd). WebFetch jest wyłączony, gdy załadowane są narzędzia MCP z danymi firmowymi (zostaje WebSearch). Demony HTTP MCP wymagają tokenu Bearer, a `cli.main()` ustawia `umask 077` (sekrety i dane czatów `0600`). Bez względu na treść wiadomości przychodzącej.
+The Claude CLI is called with `--tools` (defines the built-in tools: none, or only WebSearch/WebFetch/Read), `--allowedTools` (the explicit MCP tools) and always with `--permission-mode dontAsk` (anything not on the list is refused). The model cannot run shell commands or write anything. `Read` is present only in calls with images and works only inside the `bob_read_*` folder created for that one call (copies of the images, also the cwd). WebFetch is off when MCP tools with company data are loaded (WebSearch stays). The HTTP MCP daemons require a Bearer token, and `cli.main()` sets `umask 077` (secrets and chat data are `0600`). This holds whatever the incoming message says.

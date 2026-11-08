@@ -1,6 +1,6 @@
-"""Hourly SharePoint XLSX poller: download urlopy file -> convert to JSON -> write dest.
+"""Hourly SharePoint XLSX poller: download the leave tracker -> convert to JSON -> write dest.
 
-Pisze wylacznie do knowledge/urlopy/urlopy.json (zrodlo dla urlopy-bob).
+Writes only knowledge/leave/leave.json (the source for leave-bob).
 """
 import json
 import os
@@ -14,7 +14,7 @@ from pathlib import Path
 import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps na stdout/stderr
+import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps on stdout/stderr
 import org_config  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,15 +23,38 @@ from session import load_storage_state  # noqa: E402
 
 SESSION_FILE = Path(__file__).parent / "session.json"
 DOWNLOAD_DIR = Path(__file__).parent / "downloads"
-# Jedyny plik wynikowy -- zrodlo dla urlopy-bob (scripts/urlopy/mcp_server.py).
-# _existing_count czyta go przy "skipped".
-DEST = Path(__file__).resolve().parents[2] / "knowledge" / "urlopy" / "urlopy.json"
+# The only output file -- the source for leave-bob (scripts/leave/mcp_server.py).
+# _existing_count reads it on "skipped". Older builds wrote knowledge/urlopy/urlopy.json;
+# leave-bob still reads that one while this file does not exist yet.
+DEST = Path(__file__).resolve().parents[2] / "knowledge" / "leave" / "leave.json"
 
-# The urlopy workbook is a personal OneDrive file, so its location is deployment data:
-# URLOPY_SHAREPOINT_URL holds the browser "share" link (…/:x:/r/personal/<user>/Documents/
-# <file>.xlsx?d=w<32 hex>…) and every other URL below is derived from it. Unset = the
-# poller reports "not_configured" and does nothing.
-MTIME_KEY = "urlopy"
+# The leave workbook is a personal OneDrive file, so its location is deployment data:
+# LEAVE_SHAREPOINT_URL (old name URLOPY_SHAREPOINT_URL) holds the browser "share" link
+# (…/:x:/r/personal/<user>/Documents/<file>.xlsx?d=w<32 hex>…) and every other URL below
+# is derived from it. Unset = the poller reports "not_configured" and does nothing.
+MTIME_KEY = "leave"
+
+# Spreadsheet header (whitespace-folded, lower-cased) -> JSON row key. Either the English
+# or the older Polish header is accepted; any other column keeps its header as its key.
+HEADER_KEYS = {
+    "name": "name",
+    "first day": "first_day",
+    "first_day": "first_day",
+    "last day": "last_day",
+    "last_day": "last_day",
+    "imię i nazwisko": "name",
+    "imie i nazwisko": "name",
+    "pierwszy dzień urlopu": "first_day",
+    "pierwszy dzien urlopu": "first_day",
+    "ostatni dzień urlopu": "last_day",
+    "ostatni dzien urlopu": "last_day",
+    "email": "email",
+    "e-mail": "email",
+    "email address": "email",
+    "e-mail address": "email",
+    "adres e-mail": "email",
+    "adres email": "email",
+}
 _SHARE_PREFIX_RE = re.compile(r"^/:[a-z]:/[rgs]/")
 _UNIQUE_ID_RE = re.compile(r"^w?([0-9a-fA-F]{32})$")
 
@@ -64,12 +87,12 @@ def derive_urls(share_url: str) -> dict[str, str] | None:
     }
 
 
-_URLS = derive_urls(org_config.URLOPY_SHAREPOINT_URL)
+_URLS = derive_urls(org_config.LEAVE_SHAREPOINT_URL)
 URL = _URLS["view"] if _URLS else ""
 DOWNLOAD_URL = _URLS["download"] if _URLS else ""
 REST_API_URL = _URLS["rest_mtime"] if _URLS else ""
 SITE_REFERER_URL = _URLS["referer"] if _URLS else ""
-NOT_CONFIGURED_MSG = "[sharepoint-poller] URLOPY_SHAREPOINT_URL not configured — urlopy poll skipped"
+NOT_CONFIGURED_MSG = "[sharepoint-poller] LEAVE_SHAREPOINT_URL not configured — leave poll skipped"
 
 
 def download_xlsx() -> Path:
@@ -112,7 +135,7 @@ def download_xlsx() -> Path:
                 pass  # download-triggered navigation always raises
 
         download = dl_info.value
-        suggested = download.suggested_filename or "urlopy_live.xlsx"
+        suggested = download.suggested_filename or "leave_live.xlsx"
         dest = DOWNLOAD_DIR / suggested
         download.save_as(str(dest))
 
@@ -121,8 +144,17 @@ def download_xlsx() -> Path:
     return dest
 
 
+def _row_key(header: object) -> str:
+    """JSON key for a spreadsheet header: a known leave column, else the header itself."""
+    text = str(header)
+    return HEADER_KEYS.get(" ".join(text.split()).lower(), text)
+
+
 def xlsx_to_records(path: Path) -> list[dict]:
     """Convert an XLSX file to a list of dicts (header row -> values).
+
+    The name / first day / last day / e-mail columns get the keys name / first_day /
+    last_day / email.
 
     Datetime values are serialised as ISO-8601 strings.
     Empty cells become None.
@@ -137,7 +169,7 @@ def xlsx_to_records(path: Path) -> list[dict]:
     if not rows:
         return []
 
-    headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
+    headers = [_row_key(h) if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
     records: list[dict] = []
 
     for row in rows[1:]:
@@ -155,8 +187,8 @@ def xlsx_to_records(path: Path) -> list[dict]:
 def write_json(records: list[dict]) -> int:
     """Serialise records to DEST as JSON and return the record count.
 
-    Zapis atomowy (plik tymczasowy w tym samym katalogu + os.replace): urlopy-bob
-    czyta DEST w dowolnym momencie i nie moze trafic na urwany JSON.
+    Atomic write (temp file in the same folder + os.replace): leave-bob may read
+    DEST at any moment and must never see half-written JSON.
     """
     payload = {
         "fetched_at": datetime.now(UTC).isoformat(),
@@ -190,14 +222,15 @@ def poll() -> dict:
 
     Skips the download+convert if SharePoint's TimeLastModified hasn't advanced
     since the last successful run -- returns {"status": "skipped", "count": <existing>}
-    in that case, or {"status": "ok", "count": <new>} after a real run.
+    in that case, or {"status": "ok", "count": <new>} after a real run. A missing
+    DEST (for example the first run after the move to knowledge/leave/) always runs.
     """
     if not _URLS:
         print(NOT_CONFIGURED_MSG, file=sys.stderr, flush=True)
         return {"status": "not_configured", "count": _existing_count()}
     remote_mtime = sharepoint_meta.fetch_remote_mtime(REST_API_URL, SITE_REFERER_URL)
     state = sharepoint_meta.load_state()
-    if not sharepoint_meta.has_changed(MTIME_KEY, remote_mtime, state):
+    if DEST.exists() and not sharepoint_meta.has_changed(MTIME_KEY, remote_mtime, state):
         return {"status": "skipped", "count": _existing_count()}
 
     path = download_xlsx()

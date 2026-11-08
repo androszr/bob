@@ -3,7 +3,7 @@
 Detects what the user is asking about and fetches the right data:
 - Ticket key (PRJ1-123) → issue details
 - Sprint / team question → sprint stats
-- Tempo / worklogi → tempo summary for current week/month
+- Tempo / worklogs → tempo summary for current week/month
 - Free-text search → top matching issues
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jira_client as _jira
 
-# Polish/English month names → month number
+# English and Polish month names → month number (Polish kept for users who write in Polish)
 _MONTHS = {
     "styczeń": 1, "stycznia": 1, "january": 1, "jan": 1,
     "luty": 2, "lutego": 2, "february": 2, "feb": 2,
@@ -54,7 +54,7 @@ def _tempo_date_range(message: str) -> tuple[str, str]:
             end = today
         return str(date(year, month_n, 1)), str(end)
 
-    # "zeszły miesiąc" / "poprzedni miesiąc"
+    # "last month" (also the Polish "zeszły miesiąc" / "poprzedni miesiąc")
     if re.search(r'\b(zeszł|poprzedni|last\s+month)\b', message, re.IGNORECASE):
         first_this = today.replace(day=1)
         last_prev = first_this - timedelta(days=1)
@@ -69,24 +69,24 @@ _KEY_RE = re.compile(r'\b([A-Z]{2,10}-\d+)\b')
 # Team names.
 _TEAM_RE = re.compile(r'\b(TeamA|TeamD|TeamB)\b', re.IGNORECASE)
 
-# Sprint-related keywords.
+# Sprint-related keywords (English, plus Polish aliases).
 _SPRINT_RE = re.compile(
     r'\b(sprint|sprincie|sprintu|sprintem|story\s*point[sy]?|SP\b|velocity|burndown|'
     r'zrealizowali|ile\s+done|ile\s+sko[nń]czyli|postęp|progress|aktywny\s+sprint)\b',
     re.IGNORECASE,
 )
 
-# Tempo / time-logging keywords.
+# Tempo / time-logging keywords (English, plus Polish aliases).
 _TEMPO_RE = re.compile(
-    r'\b(tempo|worklog|zalogowali|czas\s+pracy|logowali|godzin[ay]?|ile\s+zalogowali|'
+    r'\b(tempo|worklog|logged|hours|time\s+spent|zalogowali|czas\s+pracy|logowali|godzin[ay]?|ile\s+zalogowali|'
     r'ile\s+godzin|przepracowali|logowanie)\b',
     re.IGNORECASE,
 )
 
-# Generic Jira question keywords (no specific ticket).
+# Generic Jira question keywords (no specific ticket; English, plus Polish aliases).
 _JIRA_RE = re.compile(
-    r'\b(jira|task[iy]?|ticket[sy]?|issue[sy]?|backlog|story|bug[iy]?|epic[iy]?|'
-    r'co\s+masz\s+w\s+sprincie|co\s+robimy|co\s+jest\s+do\s+zrobienia)\b',
+    r'\b(jira|task[siy]?|ticket[sy]?|issue[sy]?|backlog|story|bug[siy]?|epic[siy]?|'
+    r'what\s+are\s+we\s+working\s+on|co\s+masz\s+w\s+sprincie|co\s+robimy|co\s+jest\s+do\s+zrobienia)\b',
     re.IGNORECASE,
 )
 
@@ -129,12 +129,12 @@ def build_jira_context(message: str) -> str:
         issues = _jira.get_my_issues(max_results=10)
         if issues:
             lines = [f"  {i['key']} [{i['status']}] {i['summary']}" for i in issues]
-            parts.append("Moje otwarte taski w Jirze:\n" + "\n".join(lines))
+            parts.append("My open Jira tasks:\n" + "\n".join(lines))
 
     if not parts:
         return ""
 
-    return "[JIRA/TEMPO CONTEXT — dane pobrane na żywo]\n" + "\n\n".join(parts) + "\n[/JIRA/TEMPO CONTEXT]"
+    return "[JIRA/TEMPO CONTEXT — live data]\n" + "\n\n".join(parts) + "\n[/JIRA/TEMPO CONTEXT]"
 
 
 def _format_sprint(s: dict) -> str:
@@ -143,15 +143,15 @@ def _format_sprint(s: dict) -> str:
         f"  Committed: {s['committed_sp']} SP | Done: {s['done_sp']} SP ({s['completion_pct']}%)"
         f" | WIP: {s['wip_sp']} SP | Todo: {s['todo_sp']} SP",
     ]
-    # Show top in-progress and done issues.
+    # Show top in-progress and done issues (Polish status names matched too).
     wip = [i for i in s["issues"] if "progress" in i["status"].lower() or "realizacj" in i["status"].lower()]
     done = [i for i in s["issues"] if i["status"].lower() in ("done", "gotowe", "closed", "resolved")]
     if wip:
-        lines.append("  W trakcie:")
+        lines.append("  In progress:")
         for i in wip[:5]:
             lines.append(f"    {i['key']} ({i['sp']} SP) [{i['assignee']}] {i['summary']}")
     if done:
-        lines.append(f"  Ukończone ({len(done)} tasków):")
+        lines.append(f"  Done ({len(done)} tasks):")
         for i in done[:5]:
             lines.append(f"    {i['key']} ({i['sp']} SP) {i['summary']}")
     return "\n".join(lines)
@@ -164,16 +164,16 @@ def _format_issue(i: dict) -> str:
         f"  URL: {i['url']}",
     ]
     if i.get("description"):
-        lines.append(f"  Opis: {i['description'][:300]}")
+        lines.append(f"  Description: {i['description'][:300]}")
     if i.get("comments"):
-        lines.append("  Ostatnie komentarze:")
+        lines.append("  Latest comments:")
         for c in i["comments"]:
             lines.append(f"    [{c['author']}]: {c['body'][:200]}")
     return "\n".join(lines)
 
 
 def _format_tempo(t: dict) -> str:
-    lines = [f"Tempo — zalogowany czas {t['date_from']} → {t['date_to']} (łącznie: {t['total_hours']}h):"]
+    lines = [f"Tempo — logged time {t['date_from']} → {t['date_to']} (total: {t['total_hours']}h):"]
     for name, hours in list(t["by_person"].items())[:10]:
         lines.append(f"  {name}: {hours}h")
     return "\n".join(lines)

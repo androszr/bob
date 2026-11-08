@@ -147,7 +147,7 @@ def test_invoke_claude_writes_metric_on_success(tmp_path):
 def test_invoke_claude_metric_contains_ctx(tmp_path):
     """metrics_ctx is stored in metric['ctx']."""
     log_path = tmp_path / "perf-metrics.jsonl"
-    ctx = {"chat": "Kanal AI"}
+    ctx = {"chat": "AI Channel"}
 
     with patch("subprocess.run", return_value=_make_proc(_FULL_JSON_STDOUT)):
         with patch.object(ai, "_PERF_LOG", log_path):
@@ -243,7 +243,7 @@ def test_freeform_reply_forwards_metrics_ctx(tmp_path):
 
     with patch("subprocess.run", return_value=_make_proc(_FULL_JSON_STDOUT)):
         with patch.object(ai, "_PERF_LOG", log_path):
-            result = ai.freeform_reply("pytanie", metrics_ctx=ctx)
+            result = ai.freeform_reply("question", metrics_ctx=ctx)
 
     assert result == "hej"
     metric = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])

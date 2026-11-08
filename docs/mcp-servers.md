@@ -11,17 +11,17 @@ that chat in `chat-config.json` (`mcp`, `mcp_extra`).
 | `jira-read-bob` / `jira-bob` | 7126 / 7101 | `find`, `jira_issue`, `jira_search`, `jira_create`, `jira_comment` |
 | `todos-bob` | 7103 | `add_todo`, `list_todos`, `update_todo` |
 | `md-to-mp3-bob` | 7110 | `convert_md_to_mp3`, `list_md_to_mp3_files` |
-| `urlopy-bob` | 7112 | `urlopy_meta`, `urlopy_check`, `urlopy_list` |
+| `leave-bob` | 7112 | `leave_meta`, `leave_check`, `leave_list` |
 | `datetime-bob` | 7113 | `now`, `resolve_date`, `weekday`, `date_range` |
 | `snowflake-bob` | 7132 | `report_morning_pulse`, `report_network_panorama`, `report_forecast_vs_actual`, `report_status` |
 
 Ports between 7101 and 7131 that are not in the table belonged to retired servers; `ports.py` keeps them reserved, so do not reuse them.
 
 Tool groups per chat (`ai._MCP_GROUPS`): `jira`, `jira_write`, `jira_hypercare`, `todos`,
-`datetime`, `urlopy`, `md_to_mp3`, and the opt-in `snowflake` (a chat gets it only by naming it or through a role; see
+`datetime`, `leave`, `md_to_mp3`, and the opt-in `snowflake` (a chat gets it only by naming it or through a role; see
 [Snowflake reports](snowflake-reports.md)).
 
-Roles map onto the same groups: a role's `dostep` list names groups from `ai._MCP_GROUPS`, so a chat on a role
+Roles map onto the same groups: a role's `access` list names groups from `ai._MCP_GROUPS`, so a chat on a role
 gets exactly those servers' tools (see [Roles](running.md#roles)). The table and the ports do not change.
 
 `mcp-config.json` is **generated** by `_refresh_mcp_config()` in `ai.py` (the transport
@@ -32,7 +32,7 @@ depends on `BOB_MCP_TRANSPORT`) - it is in `.gitignore`; do not edit it by hand.
 `claude --print` starts one Python process per MCP server per message. No setup, but a few
 seconds of overhead on every reply. Exception: the servers in `ai._DAEMON_SERVERS` (Jira
 read, `jira-read-bob`) are started by `cli.py` itself as HTTP daemons - see
-[`scripts/mcp_admin/README.md`](../scripts/mcp_admin/README.md#demon-jira-tryb-stdio).
+[`scripts/mcp_admin/README.md`](../scripts/mcp_admin/README.md#jira-daemon-in-stdio-mode).
 
 ## Persistent HTTP daemons (macOS, recommended)
 
@@ -51,4 +51,8 @@ Logs: `~/Library/Logs/bob/mcp-*.log`. After changing server code:
 `unset BOB_MCP_TRANSPORT && scripts/mcp_admin/uninstall_launchd.sh`.
 
 The launchd labels are `bob.mcp.<name>`, with plists under `~/Library/LaunchAgents/`.
+
+Upgrading from a build that still had `urlopy-bob`: every `mcp_admin` script first stops that daemon and removes
+its LaunchAgent (the server is now `leave-bob` on the same port), so run `scripts/mcp_admin/install_launchd.sh`
+once after the upgrade.
 More detail: [`scripts/mcp_admin/README.md`](../scripts/mcp_admin/README.md).

@@ -1,271 +1,271 @@
 ---
-# Konwencja nazwy pliku:
-#   {YYYY-MM-DD}-ux-brief-{slug-inicjatywy}.md
+# File name convention:
+#   {YYYY-MM-DD}-ux-brief-{initiative-slug}.md
 #
-# - Data w nazwie = `updated:` z frontmatter (ostatnia merytoryczna aktualizacja)
-# - Przy kazdej istotnej aktualizacji: zmien `updated:` oraz rename pliku, by daty byly spojne
-# - Data utworzenia zyje w `date:` i w tabeli Metadane
-title: "UX Brief: {Nazwa inicjatywy}"
+# - The date in the name = `updated:` from the frontmatter (last substantive update)
+# - On every significant update: change `updated:` and rename the file, so the dates match
+# - The creation date lives in `date:` and in the Metadata table
+title: "UX Brief: {Initiative name}"
 type: ux-brief
-initiative: {slug-inicjatywy}
+initiative: {initiative-slug}
 area: {mobile | portal}
 status: draft
 date: {YYYY-MM-DD}
 updated: {YYYY-MM-DD}
-author: {imię i nazwisko PO/PD}
-epic: {link do Epica w Jira lub pusty string}
-ticket: {link do US / Task lub pusty string}
+author: {First Last of the PO/PD}
+epic: {link to the Epic in Jira, or an empty string}
+ticket: {link to the US / Task, or an empty string}
 tags: [{tag1}, {tag2}]
-summary: "{1 zdanie — czego dotyczy inicjatywa i dla kogo}"
+summary: "{1 sentence — what the initiative is about and who it is for}"
 ---
 
 
-# UX Brief: {Nazwa inicjatywy}
+# UX Brief: {Initiative name}
 
-## Metadane
+## Metadata
 
-| Pole | Wartość |
+| Field | Value |
 |------|---------|
-| Projekt | {nazwa projektu} |
-| Produkt / Moduł | {nazwa produktu} |
-| Epic (Jira) | {link do Epica — pole "Epic Link" w Jira} |
-| Ticket (Jira) | {link do US / Task} |
+| Project | {project name} |
+| Product / Module | {product name} |
+| Epic (Jira) | {link to the Epic — the "Epic Link" field in Jira} |
+| Ticket (Jira) | {link to the US / Task} |
 | Status | `draft` |
-| Autor (PO/PD) | {imię i nazwisko} |
-| Data utworzenia | {YYYY-MM-DD} |
-| Ostatnia aktualizacja | {YYYY-MM-DD} |
-| Confluence | _(po opublikowaniu uzupełnij link do strony)_ |
-| Miro | _(link do tablicy Miro / ramki, jeśli dotyczy)_ |
+| Author (PO/PD) | {First Last} |
+| Created | {YYYY-MM-DD} |
+| Last updated | {YYYY-MM-DD} |
+| Confluence | _(add the page link once published)_ |
+| Miro | _(link to the Miro board / frame, if any)_ |
 
-## Wstęp
+## Introduction
 
-> {2–3 zdania: czego dotyczy inicjatywa, jaki jest kluczowy problem, dla kogo. Służy jako orientacja dla osoby, która trafi na ten brief po raz pierwszy — bez konieczności czytania całości.}
-
----
-
-> **Jak korzystać z tego dokumentu:**
-> - 🟢 **Gate 1 (PO + BO)** - PO wypełnia wstępnie przed spotkaniem otwierającym, omawiane na Gate 1
-> - 🔵 **Problem Space (BA, PD)** - BA i PD pogłębiają i douzupełniają sekcje z Gate 1 + dodają nowe
-> - 🟣 **Solution Space (BA, PD, SA)** - weryfikacja i finalizacja wyróżników na podstawie wypracowanych rozwiązań
-> - Sekcje 1–6 żyją przez cały discovery - **Gate 1 to punkt startowy, nie ostateczny**
+> {2–3 sentences: what the initiative is about, what the key problem is, who it is for. It orients someone who lands on this brief for the first time — without having to read the whole thing.}
 
 ---
 
-# 🟢 GATE 1 - Start Discovery (PO + BO)
+> **How to use this document:**
+> - 🟢 **Gate 1 (PO + BO)** - the PO fills it in roughly before the kick-off meeting; it is discussed at Gate 1
+> - 🔵 **Problem Space (BA, PD)** - the BA and PD deepen and fill in the Gate 1 sections + add new ones
+> - 🟣 **Solution Space (BA, PD, SA)** - verify and finalise the differentiators based on the solutions worked out
+> - Sections 1–6 live throughout discovery - **Gate 1 is the starting point, not the final word**
 
-_PO wypełnia wstępnie na podstawie ustaleń z BO **przed spotkaniem otwierającym**. Omawiane na Gate 1 z BA, PD, SA. Sekcje te będą pogłębiane i douzupełniane w Problem Space przez BA i PD._
+---
 
-## 1. Użytkownicy
+# 🟢 GATE 1 - Discovery start (PO + BO)
 
-**Dla kogo to robimy?**
-_(Kto korzysta z tego ekranu/flow/produktu? Link do persony)_
+_The PO fills this in roughly, based on what was agreed with the BO, **before the kick-off meeting**. Discussed at Gate 1 with the BA, PD and SA. The BA and PD will deepen and fill in these sections in Problem Space._
 
-> {opis użytkowników}
+## 1. Users
+
+**Who are we doing this for?**
+_(Who uses this screen/flow/product? Link to the persona)_
+
+> {description of the users}
 
 ### User Story
 
-> Jako **{kto}** chcę **{co}**, aby **{po co / wartość}**.
+> As a **{who}** I want **{what}**, so that **{why / value}**.
 
 ---
 
-## 2. Cel i kontekst
+## 2. Goal and context
 
-**Jaki jest cel zadania/projektu?**
-_(PM/PO/Biznes: Geneza zmiany, co chcemy osiągnąć)_
+**What is the goal of the task/project?**
+_(PM/PO/Business: where the change comes from, what we want to achieve)_
 
-> {cel}
+> {goal}
 
-**Czy występują czynniki niezależne od produktu, które wpływają na ten projekt?**
+**Are there factors outside the product that affect this project?**
 
-> {zależności, kontekst zewnętrzny, powiązania}
+> {dependencies, external context, links}
 
-**Jak zadanie/projekt odnosi się do strategii produktu/produktów?**
-_(Szerszy kontekst, strategia biznesowa)_
+**How does the task/project relate to the product strategy?**
+_(Wider context, business strategy)_
 
-> {odniesienie do strategii produktu}
+> {relation to the product strategy}
 
-**Jak zadanie/projekt odnosi się do strategii organizacji?**
-_(Który value stream wspiera i w jaki sposób)_
+**How does the task/project relate to the organisation's strategy?**
+_(Which value stream it supports, and how)_
 
-> {odniesienie do strategii organizacji}
+> {relation to the organisation's strategy}
 
-**Co stracimy, gdy nie wprowadzimy zmian?**
-_(np. użytkownicy nie będą realizować zadań, powielimy błędy konkurencji, nie spełnimy oczekiwań użytkowników)_
+**What do we lose if we don't make the change?**
+_(e.g. users won't complete their tasks, we will repeat competitors' mistakes, we won't meet users' expectations)_
 
-> {konsekwencje braku działania}
+> {consequences of doing nothing}
 
-**W jaki sposób projekt/zadanie polepszy doświadczenia użytkownika lub oszczędzi jego czas?**
+**How will the project/task improve the user experience or save the user time?**
 
-> {oczekiwana poprawa UX}
+> {expected UX improvement}
 
-**Czy próbowaliście wprowadzać takie zmiany wcześniej?**
+**Have you tried making changes like this before?**
 
-> {historia prób, wnioski}
-
----
-
-## 3. Problem i potrzeby użytkownika - wstępnie
-
-_PO opisuje problem na poziomie ogólnym, z perspektywy BO i zgłoszeń. Szczegóły uzupełnia BA w Problem Space._
-
-**Jaki jest główny problem użytkownika?**
-_(Czy użytkownicy zgłaszali coś wcześniej? Dane z obsługi klienta, insighty)_
-
-> {opis problemu - wstępny, z perspektywy PO/BO}
-
-**Jak teraz użytkownik radzi sobie z tym problemem?**
-_(Czy ma swoje obejścia, sposoby na usprawnienie pracy?)_
-
-> {opis sposobu na workaround problemu}
+> {history of attempts, lessons learned}
 
 ---
 
-## 4. Interesariusze (RACI)
+## 3. User problem and needs - initial
 
-**Kto jest odpowiedzialny za inicjatywę?**
-_(Kto powinien uczestniczyć w kick-offie i konsultacjach? Kto podejmuje decyzje produktowe, projektowe, prawne?)_
+_The PO describes the problem at a general level, from the BO's point of view and from reported issues. The BA fills in the details in Problem Space._
 
-| Osoba | Rola w projekcie | RACI |
+**What is the user's main problem?**
+_(Have users reported anything before? Customer service data, insights)_
+
+> {problem description - initial, from the PO/BO point of view}
+
+**How does the user cope with this problem today?**
+_(Do they have their own workarounds, ways to make the work easier?)_
+
+> {description of the workaround}
+
+---
+
+## 4. Stakeholders (RACI)
+
+**Who is responsible for the initiative?**
+_(Who should take part in the kick-off and consultations? Who makes product, design and legal decisions?)_
+
+| Person | Project role | RACI |
 |-------|-----------------|------|
-| {imię} | {rola} | Odpowiedzialny |
-| {imię} | {rola} | Realizujący |
-| {imię} | {rola} | Konsultowany |
-| {imię} | {rola} | Informowany |
+| {name} | {role} | Accountable |
+| {name} | {role} | Responsible |
+| {name} | {role} | Consulted |
+| {name} | {role} | Informed |
 
 ---
 
-## 5. Wyróżniki - wstępne
+## 5. Differentiators - initial
 
-_Wyróżniki to elementy nowego systemu, które usprawniają pracę techników serwisowych i dyspozytorów, oszczędzając czas. Efektywność mierzymy w minutach zaoszczędzonych miesięcznie w skali jednego technika. PO wypełnia wstępnie na Gate 1, BA i PD pogłębiają w Problem Space, finalizacja w Solution Space._
+_Differentiators are the parts of the new system that make service technicians' and dispatchers' work easier and save them time. We measure efficiency in minutes saved per month per technician. The PO fills it in roughly at Gate 1, the BA and PD deepen it in Problem Space, and it is finalised in Solution Space._
 
-**Szacowane oszczędności per element:**
+**Estimated savings per item:**
 
-| Wyróżnik (element usprawnienia) | Oszczędność min/mies./technika | Źródło danych analitycznych | Etap wyceny |
+| Differentiator (improvement item) | Saving min/month/technician | Analytics data source | Estimate stage |
 |---------------------------------|-----------------------------|----------------------------|-------------|
-| {nazwa elementu} | {X min} | {np. analityka, badania, obserwacja} | 🟢 Gate 1 |
-| {nazwa elementu} | {X min} | {źródło} | 🟢 Gate 1 |
+| {item name} | {X min} | {e.g. analytics, research, observation} | 🟢 Gate 1 |
+| {item name} | {X min} | {source} | 🟢 Gate 1 |
 
-**Sumaryczna oszczędność dla inicjatywy:** {suma min/mies./technika}
+**Total saving for the initiative:** {total min/month/technician}
 
-> ⚠️ Tabela jest aktualizowana iteracyjnie:
-> - 🟢 Gate 1 - PO podaje wstępne szacunki na podstawie ustaleń z BO
-> - 🔵 Problem Space - BA/PD weryfikują i doprecyzowują na podstawie analizy as-is i badań
-> - 🟣 Solution Space - finalizacja po wypracowaniu rozwiązań, weryfikacja z BO
-
----
-
-## 6. Plan działania - wstępny
-
-_PO z BA, PD, SA ustalają wstępny harmonogram na spotkaniu otwierającym._
-
-**Czy jest ustalony plan/etapy pracy?**
-
-> {plan / harmonogram - wstępny}
-
-**Ile mam czasu?**
-
-> {deadline, ramy czasowe}
-
-**Jakie są ograniczenia/ryzyka w realizacji planu?**
-_(np. nie mamy czasu na testy użyteczności, ograniczenia biznesowe, technologiczne)_
-
-> {lista ograniczeń}
+> ⚠️ The table is updated iteratively:
+> - 🟢 Gate 1 - the PO gives initial estimates based on what was agreed with the BO
+> - 🔵 Problem Space - the BA/PD verify and refine them based on the as-is analysis and research
+> - 🟣 Solution Space - finalised once the solutions are worked out, verified with the BO
 
 ---
+
+## 6. Action plan - initial
+
+_The PO, BA, PD and SA agree an initial schedule at the kick-off meeting._
+
+**Is there an agreed plan/stages of work?**
+
+> {plan / schedule - initial}
+
+**How much time do I have?**
+
+> {deadline, time frame}
+
+**What are the constraints/risks in delivering the plan?**
+_(e.g. no time for usability testing, business or technology constraints)_
+
+> {list of constraints}
+
+---
 ---
 
-# 🔵 PROBLEM SPACE - pogłębienie i douzupełnienie (BA, PD)
+# 🔵 PROBLEM SPACE - deepening and filling in (BA, PD)
 
-_Po Gate 1 rozpoczyna się praca analityczna. BA i PD **wracają do sekcji 1–6 wyżej** i pogłębiają je o wnioski z analizy as-is i badań (np. doprecyzowują User Story, uzupełniają kontekst, weryfikują cel, doprecyzowują wyróżniki). Poniżej - dodatkowe sekcje, które powstają dopiero na tym etapie._
+_After Gate 1 the analysis work begins. The BA and PD **go back to sections 1–6 above** and deepen them with findings from the as-is analysis and research (e.g. refine the User Story, fill in the context, verify the goal, refine the differentiators). Below - extra sections that only come into being at this stage._
 
-## 7. Problem i potrzeby użytkownika - pogłębione
+## 7. User problem and needs - in depth
 
-_BA uzupełnia na podstawie analizy as-is. PD uzupełnia po badaniach. Pogłębia wstępny opis problemu z sekcji 3._
+_The BA fills this in from the as-is analysis. The PD fills it in after research. It deepens the initial problem description from section 3._
 
-**Na jakim etapie ścieżki użytkownika występuje problem?**
+**At which stage of the user journey does the problem occur?**
 
-> {etap / touchpoint}
+> {stage / touchpoint}
 
-**Jak wygląda obecny system/widok?**
+**What does the current system/view look like?**
 
-> {opis obecnego stanu, linki do screenshotów}
+> {description of the current state, links to screenshots}
 
-**Jakie są potrzeby użytkownika?**
+**What are the user's needs?**
 
-> {lista potrzeb - na podstawie analizy i/lub badań}
+> {list of needs - based on analysis and/or research}
 
-**Czy użytkownicy zgłaszają pomysły na usprawnienia? Jakie?**
+**Do users suggest improvements? Which ones?**
 
-> {lista pomysłów usprawnień - na podstawie analizy i/lub badań}
+> {list of improvement ideas - based on analysis and/or research}
 
-### Obecny widok
+### Current view
 
-_(Screenshoty / linki do aktualnego stanu UI)_
+_(Screenshots / links to the current state of the UI)_
 
-| Screen | Link / opis |
+| Screen | Link / description |
 |--------|-------------|
-| {nazwa} | {link} |
+| {name} | {link} |
 
-### Potrzeby (notatki)
+### Needs (notes)
 
-- {potrzeba 1}
-- {potrzeba 2}
-- {potrzeba 3}
+- {need 1}
+- {need 2}
+- {need 3}
 
 ---
 
-## 8. Dane i metryki
+## 8. Data and metrics
 
-_BA uzupełnia danymi z analizy as-is. PD uzupełnia wynikami badań._
+_The BA fills this in with data from the as-is analysis. The PD fills it in with research results._
 
-**Czy dany problem jest poparty danymi?**
-_(Analityka, dane ilościowe, zdarzenia biznesowe, zgłoszenia z obsługi klienta / sprzedaży, komentarze, desk research i konkurencja, nagrania użytkownika, raporty z badań)_
+**Is the problem backed by data?**
+_(Analytics, quantitative data, business events, customer service / sales reports, comments, desk research and competitors, user recordings, research reports)_
 
-> {dostępne dane i źródła}
+> {available data and sources}
 
-**Jeśli nie mamy danych, to jakie są możliwości analizy ilościowej/jakościowej?**
+**If we have no data, what are the options for quantitative/qualitative analysis?**
 
-> {propozycje pozyskania danych}
+> {proposals for obtaining data}
 
-**Jakie dane jeszcze musimy zdobyć? Kto je dostarczy i ile to potrwa?**
+**What data do we still need? Who will provide it and how long will it take?**
 
-| Dane do pozyskania | Kto dostarczy | Termin |
+| Data to obtain | Provided by | Due |
 |--------------------|---------------|--------|
-| {dane} | {osoba/zespół} | {kiedy} |
+| {data} | {person/team} | {when} |
 
-**Jak sprawdzimy, czy nasze rozwiązanie działa?** _(KPI + Metryki)_
+**How will we check that our solution works?** _(KPIs + Metrics)_
 
-| KPI / Metryka | Obecna wartość | Cel |
+| KPI / Metric | Current value | Target |
 |---------------|----------------|-----|
-| {metryka} | {baseline} | {target} |
+| {metric} | {baseline} | {target} |
 
 ---
 
-## 9. Plan działania - zaktualizowany
+## 9. Action plan - updated
 
-_Aktualizowany po ustaleniu scope i zakończeniu badań. Zastępuje wstępny plan z Gate 1._
+_Updated once the scope is set and research is finished. Replaces the initial plan from Gate 1._
 
-**W którym momencie przetestujemy?**
+**At what point will we test?**
 
-> {planowany moment walidacji}
+> {planned validation point}
 
 ---
 ---
 
-# 🟣 SOLUTION SPACE - weryfikacja i finalizacja (BA, PD, SA)
+# 🟣 SOLUTION SPACE - verification and finalisation (BA, PD, SA)
 
-_Na etapie Solution Space, po wypracowaniu wymagań i makiet, wracamy do wyróżników (sekcja 5) i finalizujemy je._
+_In Solution Space, once the requirements and mockups are worked out, we go back to the differentiators (section 5) and finalise them._
 
-## 10. Wyróżniki - finalne
+## 10. Differentiators - final
 
-_Po akceptacji wymagań i makiet przez PO i BO - finalna tabela wyróżników z zweryfikowanymi danymi._
+_After the PO and BO accept the requirements and mockups - the final differentiators table with verified data._
 
-| Wyróżnik (element usprawnienia) | Oszczędność min/mies./technika | Źródło danych | Status weryfikacji |
+| Differentiator (improvement item) | Saving min/month/technician | Data source | Verification status |
 |---------------------------------|-----------------------------|---------------|--------------------|
-| {nazwa elementu} | {X min} | {źródło} | ✅ Zweryfikowany / ⏳ Do weryfikacji |
+| {item name} | {X min} | {source} | ✅ Verified / ⏳ To verify |
 
-**Sumaryczna oszczędność dla inicjatywy:** {suma min/mies./technika}
+**Total saving for the initiative:** {total min/month/technician}
 
-**Zmiany vs Gate 1 / Problem Space:**
+**Changes vs Gate 1 / Problem Space:**
 
-> {opis co się zmieniło w szacunkach i dlaczego}
+> {what changed in the estimates and why}

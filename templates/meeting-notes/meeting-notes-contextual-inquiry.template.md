@@ -1,214 +1,214 @@
 ---
-title: "Wizyta badawcza: {Temat}"
+title: "Field visit: {Topic}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Wizyta badawcza / obserwacja w miejscu pracy (Meeting Notes)
+# Template: Field visit / workplace observation (Meeting Notes)
 
-> **Przeznaczenie tego template'u (czytaj uważnie zanim wybierzesz):**
-> - Sesja typu **contextual inquiry / shadowing / wizyta badawcza** — badacz jedzie do użytkownika i obserwuje, jak ten realnie wykonuje proces w swoim środowisku pracy (oddział, biuro, magazyn części, u klienta).
-> - Hybryda **obserwacji + wywiadu** — najpierw patrzymy „co naprawdę robi", potem dopytujemy. Cel: zobaczyć **rzeczywiste obejścia, własne reguły, momenty frustracji**, których nie usłyszysz w rozmowie zdalnej.
-> - Wyjście: surowy materiał obserwacyjny + cytaty + hipotezy badacza. Dane wejściowe do user story, briefów UX, decyzji produktowych.
+> **What this template is for (read carefully before you choose it):**
+> - A **contextual inquiry / shadowing / field visit** session — the researcher goes to the user and observes how they actually carry out the process in their own work environment (branch, office, parts warehouse, at the customer's site).
+> - A hybrid of **observation + interview** — first we watch "what they really do", then we ask follow-up questions. Goal: to see the **real workarounds, personal rules and moments of frustration** you won't hear about in a remote conversation.
+> - Output: raw observational material + quotes + the researcher's hypotheses. Input for user stories, UX briefs and product decisions.
 >
-> **Kiedy NIE używać:**
-> - jeśli to był wywiad bez obserwacji procesu (zdalna rozmowa, „jak Ci się pracuje?") → użyj `meeting-notes-discovery-interview.template.md`
-> - jeśli to był wywiad ewaluacyjny o istniejącym produkcie („jak korzystasz z aplikacji X") → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli to był warsztat mapowania procesu z kilkoma uczestnikami → użyj `meeting-notes-as-is-to-be.template.md`
-> - jeśli to był status / sync → użyj `meeting-notes-status-update.template.md`
-> - jeśli celem było rozstrzygnięcie decyzji → użyj `meeting-notes-decision.template.md`
+> **When NOT to use:**
+> - if it was an interview without observing the process (remote conversation, "how is work going for you?") → use `meeting-notes-discovery-interview.template.md`
+> - if it was an evaluation interview about an existing product ("how do you use app X") → use `meeting-notes-product-feedback-interview.template.md`
+> - if it was a process-mapping workshop with several participants → use `meeting-notes-as-is-to-be.template.md`
+> - if it was a status update / sync → use `meeting-notes-status-update.template.md`
+> - if the goal was to settle a decision → use `meeting-notes-decision.template.md`
 >
-> **Jak używać:**
-> - **Oddziel obserwację od interpretacji** — w sekcji „Obserwacja procesu" zapisuj fakty (co kliknął, co powiedział, w jakiej kolejności). Hipotezy i wnioski idą do osobnej sekcji na końcu.
-> - **Cytaty dosłowne** — każdy mocniejszy moment werbalny zapisuj cytatem z imieniem rozmówcy.
-> - **Notuj własne reguły i obejścia** — to najcenniejszy materiał z wizyty (karteczka obok komputera, własna kolejność klikania, korzystanie z innego systemu „bo tu się nie da").
-> - **Notuj emocje i postawę** — ton głosu, frustracje, rutyna, pewność. To kontekst, którego brak w zdalnym wywiadzie.
-> - **Konwertuj relatywne daty na bezwzględne** (np. „w styczniu" → „styczeń 2026").
-> - Frontmatter YAML wg konwencji folderu (`type: field-visit` / `site-visit`, lokalizacja, segment, role, duration_min, tags, summary).
-> - Plik nazywaj: `{YYYY-MM-DD}-{typ-wizyty-kebab}-{identyfikator-miejsca}.md` (np. `2026-04-07-field-visit-br-014.md`).
+> **How to use:**
+> - **Separate observation from interpretation** — in the "Process observation" section record facts (what they clicked, what they said, in what order). Hypotheses and conclusions go in a separate section at the end.
+> - **Verbatim quotes** — record every strong verbal moment as a quote with the interviewee's name.
+> - **Note personal rules and workarounds** — this is the most valuable material from a visit (a sticky note next to the computer, their own clicking order, using another system "because you can't do it here").
+> - **Note emotions and attitude** — tone of voice, frustrations, routine, confidence. This is context that a remote interview lacks.
+> - **Convert relative dates to absolute ones** (e.g. "in January" → "January 2026").
+> - YAML frontmatter per the folder's convention (`type: field-visit` / `site-visit`, location, segment, role, duration_min, tags, summary).
+> - Name the file: `{YYYY-MM-DD}-{visit-type-kebab}-{site-id}.md` (e.g. `2026-04-07-field-visit-br-014.md`).
 
 ---
 
 ```yaml
 ---
 type: field-visit
-initiative: {nazwa-inicjatywy-kebab}
+initiative: {initiative-name-kebab}
 date: {YYYY-MM-DD}
-{identyfikator-miejsca}: {np. OD-014}
-{lokalizacja}: {np. site_city: Miasto-A}
-{segment / typ}: {np. site_segment: obiekt przemysłowy}
-role: {technik / dyspozytor / klient / kierownik / inna}
-interviewee: {Imię Nazwisko}
-researcher: {Imię Nazwisko badacza}
+{site-id}: {e.g. OD-014}
+{location}: {e.g. site_city: City-A}
+{segment / type}: {e.g. site_segment: industrial facility}
+role: {technician / dispatcher / customer / manager / other}
+interviewee: {First Last}
+researcher: {Researcher's First Last}
 duration_min: {NN}
 tags: [{tag1}, {tag2}, {tag3}]
-summary: "{2–4 zdania — kto, kontekst miejsca, najmocniejszy insight, główne pain pointy}"
+summary: "{2–4 sentences — who, the site context, the strongest insight, the main pain points}"
 ---
 ```
 
-# Wizyta badawcza — {Temat / Obszar}
-## {Identyfikator miejsca} | {YYYY-MM-DD}
+# Field visit — {Topic / Area}
+## {Site ID} | {YYYY-MM-DD}
 
-**Badacz:** {Imię Nazwisko}
-**Czas trwania:** ok. {NN} min
-
----
-
-## Karta miejsca / oddziału
-
-_{Opcjonalne — wypełnij, jeśli wizyta dotyczyła konkretnego oddziału / klienta / miejsca zlecenia z bazy referencyjnej. Wklej kluczowe pola z bazy, żeby raport stał się samowystarczalny (czytelnik nie musi szukać kontekstu w innym systemie).}_
-
-### Tożsamość i status
-
-| Pole | Wartość |
-|------|---------|
-| Nr / ID | `{identyfikator}` |
-| Status | `{OTWARTY / inny}` |
-| {Właściciel / rozmówca} | `{Imię Nazwisko}` |
-| Kontakt | `{telefon / e-mail}` |
-
-### Lokalizacja i charakterystyka
-
-| Pole | Wartość |
-|------|---------|
-| Miejscowość | `{…}` |
-| Adres | `{…}` |
-| Województwo / region | `{…}` |
-| Powierzchnia / wielkość | `{…}` |
-| Segment / typ placówki | `{…}` |
-
-### Struktura opieki / kontakty pośrednie
-
-| Pole | Wartość |
-|------|---------|
-| {Manager / opiekun} | `{Imię Nazwisko}` |
-| {Partner / przełożony} | `{Imię Nazwisko}` |
-| {Dyrektor / region} | `{Imię Nazwisko}` |
+**Researcher:** {First Last}
+**Duration:** approx. {NN} min
 
 ---
 
-## 1. Profil rozmówcy
+## Site / branch profile
 
-| Pytanie | Odpowiedź |
+_{Optional — fill in if the visit concerned a specific branch / customer / job site from the reference database. Paste the key fields from the database so the report becomes self-contained (the reader doesn't have to look up context in another system).}_
+
+### Identity and status
+
+| Field | Value |
+|------|---------|
+| No. / ID | `{identifier}` |
+| Status | `{OPEN / other}` |
+| {Owner / interviewee} | `{First Last}` |
+| Contact | `{phone / email}` |
+
+### Location and characteristics
+
+| Field | Value |
+|------|---------|
+| Town / city | `{…}` |
+| Address | `{…}` |
+| Province / region | `{…}` |
+| Floor area / size | `{…}` |
+| Segment / site type | `{…}` |
+
+### Support structure / indirect contacts
+
+| Field | Value |
+|------|---------|
+| {Manager / account owner} | `{First Last}` |
+| {Partner / supervisor} | `{First Last}` |
+| {Director / region} | `{First Last}` |
+
+---
+
+## 1. Interviewee profile
+
+| Question | Answer |
 |---------|-----------|
-| Staż w roli / w organizacji | {…} |
-| Liczba miejsc / oddziałów pod opieką | {…} |
-| {Kontekst operacyjny — np. wielkość magazynu, struktura zespołu} | {…} |
-| {Rytm pracy — np. godziny przyjmowania zleceń, godziny wizyt u klientów} | {…} |
-| Skąd wykonuje obserwowany proces (dom / biuro / oddział / terenowo) | {…} |
-| Sposób przygotowania do procesu (notatnik / Excel / telefon służbowy / WhatsApp / inne systemy) | {…} |
+| Time in role / in the organisation | {…} |
+| Number of sites / branches they look after | {…} |
+| {Operational context — e.g. warehouse size, team structure} | {…} |
+| {Work rhythm — e.g. hours for taking work orders, hours for customer visits} | {…} |
+| Where they carry out the observed process (home / office / branch / in the field) | {…} |
+| How they prepare for the process (notebook / Excel / work phone / WhatsApp / other systems) | {…} |
 
 ---
 
-## 2. Kontekst przed otwarciem {narzędzia / aplikacji}
+## 2. Context before opening {the tool / app}
 
-> _Co rozmówca robi zanim wejdzie do narzędzia? Notatnik, Excel, zdjęcia, WhatsApp z zespołem, telefon służbowy, inne systemy?_
+> _What does the interviewee do before going into the tool? Notebook, Excel, photos, WhatsApp with the team, work phone, other systems?_
 
-{3–6 zdań opisu rzeczywistego setupu. Co miał otwarte, co przygotowane na papierze, na czym oparł się przed wejściem do narzędzia. To pokazuje **co narzędzie pomija** — bo skoro użytkownik robi to gdzie indziej, znaczy że nie ufa lub nie umie tego zrobić w narzędziu.}
+{3–6 sentences describing the real setup. What they had open, what they had prepared on paper, what they relied on before going into the tool. This shows **what the tool leaves out** — because if the user does it somewhere else, it means they don't trust the tool or don't know how to do it there.}
 
 ---
 
-## 3. Obserwacja procesu {nazwa procesu}
+## 3. Observation of the {process name} process
 
-### Kolejność działań
+### Sequence of actions
 
-{Opisz krok po kroku to, co badacz **widział** — nie to, co rozmówca powiedział że robi. Konkretnie: które menu kliknął, w jakiej kolejności przewijał, gdzie zatrzymał się dłużej. Numerowana lista lub akapit, jak czytelniej.}
+{Describe step by step what the researcher **saw** — not what the interviewee said they do. Concretely: which menu they clicked, in what order they scrolled, where they paused longer. A numbered list or a paragraph, whichever reads better.}
 
-### {Główna interakcja — np. zmiany ilości / wprowadzanie danych}
+### {Main interaction — e.g. quantity changes / data entry}
 
-| Typ {zmiany / akcji} | {Kategoria / obszar} | Powód / komentarz rozmówcy |
+| Type of {change / action} | {Category / area} | Reason / interviewee's comment |
 |----------------------|----------------------|----------------------------|
-| {np. korekta stanu} | {…} | „{dosłowny cytat}" |
-| {np. zmniejszenie} | {…} | {…} |
-| {np. zwiększenie} | {…} | {…} |
+| {e.g. stock correction} | {…} | "{verbatim quote}" |
+| {e.g. decrease} | {…} | {…} |
+| {e.g. increase} | {…} | {…} |
 
-> _{Pytanie pomocnicze, jeśli pasuje — np. „Czy zmiany są masowe (cała kategoria) czy indywidualne (konkretne pozycje)?"}_
+> _{Helper question, if it fits — e.g. "Are the changes bulk (a whole category) or individual (specific line items)?"}_
 
-### Wchodzenie w szczegóły / inne ekrany
+### Drilling into details / other screens
 
-{Ile razy w trakcie procesu rozmówca wchodził w szczegóły? Na co patrzył? Czy był wzorzec (rutyna) czy weryfikacja problematycznych przypadków?}
+{How many times during the process did the interviewee drill into details? What did they look at? Was there a pattern (routine) or was it checking problematic cases?}
 
-### Wyszukiwanie / dodawanie spoza domyślnego widoku
+### Searching / adding outside the default view
 
-{Czy korzystał z wyszukiwarki? Jak — po nazwie, kodzie, kategorii? Jakie pozycje dodawał spoza rekomendacji systemu?}
+{Did they use search? How — by name, code, category? Which items did they add outside the system's recommendations?}
 
-### Korzystanie z innych źródeł podczas procesu
+### Using other sources during the process
 
-{Czy otwierał inne systemy / dokumenty / aplikacje w trakcie? Jakie i po co? To kluczowy sygnał: każde wyjście „poza system" to potencjalna luka funkcjonalna.}
+{Did they open other systems / documents / apps along the way? Which ones and why? This is a key signal: every step "outside the system" is a potential functional gap.}
 
-### Komentarze werbalne rozmówcy
+### Interviewee's verbal comments
 
-{Krótkie cytaty wypowiedziane spontanicznie podczas obserwacji. Bez interpretacji.}
+{Short quotes said spontaneously during the observation. No interpretation.}
 
-- „{dosłowny cytat}"
-- „{dosłowny cytat}"
-- „{dosłowny cytat}"
+- "{verbatim quote}"
+- "{verbatim quote}"
+- "{verbatim quote}"
 
-### Emocje i postawa
+### Emotions and attitude
 
-{1–3 zdania — jak się zachowywał. Spokojnie i rutynowo? Z frustracją? Z entuzjazmem? Czy widać było momenty wahania, sprawdzania, zatrzymania?}
+{1–3 sentences — how they behaved. Calm and routine? Frustrated? Enthusiastic? Were there visible moments of hesitation, checking, stopping?}
 
-### Własne reguły i obejścia
+### Personal rules and workarounds
 
-_{Bardzo wartościowa sekcja — to, co rozmówca wypracował sam, bo system go nie wspiera. Każda taka reguła = sygnał o brakującej funkcji lub o tym, że domyślny flow nie pasuje.}_
+_{A very valuable section — what the interviewee worked out on their own because the system doesn't support them. Each such rule = a signal of a missing feature or of the default flow not fitting.}_
 
-- {Reguła / obejście 1 — np. „Zawsze zatwierdza korekty stanu busa bezpośrednio przed zamówieniem części"}
-- {Reguła / obejście 2 — np. „Przegląda formularz od dołu do góry"}
-- {Reguła / obejście 3}
+- {Rule / workaround 1 — e.g. "Always approves van stock corrections right before ordering parts"}
+- {Rule / workaround 2 — e.g. "Goes through the form from the bottom up"}
+- {Rule / workaround 3}
 
 ---
 
-## 4. Pytania dodatkowe po obserwacji
+## 4. Follow-up questions after the observation
 
-_{Po obserwacji badacz dopytuje o konkretne tematy — według scenariusza wywiadu. Każdy podtemat jako pod-nagłówek z tabelą pytanie → odpowiedź lub krótki akapit.}_
+_{After the observation the researcher asks about specific topics — following the interview script. Each subtopic as a subheading with a question → answer table or a short paragraph.}_
 
-### {Podtemat 1 — np. Rekomendacje systemu i prognozowanie}
+### {Subtopic 1 — e.g. System recommendations and forecasting}
 
-| Pytanie | Odpowiedź |
+| Question | Answer |
 |---------|-----------|
-| {pytanie} | {odpowiedź — krótko, z cytatem jeśli pomocny} |
-| {pytanie} | {…} |
-| {pytanie} | {…} |
+| {question} | {answer — briefly, with a quote if helpful} |
+| {question} | {…} |
+| {question} | {…} |
 
-### {Podtemat 2 — np. Formularz / atrybuty}
+### {Subtopic 2 — e.g. Form / attributes}
 
-| Pytanie | Odpowiedź |
+| Question | Answer |
 |---------|-----------|
-| {pytanie} | {…} |
-| {pytanie} | {…} |
+| {question} | {…} |
+| {question} | {…} |
 
-### {Podtemat N — np. Inne kategorie / wątki nie omówione w obserwacji}
+### {Subtopic N — e.g. Other categories / threads not covered in the observation}
 
 {…}
 
 ---
 
-## 5. Hipoteza {konkretna — np. braków części w busie / nadmiarowych zamówień / itp.}
+## 5. Hypothesis: {specific — e.g. missing parts in the van / excess orders / etc.}
 
-_{Opcjonalne — wypełnij, jeśli scenariusz wizyty obejmował weryfikację konkretnej hipotezy badawczej.}_
+_{Optional — fill in if the visit script included testing a specific research hypothesis.}_
 
-> _{Pytanie pomocnicze — np. „Czy zdarza się X? Co mogłoby pomóc?"}_
+> _{Helper question — e.g. "Does X happen? What could help?"}_
 
-{Odpowiedź rozmówcy + obserwacje badacza weryfikujące lub falsyfikujące hipotezę.}
-
----
-
-## 6. Pytanie zamykające
-
-> _Czy jest jeszcze coś, na co powinniśmy zwrócić uwagę?_
-
-{Cokolwiek, co rozmówca chciał dodać poza scenariuszem. Czasem tu pojawia się najmocniejszy insight.}
+{The interviewee's answer + the researcher's observations confirming or refuting the hypothesis.}
 
 ---
 
-## 7. Kluczowe obserwacje i wnioski
+## 6. Closing question
 
-_{Najważniejsze insighty z wizyty — do wykorzystania w projektowaniu. To **interpretacja badacza**, więc tutaj można już wnioskować (osobno od surowej obserwacji powyżej). Każdy punkt: tytuł + akapit z dowodem (cytat / konkretna obserwacja).}_
+> _Is there anything else we should pay attention to?_
 
-1. **{Insight 1 — krótki tytuł, np. „technik ufa proponowanej kolejności zleceń jako punktowi wyjścia, ale ma wyraźną własną logikę korekty"}**
-   {3–5 zdań rozwinięcia. Co konkretnie zaobserwowano, jaki cytat to potwierdza, co z tego wynika dla projektowania.}
+{Anything the interviewee wanted to add outside the script. Sometimes this is where the strongest insight shows up.}
+
+---
+
+## 7. Key observations and conclusions
+
+_{The most important insights from the visit — to use in design. This is **the researcher's interpretation**, so here you can draw conclusions (separately from the raw observation above). Each point: a title + a paragraph with evidence (a quote / a specific observation).}_
+
+1. **{Insight 1 — short title, e.g. "the technician trusts the suggested work-order sequence as a starting point, but has a clear correction logic of their own"}**
+   {3–5 sentences of elaboration. What exactly was observed, which quote confirms it, what it means for design.}
 
 2. **{Insight 2}**
    {…}
@@ -221,27 +221,27 @@ _{Najważniejsze insighty z wizyty — do wykorzystania w projektowaniu. To **in
 
 ---
 
-## 8. Luźne przemyślenia
+## 8. Loose thoughts
 
-_{Nieskategoryzowane obserwacje, intuicje, hipotezy badacza. Materiał do dalszej weryfikacji w kolejnych wizytach lub przez analitykę. Nie wnioski formalne — surowy strumień myśli badacza po wizycie.}_
+_{Uncategorised observations, intuitions and hypotheses of the researcher. Material for further validation in later visits or through analytics. Not formal conclusions — the researcher's raw stream of thought after the visit.}_
 
-- {Przemyślenie 1}
-- {Przemyślenie 2}
-- {Przemyślenie 3}
+- {Thought 1}
+- {Thought 2}
+- {Thought 3}
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- {Nagranie / zdjęcia z wizyty — jeśli były}: [{nazwa pliku}]({link})
-- Transkrypcja (jeśli była): [{nazwa pliku}]({link})
-- Powiązane wizyty / wywiady:
-  - [{inna wizyta z tej samej inicjatywy / segmentu}]({link})
-  - [{wywiad z tą samą personą zdalnie}]({link})
-- Powiązane dokumenty:
+- {Recording / photos from the visit — if any}: [{file name}]({link})
+- Transcript (if any): [{file name}]({link})
+- Related visits / interviews:
+  - [{another visit from the same initiative / segment}]({link})
+  - [{remote interview with the same persona}]({link})
+- Related documents:
   - [{user story / brief / epic}]({link})
-  - [{indeks wizyt — README folderu}]({link})
+  - [{visit index — the folder's README}]({link})
 
 ---
 
-*Raport wygenerowany przez {skill / autor} | {YYYY-MM-DD generowania}*
+*Report generated by {skill / author} | {YYYY-MM-DD generated}*

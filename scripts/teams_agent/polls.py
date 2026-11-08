@@ -25,15 +25,17 @@ import uuid
 # Constants
 # ---------------------------------------------------------------------------
 
+# Free-text traits appended to the system prompt; older Polish values already saved in
+# chat-config.json keep working because the prompt takes them as written.
 _EPITHET_CHOICES = (
-    "zwiezly",
-    "formalny",
-    "analityczny",
-    "humorystyczny",
-    "rzeczowy",
-    "krotki",
-    "szczegolowy",
-    "empatyczny",
+    "concise",
+    "formal",
+    "analytical",
+    "humorous",
+    "matter-of-fact",
+    "brief",
+    "detailed",
+    "empathetic",
 )
 
 _MCP_CHOICES = ("jira", "todos")
@@ -111,7 +113,7 @@ def _choice_set(
     actions = [
         {
             "type": "Action.Submit",
-            "title": "Zatwierdz",
+            "title": "Submit",
             "data": submit_data,
         }
     ]
@@ -144,7 +146,7 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
             _submit_button("opus", {"poll_id": poll_id, "action": "model", "value": "opus"}),
         ]
         card = {
-            **_card("Wybierz model Claude:", [], poll_id),
+            **_card("Choose the Claude model:", [], poll_id),
             "actions": actions,
         }
 
@@ -152,24 +154,24 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
     elif topic_l == "pause":
         actions = [
             _submit_button("30 min", {"poll_id": poll_id, "action": "pause", "value": "30m"}),
-            _submit_button("1 godz", {"poll_id": poll_id, "action": "pause", "value": "1h"}),
-            _submit_button("2 godz", {"poll_id": poll_id, "action": "pause", "value": "2h"}),
-            _submit_button("Anuluj pause", {"poll_id": poll_id, "action": "pause", "value": "cancel"}),
+            _submit_button("1 hour", {"poll_id": poll_id, "action": "pause", "value": "1h"}),
+            _submit_button("2 hours", {"poll_id": poll_id, "action": "pause", "value": "2h"}),
+            _submit_button("Cancel pause", {"poll_id": poll_id, "action": "pause", "value": "cancel"}),
         ]
         card = {
-            **_card("Pauza Boba:", [], poll_id),
+            **_card("Pause Bob:", [], poll_id),
             "actions": actions,
         }
 
     # --- Global: onoff ---
     elif topic_l == "onoff":
         actions = [
-            _submit_button("Wylacz (off)", {"poll_id": poll_id, "action": "onoff", "value": "off"}),
-            _submit_button("Wlacz (on)", {"poll_id": poll_id, "action": "onoff", "value": "on"}),
+            _submit_button("Turn off (off)", {"poll_id": poll_id, "action": "onoff", "value": "off"}),
+            _submit_button("Turn on (on)", {"poll_id": poll_id, "action": "onoff", "value": "on"}),
             _submit_button("Status", {"poll_id": poll_id, "action": "onoff", "value": "status"}),
         ]
         card = {
-            **_card("Wlacz/wylacz Boba:", [], poll_id),
+            **_card("Turn Bob on/off:", [], poll_id),
             "actions": actions,
         }
 
@@ -187,7 +189,7 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
                 break
         if sub is None:
             raise ValueError(
-                f"Nieznany sub-topic: {rest!r}. Dostepne: {', '.join(_sub_topics)}"
+                f"Unknown sub-topic: {rest!r}. Available: {', '.join(_sub_topics)}"
             )
         # Reconstruct original-case chat name from chat_config keys (case-insensitive match).
         chat_name = chat_name_raw
@@ -199,16 +201,16 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
         if sub == "onoff":
             actions = [
                 _submit_button(
-                    "Wlacz",
+                    "Turn on",
                     {"poll_id": poll_id, "action": "chat_onoff", "chat": chat_name, "value": "on"},
                 ),
                 _submit_button(
-                    "Wylacz",
+                    "Turn off",
                     {"poll_id": poll_id, "action": "chat_onoff", "chat": chat_name, "value": "off"},
                 ),
             ]
             card = {
-                **_card(f"Wlacz/wylacz chat: {chat_name}", [], poll_id),
+                **_card(f"Turn chat on/off: {chat_name}", [], poll_id),
                 "actions": actions,
             }
 
@@ -225,7 +227,7 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
                 extra_data={"chat": chat_name},
             )
             card = {
-                **_card(f"Grupy MCP dla chatu: {chat_name}", body_items, poll_id),
+                **_card(f"MCP groups for chat: {chat_name}", body_items, poll_id),
                 "actions": actions,
             }
 
@@ -244,12 +246,12 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
                     {"poll_id": poll_id, "action": "chat_caller", "chat": chat_name, "value": "auto"},
                 ),
                 _submit_button(
-                    "clear (fallback globalny)",
+                    "clear (fall back to global)",
                     {"poll_id": poll_id, "action": "chat_caller", "chat": chat_name, "value": "clear"},
                 ),
             ]
             card = {
-                **_card(f"Caller mode dla chatu: {chat_name}", [], poll_id),
+                **_card(f"Caller mode for chat: {chat_name}", [], poll_id),
                 "actions": actions,
             }
 
@@ -259,7 +261,7 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
                 default_values = []
             else:
                 default_values = list(current_ep)
-            choices = [("Wyczyszczone (brak traitow)", "__none__")]
+            choices = [("Cleared (no traits)", "__none__")]
             choices += [(e, e) for e in _EPITHET_CHOICES]
             body_items, actions = _choice_set(
                 choices, "values", poll_id, "chat_epithets",
@@ -267,16 +269,16 @@ def build_poll_card(topic: str, chat_config: dict) -> tuple[dict, str]:
                 extra_data={"chat": chat_name},
             )
             card = {
-                **_card(f"Personality epithets dla chatu: {chat_name}", body_items, poll_id),
+                **_card(f"Personality epithets for chat: {chat_name}", body_items, poll_id),
                 "actions": actions,
             }
 
         else:
-            raise ValueError(f"Nieznany sub-topic: {sub!r}")
+            raise ValueError(f"Unknown sub-topic: {sub!r}")
 
     else:
         raise ValueError(
-            f"Nieznany temat: {topic!r}. Dostepne: model, pause, onoff, "
+            f"Unknown topic: {topic!r}. Available: model, pause, onoff, "
             f"chat <name> onoff|mcp|knowledge|caller|epithets"
         )
 
@@ -363,7 +365,7 @@ def apply_vote(
         value = vote.get("value", "")
         model_id = _cli.ai.MODEL_ALIASES.get(value, value)
         args.model = model_id
-        return f"Model zmieniony na: {model_id}."
+        return f"Model changed to: {model_id}."
 
     # --- pause ---
     elif action == "pause":
@@ -372,31 +374,31 @@ def apply_vote(
             ctrl = _cli._load_control()
             ctrl["paused_until"] = None
             _cli._save_control(ctrl)
-            return "Pauza anulowana."
+            return "Pause cancelled."
         elif value.endswith("h"):
             minutes = int(value[:-1]) * 60
         elif value.endswith("m"):
             minutes = int(value[:-1])
         else:
-            return f"Nieznana wartosc pause: {value!r}."
+            return f"Unknown pause value: {value!r}."
         from datetime import UTC, datetime, timedelta
         until_dt = datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=minutes)
         _cli._save_control({"paused_until": until_dt.isoformat(), "disabled": False})
-        return f"Pauza ustawiona do {until_dt.strftime('%H:%M')} UTC ({minutes} min)."
+        return f"Paused until {until_dt.strftime('%H:%M')} UTC ({minutes} min)."
 
     # --- onoff ---
     elif action == "onoff":
         value = vote.get("value", "")
         if value == "off":
             _cli._save_control({"disabled": True, "paused_until": None})
-            return "Bob wylaczony (off)."
+            return "Bob turned off (off)."
         elif value == "on":
             _cli._save_control({"disabled": False, "paused_until": None})
-            return "Bob wlaczony (on)."
+            return "Bob turned on (on)."
         elif value == "status":
             paused, reason = _cli._is_paused()
-            return f"Status: {'pauza — ' + reason if paused else 'aktywny'}."
-        return f"Nieznana wartosc onoff: {value!r}."
+            return f"Status: {'paused — ' + reason if paused else 'active'}."
+        return f"Unknown onoff value: {value!r}."
 
     # --- chat onoff ---
     elif action == "chat_onoff":
@@ -404,11 +406,11 @@ def apply_vote(
         value = vote.get("value", "")
         if value == "off":
             _cli.disable_chat(chat_name)
-            return f"Chat '{chat_name}' wylaczony."
+            return f"Chat '{chat_name}' turned off."
         elif value == "on":
             _cli.enable_chat(chat_name)
-            return f"Chat '{chat_name}' wlaczony."
-        return f"Nieznana wartosc chat_onoff: {value!r}."
+            return f"Chat '{chat_name}' turned on."
+        return f"Unknown chat_onoff value: {value!r}."
 
     # --- chat mcp ---
     elif action == "chat_mcp":
@@ -416,8 +418,8 @@ def apply_vote(
         values = vote.get("values", [])
         mcp_val = None if not values else list(values)
         _cli._apply_chat_config_change(chat_name, "mcp", mcp_val, chat_config)
-        ack_val = "wszystkie" if mcp_val is None else (", ".join(mcp_val) or "brak")
-        return f"MCP dla '{chat_name}' zmienione na: {ack_val}."
+        ack_val = "all" if mcp_val is None else (", ".join(mcp_val) or "none")
+        return f"MCP for '{chat_name}' changed to: {ack_val}."
 
     # --- chat caller ---
     elif action == "chat_caller":
@@ -425,8 +427,8 @@ def apply_vote(
         value = vote.get("value", "")
         caller_val = None if value == "clear" else value
         _cli._apply_chat_config_change(chat_name, "caller", caller_val, chat_config)
-        ack_val = "usuniety (fallback do globalnego)" if caller_val is None else caller_val
-        return f"Caller dla '{chat_name}' zmieniony na: {ack_val}."
+        ack_val = "removed (falls back to global)" if caller_val is None else caller_val
+        return f"Caller for '{chat_name}' changed to: {ack_val}."
 
     # --- chat epithets ---
     elif action == "chat_epithets":
@@ -437,7 +439,7 @@ def apply_vote(
         else:
             ep_val = [v for v in values if v != "__none__"] or None
         _cli._apply_chat_config_change(chat_name, "epithets", ep_val, chat_config)
-        ack_val = "wyczyszczone (default prompt)" if ep_val is None else ", ".join(ep_val)
-        return f"Epithets dla '{chat_name}' zmienione na: {ack_val}."
+        ack_val = "cleared (default prompt)" if ep_val is None else ", ".join(ep_val)
+        return f"Epithets for '{chat_name}' changed to: {ack_val}."
 
-    return f"Nieznana akcja: {action!r}."
+    return f"Unknown action: {action!r}."

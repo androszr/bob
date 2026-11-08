@@ -13,7 +13,7 @@
 
 ## C4 architecture
 
-The full architecture (L1 + L2 + L3): [`PRD.md` - section 6](../PRD.md#6-architektura-c4).
+The full architecture (L1 + L2 + L3): [`PRD.md` - section 6](../PRD.md#6-c4-architecture).
 
 ### L1 - System Context
 
@@ -62,7 +62,7 @@ flowchart TB
         CLIW["Orchestrator\ncli.py — watch · interactive\nrate-limit · commands"]
         AIM["AI engine\nai.py — builds the prompt\npersona · history · MCP"]
         CLCLI["Claude CLI"]
-        MCPL["MCP Servers\njira · todos · leave (urlopy)\ndatetime · md-to-mp3 · …"]
+        MCPL["MCP Servers\njira · todos · leave\ndatetime · md-to-mp3 · …"]
         KB5["Knowledge base\nMarkdown per chat"]
         HIST5["Chat history\nJSONL per chat"]
         PW5["Playwright Browser\nSSO · keepalive · file uploads"]
@@ -88,7 +88,7 @@ flowchart TB
     CLCLI -- "MCP tools" --> MCPL
     CLIW -- "send the reply" --> MS2
     MCPL --> JT5
-    MCPL -. "knowledge/urlopy/urlopy.json\n(sharepoint_poller)" .-> SP5
+    MCPL -. "knowledge/leave/leave.json\n(sharepoint_poller)" .-> SP5
 ```
 
 ## Layout
@@ -114,7 +114,7 @@ teams-agent/
 │   ├── mcp_admin/         — HTTP MCP daemons (launchd), ports, healthcheck
 │   ├── snowflake_bob/     — reports: predefined queries, demo data, connector, one-file pages
 │   ├── broadcast/         — schedule of reports and standups to channels
-│   └── …                  — todos, urlopy, datetime_bob, md_to_mp3, …
+│   └── …                  — todos, leave, datetime_bob, md_to_mp3, …
 ├── knowledge/             — knowledge base (Markdown) injected per chat
 ├── templates/             — issue and meeting-note templates
 ├── tests/                 — pytest (mock Playwright, REST and the claude CLI)

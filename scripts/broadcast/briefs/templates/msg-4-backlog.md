@@ -1,4 +1,4 @@
-**Co nas czeka w Sprincie {{SPRINT_NR}}:**
+**What awaits us in Sprint {{SPRINT_NR}}:**
 
 {{SPRINT_TASKS_PER_PERSON}}
 
@@ -7,4 +7,4 @@
 
 {{HEALTH_COMMENT}}
 
-Miłego planningu! 🚀
+Have a good planning! 🚀

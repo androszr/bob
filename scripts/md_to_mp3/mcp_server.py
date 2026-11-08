@@ -38,10 +38,21 @@ load_dotenv(_PROJECT_ROOT / ".env", override=False)
 # ---------------------------------------------------------------------------
 
 _CHUNK_MAX_CHARS = 4500
-_VALID_VOICES = ("kobieta", "mezczyzna")
+_VALID_VOICES = ("female", "male")
+# Older Polish voice names, still accepted.
+_VOICE_ALIASES = {
+    "kobieta": "female",
+    "mezczyzna": "male",
+    "mężczyzna": "male",
+}
 _DEFAULT_VOICE_IDS = {
-    "kobieta": "Kore",
-    "mezczyzna": "Charon",
+    "female": "Kore",
+    "male": "Charon",
+}
+# Env override per voice: the English name first, then the older Polish one.
+_VOICE_ENV_KEYS = {
+    "female": ("MD_TO_MP3_VOICE_FEMALE_ID", "MD_TO_MP3_VOICE_KOBIETA_ID"),
+    "male": ("MD_TO_MP3_VOICE_MALE_ID", "MD_TO_MP3_VOICE_MEZCZYZNA_ID"),
 }
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -62,14 +73,16 @@ def _tlog(tag: str, t0: float, extra: str = "") -> None:
 # ---------------------------------------------------------------------------
 
 
+def _normalize_voice(voice: str) -> str:
+    """Canonical voice name ('female'/'male') for a voice or its Polish alias."""
+    v = (voice or "").strip().lower()
+    return _VOICE_ALIASES.get(v, v)
+
+
 def _get_voice_id(voice: str) -> str:
-    """Return Gemini voice ID for the given voice alias, with env override."""
-    env_key_map = {
-        "kobieta": "MD_TO_MP3_VOICE_KOBIETA_ID",
-        "mezczyzna": "MD_TO_MP3_VOICE_MEZCZYZNA_ID",
-    }
-    env_key = env_key_map.get(voice)
-    if env_key:
+    """Return Gemini voice ID for the given voice (or alias), with env override."""
+    voice = _normalize_voice(voice)
+    for env_key in _VOICE_ENV_KEYS.get(voice, ()):
         override = os.getenv(env_key, "").strip()
         if override:
             return override
@@ -291,19 +304,19 @@ def _run_ffmpeg(pcm_bytes: bytes, out_path: Path) -> None:
 @mcp.tool()
 async def convert_md_to_mp3(
     text: str,
-    voice: str = "kobieta",
+    voice: str = "female",
     filename: str = "",
 ) -> list:
-    """Konwertuj tekst Markdown/TXT na plik MP3 przez Gemini TTS i ffmpeg.
+    """Convert Markdown/TXT text to an MP3 file via Gemini TTS and ffmpeg.
 
-    Parametry:
-      text:     Wymagany. Tekst do narracji.
-      voice:    'kobieta' (domyslnie) lub 'mezczyzna'.
-      filename: Opcjonalna nazwa pliku (np. 'raport.mp3').
-                Gdy pusta, generowana automatycznie: YYYY-MM-DD-HHMMSS-md-to-mp3-<voice>.mp3.
+    Parameters:
+      text:     Required. The text to narrate.
+      voice:    'female' (default) or 'male'.
+      filename: Optional file name (e.g. 'report.mp3').
+                When empty, generated automatically: YYYY-MM-DD-HHMMSS-md-to-mp3-<voice>.mp3.
 
-    Zwraca liste: TextContent z metadanymi + EmbeddedResource z plikiem MP3 (base64).
-    Bledy: ValueError (walidacja), RuntimeError (Gemini/ffmpeg).
+    Returns a list: TextContent with metadata + EmbeddedResource with the MP3 file (base64).
+    Errors: ValueError (validation), RuntimeError (Gemini/ffmpeg).
     """
     t0 = time.perf_counter()
     print(
@@ -315,6 +328,7 @@ async def convert_md_to_mp3(
     # --- Validation ---
     if not text or not text.strip():
         raise ValueError("text_required: text parameter is empty")
+    voice = _normalize_voice(voice)
     if voice not in _VALID_VOICES:
         raise ValueError(
             f"invalid_voice: '{voice}' not in {list(_VALID_VOICES)}"
@@ -433,10 +447,10 @@ async def convert_md_to_mp3(
 
 @mcp.tool()
 def list_md_to_mp3_files() -> str:
-    """Lista wygenerowanych plikow MP3 w katalogu wyjsciowym.
+    """List the generated MP3 files in the output folder.
 
-    Zwraca JSON z polem 'files' (lista {name, absolutePath, bytes, mtime})
-    i 'total'. Zwraca pusta liste gdy katalog nie istnieje.
+    Returns JSON with 'files' (a list of {name, absolutePath, bytes, mtime})
+    and 'total'. Returns an empty list when the folder does not exist.
     """
     t0 = time.perf_counter()
     print("[md-to-mp3] list_md_to_mp3_files start", file=sys.stderr, flush=True)

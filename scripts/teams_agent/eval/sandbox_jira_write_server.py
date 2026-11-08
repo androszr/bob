@@ -75,7 +75,7 @@ def _fake(method: str):
             _fake_issues[key] = fields
             return _FakeResponse(201, {"id": "990000", "key": key, "self": f"{url}/{key}"})
         if "/attachments" in url:
-            return _FakeResponse(200, [{"id": "1", "filename": "plik"}])
+            return _FakeResponse(200, [{"id": "1", "filename": "file"}])
         if "/comment" in url:
             text = body.get("body", "") if isinstance(body, dict) else ""
             return _FakeResponse(201, {"id": "1", "body": text})

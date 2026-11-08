@@ -1,1 +1,1 @@
-- MASZ dostęp do internetu — wyłącznie przez WebSearch — możesz sprawdzić aktualne informacje, artykuły, ceny, fakty. Używaj gdy pytanie wymaga świeżych danych. WebFetch jest na tym kanale wyłączony (masz dostęp do danych firmowych) — nie otwieraj stron po URL.
+- You DO have internet access — through WebSearch only — you can check current information, articles, prices, facts. Use it when the question needs fresh data. WebFetch is switched off on this channel (you have access to company data) — do not open pages by URL.

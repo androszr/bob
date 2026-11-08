@@ -1,160 +1,160 @@
 ---
-title: "Retrospektywa: {Nazwa sprintu / etapu}"
+title: "Retrospective: {Sprint / stage name}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Retrospektywa / podsumowanie etapu (Meeting Notes)
+# Template: Retrospective / stage wrap-up (Meeting Notes)
 
-> **Przeznaczenie tego template'u (czytaj uważnie zanim wybierzesz):**
-> - Spotkanie typu **retrospektywa** — patrzymy wstecz na zakończony okres (sprint, kwartał, etap projektu, wdrożenie, incydent) i wyciągamy wnioski.
-> - Typowe formaty pasujące do tego template'u: „start / stop / continue", „what went well / what went wrong / what to change", „4 L's (liked, learned, lacked, longed for)", post-mortem incydentu.
-> - Cel: **lessons learned** + konkretne usprawnienia procesowe na kolejny etap. NIE jest to status („co zrobiliśmy"), tylko refleksja („dlaczego tak wyszło i co z tego wynosimy").
+> **What this template is for (read carefully before you choose it):**
+> - A **retrospective** meeting — we look back on a completed period (sprint, quarter, project stage, rollout, incident) and draw lessons from it.
+> - Typical formats that fit this template: "start / stop / continue", "what went well / what went wrong / what to change", "4 L's (liked, learned, lacked, longed for)", incident post-mortem.
+> - Goal: **lessons learned** + concrete process improvements for the next stage. It is NOT a status update ("what we did") but a reflection ("why it turned out this way and what we take away from it").
 >
-> **Kiedy NIE używać:**
-> - jeśli to był sync raportujący postęp → użyj `meeting-notes-status-update.template.md`
-> - jeśli celem było rozstrzygnięcie konkretnej decyzji → użyj `meeting-notes-decision.template.md`
-> - jeśli to był warsztat odkrywczy z biznesem → użyj `meeting-notes-as-is-to-be.template.md`
-> - jeśli to był wywiad jakościowy z użytkownikiem → użyj `meeting-notes-discovery-interview.template.md`
-> - jeśli to była obserwacja w miejscu pracy / shadowing → użyj `meeting-notes-contextual-inquiry.template.md`
-> - jeśli to był wywiad ewaluacyjny istniejącego produktu → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli to było rozpoczęcie nowego etapu → użyj `meeting-notes-kickoff.template.md`
+> **When NOT to use:**
+> - if it was a sync reporting progress → use `meeting-notes-status-update.template.md`
+> - if the goal was to settle a specific decision → use `meeting-notes-decision.template.md`
+> - if it was a discovery workshop with the business → use `meeting-notes-as-is-to-be.template.md`
+> - if it was a qualitative interview with a user → use `meeting-notes-discovery-interview.template.md`
+> - if it was an observation at the workplace / shadowing → use `meeting-notes-contextual-inquiry.template.md`
+> - if it was an evaluation interview about an existing product → use `meeting-notes-product-feedback-interview.template.md`
+> - if it was the start of a new stage → use `meeting-notes-kickoff.template.md`
 >
-> **Jak używać:**
-> - **Oddziel obserwacje od interpretacji** — najpierw co się stało, potem dlaczego (hipoteza), potem co z tego wynosimy.
-> - Każdy action item musi mieć właściciela i termin — inaczej retrospektywa zamieni się w wentylowanie frustracji bez efektu.
-> - Jeśli retrospektywa była post-mortemem incydentu — wypełnij dodatkowo sekcję „Timeline incydentu".
-> - **Blame-free**: opisuj zdarzenia, nie winy. Imiona OK przy faktach („X wdrożył"), nie OK przy ocenach („X popełnił błąd").
-> - **Konwertuj relatywne daty na bezwzględne**.
-> - Plik nazywaj: `retro-{etap-kebab}-{YYYY-MM-DD}.md` lub `post-mortem-{incydent-kebab}-{YYYY-MM-DD}.md`.
+> **How to use:**
+> - **Separate observations from interpretation** — first what happened, then why (a hypothesis), then what we take away from it.
+> - Every action item must have an owner and a due date — otherwise the retrospective turns into venting frustration with no effect.
+> - If the retrospective was an incident post-mortem — also fill in the "Incident timeline" section.
+> - **Blame-free**: describe events, not fault. Names are OK with facts ("X deployed"), not OK with judgements ("X made a mistake").
+> - **Convert relative dates to absolute ones**.
+> - Name the file: `retro-{stage-kebab}-{YYYY-MM-DD}.md` or `post-mortem-{incident-kebab}-{YYYY-MM-DD}.md`.
 
 ---
 
-# Retrospektywa: {Etap / Sprint / Inicjatywa / Incydent} — {YYYY-MM-DD}
+# Retrospective: {Stage / Sprint / Initiative / Incident} — {YYYY-MM-DD}
 
-**Plik źródłowy:** [{nazwa pliku transkrypcji / notatek}]({link})
-**Data spotkania:** {YYYY-MM-DD}
-**Czas trwania:** ~{NN} min
-**Format retrospektywy:** {start-stop-continue / went-well-wrong-change / 4L / post-mortem / inny}
-**Okres pod lupą:** {od YYYY-MM-DD do YYYY-MM-DD — np. sprint 23, Q1 2026, wdrożenie X}
-**Inicjatywa / Epic / Incydent:** {nazwa, kontekst, link do epica/ticketu jeśli pasuje}
+**Source file:** [{transcript / notes file name}]({link})
+**Meeting date:** {YYYY-MM-DD}
+**Duration:** ~{NN} min
+**Retrospective format:** {start-stop-continue / went-well-wrong-change / 4L / post-mortem / other}
+**Period under review:** {from YYYY-MM-DD to YYYY-MM-DD — e.g. sprint 23, Q1 2026, rollout of X}
+**Initiative / Epic / Incident:** {name, context, link to the epic/ticket if relevant}
 
-## Uczestnicy
+## Participants
 
-- **{Grupa 1, np. Zespół wytwórczy}:** {Imię (rola)}, {Imię (rola)}
-- **{Grupa 2, np. Stakeholderzy}:** {Imię (rola)}
-- **Facylitator:** {Imię}
-- **Nieobecni (ich perspektywa zebrana asynchronicznie):** {Imię — jakim kanałem}
-
----
-
-## TL;DR (jednym akapitem)
-
-_{Maks. 4–6 zdań. Co był za etap → ogólna ocena → 1–2 największe sukcesy → 1–2 największe lekcje → najważniejsza zmiana procesowa, którą wprowadzamy.}_
+- **{Group 1, e.g. Delivery team}:** {Name (role)}, {Name (role)}
+- **{Group 2, e.g. Stakeholders}:** {Name (role)}
+- **Facilitator:** {Name}
+- **Absent (their perspective gathered asynchronously):** {Name — through which channel}
 
 ---
 
-## Co poszło dobrze (continue)
+## TL;DR (in one paragraph)
 
-_{Rzeczy, które chcemy powtarzać. Nie ogólniki („dobra atmosfera") — konkrety, które dają się powtórzyć w kolejnym etapie.}_
-
-1. **{Sukces 1}** — {opis + cytat lub przykład: „dzięki temu udało się X"}
-2. **{Sukces 2}** — {opis}
-3. **{Sukces N}** — {opis}
+_{Max. 4–6 sentences. What the stage was → overall assessment → the 1–2 biggest successes → the 1–2 biggest lessons → the most important process change we are introducing.}_
 
 ---
 
-## Co nie zadziałało (problem)
+## What went well (continue)
 
-_{Konkretne sytuacje, decyzje, mechanizmy, które przeszkodziły. Bez personalizacji — opisuj fakty, nie winy.}_
+_{Things we want to repeat. Not generalities ("good atmosphere") — specifics that can be repeated in the next stage.}_
 
-| # | Co | Kiedy / kontekst | Skutek |
+1. **{Success 1}** — {description + a quote or example: "thanks to this we managed to X"}
+2. **{Success 2}** — {description}
+3. **{Success N}** — {description}
+
+---
+
+## What didn't work (problem)
+
+_{Specific situations, decisions, mechanisms that got in the way. Don't make it personal — describe facts, not fault.}_
+
+| # | What | When / context | Effect |
 |---|----|-------------------|--------|
-| 1 | {co się stało / czego brakowało} | {kiedy, w którym etapie} | {co przez to ucierpiało} |
+| 1 | {what happened / what was missing} | {when, at which stage} | {what suffered because of it} |
 | 2 | {…} | {…} | {…} |
 | 3 | {…} | {…} | {…} |
 
 ---
 
-## Pomysły na poprawę (start / change)
+## Ideas for improvement (start / change)
 
-_{Co zaczynamy robić / co zmieniamy. Każdy pomysł powinien mieć powiązanie z konkretnym problemem powyżej — inaczej dryfujemy w abstrakcję.}_
+_{What we start doing / what we change. Each idea should link to a specific problem above — otherwise we drift into abstraction.}_
 
-1. **{Pomysł 1}** — adresuje problem #{numer} → {opis zmiany w procesie}
-2. **{Pomysł 2}** — adresuje problem #{numer} → {…}
-3. **{Pomysł N}** — {…}
-
----
-
-## Lessons learned (przekrojowe)
-
-_{Co wyciągamy ponad pojedynczy etap — wnioski, które dotyczą sposobu pracy w ogóle. Krótko, hasłowo.}_
-
-- {Lekcja 1 — np. „nie startujemy implementacji bez zatwierdzonych makiet UX, bo to rodzi przeróbki"}
-- {Lekcja 2}
-- {Lekcja N}
+1. **{Idea 1}** — addresses problem #{number} → {description of the process change}
+2. **{Idea 2}** — addresses problem #{number} → {…}
+3. **{Idea N}** — {…}
 
 ---
 
-## Timeline incydentu (TYLKO dla post-mortemu)
+## Lessons learned (cross-cutting)
 
-_{Wypełnij wyłącznie, jeśli retrospektywa była post-mortemem incydentu produkcyjnego. W innym wypadku — usuń tę sekcję.}_
+_{What we take away beyond the single stage — conclusions about the way we work in general. Short, in a few words.}_
 
-| Czas | Co się stało | Kto wykrył / zareagował | Decyzja / akcja |
+- {Lesson 1 — e.g. "we don't start implementation without approved UX mockups, because it leads to rework"}
+- {Lesson 2}
+- {Lesson N}
+
+---
+
+## Incident timeline (ONLY for a post-mortem)
+
+_{Fill in only if the retrospective was a post-mortem of a production incident. Otherwise — delete this section.}_
+
+| Time | What happened | Who detected / responded | Decision / action |
 |------|--------------|--------------------------|------------------|
-| {YYYY-MM-DD HH:MM} | {trigger — co odpaliło incydent} | {monitoring / user / Imię} | {…} |
-| {YYYY-MM-DD HH:MM} | {wykrycie} | {Imię} | {…} |
-| {YYYY-MM-DD HH:MM} | {mitigacja} | {Imię} | {…} |
-| {YYYY-MM-DD HH:MM} | {resolucja} | {Imię} | {…} |
+| {YYYY-MM-DD HH:MM} | {trigger — what set off the incident} | {monitoring / user / Name} | {…} |
+| {YYYY-MM-DD HH:MM} | {detection} | {Name} | {…} |
+| {YYYY-MM-DD HH:MM} | {mitigation} | {Name} | {…} |
+| {YYYY-MM-DD HH:MM} | {resolution} | {Name} | {…} |
 
-**Detection time (od triggera do wykrycia):** {NN minut}
-**Mitigation time (od wykrycia do mitigacji):** {NN minut}
-**Resolution time (od triggera do pełnej resolucji):** {NN minut/godzin}
-**Wpływ na użytkownika:** {ilu użytkowników, jakie funkcje, ile czasu}
-**Root cause:** {jednym zdaniem — co było faktyczną przyczyną}
-**Contributing factors:** {co dodatkowo umożliwiło / pogłębiło problem}
+**Detection time (from trigger to detection):** {NN minutes}
+**Mitigation time (from detection to mitigation):** {NN minutes}
+**Resolution time (from trigger to full resolution):** {NN minutes/hours}
+**User impact:** {how many users, which features, for how long}
+**Root cause:** {in one sentence — what the actual cause was}
+**Contributing factors:** {what additionally enabled / worsened the problem}
 
 ---
 
-## Metryki etapu (jeśli mierzone)
+## Stage metrics (if measured)
 
-_{Opcjonalne. Wartości faktyczne vs. planowane.}_
+_{Optional. Actual vs. planned values.}_
 
-| Metryka | Plan | Wynik | Komentarz |
+| Metric | Plan | Result | Comment |
 |---------|------|-------|-----------|
-| {np. velocity} | {NN} | {NN} | {…} |
-| {np. % ticketów dostarczonych} | {NN%} | {NN%} | {…} |
-| {np. liczba bugów po wdrożeniu} | {<NN} | {NN} | {…} |
+| {e.g. velocity} | {NN} | {NN} | {…} |
+| {e.g. % of tickets delivered} | {NN%} | {NN%} | {…} |
+| {e.g. number of bugs after rollout} | {<NN} | {NN} | {…} |
 
 ---
 
-## Action items (kto, co, kiedy)
+## Action items (who, what, when)
 
-| # | Co | Kto | Termin | Powiązany problem |
+| # | What | Who | Due | Related problem |
 |---|----|-----|--------|--------------------|
-| 1 | {konkretna akcja procesowa} | {Imię} | {YYYY-MM-DD} | #{numer problemu} |
-| 2 | {…} | {Imię} | {YYYY-MM-DD} | #{…} |
-| 3 | {…} | {Imię} | {YYYY-MM-DD} | #{…} |
+| 1 | {concrete process action} | {Name} | {YYYY-MM-DD} | #{problem number} |
+| 2 | {…} | {Name} | {YYYY-MM-DD} | #{…} |
+| 3 | {…} | {Name} | {YYYY-MM-DD} | #{…} |
 
 ---
 
-## Sentiment / nastrój zespołu (opcjonalne)
+## Team sentiment / mood (optional)
 
-_{Krótko — jak zespół się czuł podczas tego etapu. Pomocne dla obserwowania trendów wypalenia / motywacji w czasie.}_
+_{Briefly — how the team felt during this stage. Helpful for watching burnout / motivation trends over time.}_
 
-- **Energia:** {niska / średnia / wysoka}
-- **Pewność co do kierunku:** {niska / średnia / wysoka}
-- **Główne źródła frustracji:** {1–3 hasła}
-- **Główne źródła satysfakcji:** {1–3 hasła}
+- **Energy:** {low / medium / high}
+- **Confidence in the direction:** {low / medium / high}
+- **Main sources of frustration:** {1–3 keywords}
+- **Main sources of satisfaction:** {1–3 keywords}
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- Transkrypcja: [{nazwa pliku}]({link})
-- Powiązane:
-  - [{retrospektywa z poprzedniego etapu}]({link}) — porównanie trendów
-  - [{board / dashboard z metrykami}]({link})
-  - [{post-mortem / RCA}]({link}) — jeśli dotyczy incydentu
+- Transcript: [{file name}]({link})
+- Related:
+  - [{retrospective from the previous stage}]({link}) — trend comparison
+  - [{board / dashboard with metrics}]({link})
+  - [{post-mortem / RCA}]({link}) — if it concerns an incident

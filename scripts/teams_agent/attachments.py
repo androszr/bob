@@ -89,7 +89,7 @@ def _load_disk_cookies() -> dict[str, dict[str, str]]:
             if data.get("expires", 0) > time.time():
                 return data.get("cookies_by_domain", {}) or {}
     except Exception as exc:
-        print(f"[attachments] _load_disk_cookies blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[attachments] _load_disk_cookies error: {exc}", file=sys.stderr, flush=True)
     return {}
 
 
@@ -98,7 +98,7 @@ def _save_disk_cookies(cookies: dict[str, dict[str, str]]) -> None:
         payload = {"cookies_by_domain": cookies, "expires": time.time() + _DISK_COOKIE_TTL_S}
         _SP_COOKIES_FILE.write_text(json.dumps(payload), encoding="utf-8")
     except Exception as exc:
-        print(f"[attachments] _save_disk_cookies blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[attachments] _save_disk_cookies error: {exc}", file=sys.stderr, flush=True)
 
 
 def _ensure_loaded() -> None:
@@ -108,7 +108,7 @@ def _ensure_loaded() -> None:
     _cookies = _load_disk_cookies()
     _cookies_loaded = True
     if _cookies:
-        print(f"[attachments] SP cookies wczytane z dysku ({len(_cookies)} domen)",
+        print(f"[attachments] SP cookies loaded from disk ({len(_cookies)} domains)",
               file=sys.stderr, flush=True)
 
 
@@ -142,7 +142,7 @@ def _attempt_fetch(
             timeout=20, allow_redirects=False, stream=True,
         )
     except Exception as exc:
-        print(f"[attachments] HTTP blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[attachments] HTTP error: {exc}", file=sys.stderr, flush=True)
         return None
     try:
         if r.status_code != 200:
@@ -155,7 +155,7 @@ def _attempt_fetch(
             advertised = 0
         if advertised and advertised > max_bytes:
             print(
-                f"[attachments] odrzucam: Content-Length={advertised} > cap "
+                f"[attachments] rejecting: Content-Length={advertised} > cap "
                 f"{max_bytes}", file=sys.stderr, flush=True,
             )
             return None
@@ -167,8 +167,8 @@ def _attempt_fetch(
             buf.extend(chunk)
             if len(buf) > max_bytes:
                 print(
-                    f"[attachments] odrzucam: rozmiar przekroczyl cap "
-                    f"{max_bytes} w trakcie pobierania",
+                    f"[attachments] rejecting: size went over the cap "
+                    f"{max_bytes} while downloading",
                     file=sys.stderr, flush=True,
                 )
                 return None
@@ -230,7 +230,7 @@ def _refresh_via_playwright_here(file_url: str) -> dict[str, dict[str, str]]:
             except Exception:
                 pass
     n = sum(len(v) for v in cookies.values())
-    print(f"[attachments] -> got {n} SP cookies ({len(cookies)} domen)", file=sys.stderr, flush=True)
+    print(f"[attachments] -> got {n} SP cookies ({len(cookies)} domains)", file=sys.stderr, flush=True)
     return cookies
 
 
@@ -254,7 +254,7 @@ def ensure_cookies(probe_url: str) -> dict[str, str]:
         try:
             new_cookies = _refresh_via_playwright(probe_url)
         except Exception as exc:
-            print(f"[attachments] ensure_cookies refresh blad: {exc}",
+            print(f"[attachments] ensure_cookies refresh error: {exc}",
                   file=sys.stderr, flush=True)
             return {}
         if new_cookies:
@@ -294,7 +294,7 @@ def download(
         return None
     if not _host_allowed(url):
         print(
-            f"[attachments] odrzucam: host nie na whitelist ({url[:120]})",
+            f"[attachments] rejecting: host not on the allowlist ({url[:120]})",
             file=sys.stderr, flush=True,
         )
         return None
@@ -314,11 +314,11 @@ def download(
         try:
             new_cookies = _refresh_via_playwright(url)
         except Exception as exc:
-            print(f"[attachments] Playwright refresh blad: {exc}",
+            print(f"[attachments] Playwright refresh error: {exc}",
                   file=sys.stderr, flush=True)
             return None
         if not new_cookies:
-            print("[attachments] Playwright nie zwrocil cookies SP — fetch nie powiedzie sie",
+            print("[attachments] Playwright returned no SP cookies — the fetch will fail",
                   file=sys.stderr, flush=True)
             return None
         # Merge per domain: a refresh for one host must not drop the other host's FedAuth.
@@ -327,6 +327,6 @@ def download(
 
     result = _attempt_fetch(url, _cookies_for(url, _cookies), max_bytes=max_bytes)
     if result is None:
-        print(f"[attachments] po refreshu cookies nadal nie pobralo {file_name!r}",
+        print(f"[attachments] still could not download {file_name!r} after the cookie refresh",
               file=sys.stderr, flush=True)
     return result

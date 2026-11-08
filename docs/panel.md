@@ -25,25 +25,23 @@ change the login shell Bob is started in (default `/bin/zsh`).
 
 ## The tabs
 
-The tabs have Polish names on the page; the English names are in brackets.
-
 | Tab | What it does |
 |---|---|
-| Pulpit (Dashboard) | One box says what to do now: sign in, start Bob, answer a waiting approval, or "all is well". Below: status cards, start / stop / restart, and a live 24-hour view of the chats (a heat map by hour, calls and cost per hour, the latest actions). It refreshes every 15 seconds. |
-| Zgody (Approvals) | Yes-or-no requests from Bob, Claude Code or scripts, with a note field. Each new request is also announced in your notes chat, where you can answer it away from the computer. Recent decisions are listed under it. |
-| Rozmowy (Conversations) | The latest messages Bob reacted to, who wrote, and what he answered or that he stayed silent; filter by chat. |
-| Logi i problemy (Logs) | Bob's log, parsed into levels and sources. Problems of the last day come first, repeats are folded ("x3"), routine lines are hidden unless you ask. |
-| Kanały (Chats) | Every chat in `chat-config.json`: roles, who may call Bob, tools, last activity. Add, change, switch off or remove a chat; every change is checked, shown as a diff first and backed up. |
-| Role (Roles) | The roles in `roles.json`: tool groups, skills, knowledge and where each role works. Edit a role, describe a change to a knowledge file (Claude drafts it, the proposal goes to Approvals), switch tool-group descriptions. |
-| Harmonogram (Schedule) | The scheduled posts with the time they last fired, and the background loops Bob runs on his own. |
+| Dashboard | One box says what to do now: sign in, start Bob, answer a waiting approval, or "all is well". Below: status cards, start / stop / restart, and a live 24-hour view of the chats (a heat map by hour, calls and cost per hour, the latest actions). It refreshes every 15 seconds. |
+| Approvals | Yes-or-no requests from Bob, Claude Code or scripts, with a note field. Each new request is also announced in your notes chat, where you can answer it away from the computer. Recent decisions are listed under it. |
+| Conversations | The latest messages Bob reacted to, who wrote, and what he answered or that he stayed silent; filter by chat. |
+| Logs | Bob's log, parsed into levels and sources. Problems of the last day come first, repeats are folded ("x3"), routine lines are hidden unless you ask. |
+| Chats | Every chat in `chat-config.json`: roles, who may call Bob, tools, last activity. Add, change, switch off or remove a chat; every change is checked, shown as a diff first and backed up. |
+| Roles | The roles in `roles.json`: tool groups, skills, knowledge and where each role works. Edit a role, describe a change to a knowledge file (Claude drafts it, the proposal goes to Approvals), switch tool-group descriptions. |
+| Schedule | The scheduled posts with the time they last fired, and the background loops Bob runs on his own. |
 
 If `roles.json` does not exist yet, the Roles tab says so; copy `roles.example.json` to `roles.json`.
 
 ## Sign in to Teams from the page
 
-When the Teams session is missing or older than seven days, the dashboard offers "Zaloguj do Teams" (and "Zaloguj i
-uruchom Boba"). It opens a normal browser window on this computer; sign in as usual (choose "stay signed in"),
-and when you see the chat list press "Jestem zalogowany" on the panel. Bob will not start, and a restart is
+When the Teams session is missing or older than seven days, the dashboard offers "Sign in to Teams" (and "Sign in and
+start Bob"). It opens a normal browser window on this computer; sign in as usual (choose "stay signed in"),
+and when you see the chat list press "I'm signed in" on the panel. Bob will not start, and a restart is
 refused, while the session is expired, so a restart can never leave Bob down. If Bob was running before a reboot
 and the session is still valid, the panel starts him again by itself.
 
@@ -63,7 +61,8 @@ anything, so another local user account that can reach `127.0.0.1` on the panel'
 a single-user Mac; there is no password or token layer.
 
 Before rolling back to an older build, restore the chats' hand-written `mcp` lists (without team-only groups on
-`kanal_fr` chats) and remove `ingest_only` (older builds ignore `role`, `kanal_fr` and `ingest_only`).
+`external_chat` chats) and remove `ingest_only` (older builds ignore `roles`, `external_chat` and `ingest_only`,
+and do not read the English keys at all).
 
 ## One page, both screens
 

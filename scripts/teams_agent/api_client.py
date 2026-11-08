@@ -40,7 +40,7 @@ _BASE = "https://teams.microsoft.com/api/chatsvc/emea/v1"
 USER_MRI = org_config.OWNER_MRI
 USER_DISPLAY = org_config.OWNER_DISPLAY_NAME
 
-# Owner's private notes-to-self conversation ("Notatki" in chat-config.json) —
+# Owner's private notes-to-self conversation (the chat named "Notes" in chat-config.json) —
 # the default/anchor conversation for all send/reply/fetch helpers below.
 NOTES_CONV_ID = "48:notes"
 
@@ -64,7 +64,7 @@ DEFAULT_AGENT_LABEL = "Bob"
 _DEFAULT_AGENT_EMOJI = "\U0001f9d1‍\U0001f4bb"
 # persona key (as used in chat-config.json) -> display label
 AGENT_LABELS: dict[str, str] = {
-    "example": "Asystent",
+    "example": "Assistant",
 }
 _AGENT_EMOJI: dict[str, str] = {
     "example": "\U0001f4a1",  # light bulb
@@ -79,11 +79,14 @@ _AGENT_EMOJI: dict[str, str] = {
 # here. The legacy label with the persona's CURRENT emoji is recognised too
 # (see _legacy_prefix_pairs) in case anything was posted mid-rename.
 # Shape: {"example": (("OldLabel", "\U0001f4dd"),)}.
-_LEGACY_AGENT_LABELS: dict[str, tuple[tuple[str, str], ...]] = {}
+_LEGACY_AGENT_LABELS: dict[str, tuple[tuple[str, str], ...]] = {
+    # The example persona posted as "Asystent" before the English rename.
+    "example": (("Asystent", "\U0001f4a1"),),
+}
 
 
 def agent_label(persona: str | None = None) -> str:
-    """Display label for a persona ('example' -> 'Asystent'). None -> 'Bob'."""
+    """Display label for a persona ('example' -> 'Assistant'). None -> 'Bob'."""
     return AGENT_LABELS.get(persona or "", DEFAULT_AGENT_LABEL)
 
 
@@ -123,7 +126,7 @@ _PREFIX_PAIRS: tuple[tuple[str | None, str], ...] = tuple(
 # passed in.
 BOT_HTML_PREFIXES = tuple(prefix for _, prefix in _PREFIX_PAIRS)
 
-# Plain-text forms ("[Bob]", "[Asystent]", retired labels) — used
+# Plain-text forms ("[Bob]", "[Assistant]", retired labels) — used
 # where only the rendered text of a message is available (quote detection,
 # skip-answered).
 AGENT_TEXT_LABELS = tuple(
@@ -214,7 +217,7 @@ def set_auth_token(token: str) -> None:
         _auth_token_gen += 1
         _needs_token_refresh = False
     if changed:
-        print(f"[api] Bearer token zaktualizowany ({len(token)} znakow)", file=sys.stderr, flush=True)
+        print(f"[api] Bearer token updated ({len(token)} chars)", file=sys.stderr, flush=True)
         try:
             # Teams Bearer token -- owner-only, whatever the process umask.
             # Created 0600 from the start (no 0644 window), then swapped in atomically.
@@ -256,7 +259,7 @@ def set_ic3_token(token: str) -> None:
     _ic3_token = token
     _ic3_token_ts = __import__("time").time()
     if changed:
-        print(f"[api] ic3 token zaktualizowany ({len(token)} znakow)", file=sys.stderr, flush=True)
+        print(f"[api] ic3 token updated ({len(token)} chars)", file=sys.stderr, flush=True)
         try:
             # Owner-only from the start, swapped in atomically (as .auth-token).
             tmp = _IC3_TOKEN_CACHE.with_name(f"{_IC3_TOKEN_CACHE.name}.{os.getpid()}.tmp")
@@ -305,7 +308,7 @@ def _token_debug_info() -> str:
         age = _time.time() - mtime
         return (f"token=cache age={age:.0f}s len={len(cached)} "
                 f"sha={token_fingerprint(cached)}")
-    return "token=brak"
+    return "token=none"
 
 
 # A 401 is not proof the token is dead. Concurrent get_messages calls can all
@@ -324,8 +327,8 @@ def _retry_401(label: str, attempts_done: int) -> bool:
         return False
     import time as _t
     print(
-        f"[api] {label} 401 — retry {attempts_done}/{_401_RETRIES} za "
-        f"{_401_RETRY_DELAY_S:.0f}s (ten sam token, sprawdzam czy przejsciowe) | "
+        f"[api] {label} 401 — retry {attempts_done}/{_401_RETRIES} in "
+        f"{_401_RETRY_DELAY_S:.0f}s (same token, checking whether it is transient) | "
         f"{_token_debug_info()}",
         file=sys.stderr, flush=True,
     )
@@ -393,7 +396,7 @@ def _log_network_diag() -> None:
     # Control: check if HTTPS generally works (not just Teams)
     try:
         with socket.create_connection(("google.com", 443), timeout=5):
-            print("[api][diag] TCP google.com:443 -> OK (HTTPS dziala ogolnie)", file=sys.stderr, flush=True)
+            print("[api][diag] TCP google.com:443 -> OK (HTTPS works in general)", file=sys.stderr, flush=True)
     except OSError as e:
         print(f"[api][diag] TCP google.com:443 -> FAIL errno={e.errno} ({e})", file=sys.stderr, flush=True)
 
@@ -444,7 +447,7 @@ def _session() -> _requests.Session:
             _cached_cookies = state.get("cookies", [])
             _cookies_loaded_at = now
         except Exception as exc:
-            print(f"[api] Nie mozna wczytac session.json: {exc}", file=sys.stderr, flush=True)
+            print(f"[api] Could not read session.json: {exc}", file=sys.stderr, flush=True)
 
     s = _requests.Session()
     s.mount("https://", _teams_adapter)
@@ -640,7 +643,7 @@ def _extract_image_urls(html: str) -> list[str]:
 def download_image(url: str) -> tuple[bytes, str] | None:
     """Download image from Teams CDN using Bearer token. Returns (bytes, media_type) or None."""
     if not _image_host_allowed(url):
-        print(f"[api] download_image odrzucony (host spoza allowlisty): {url!r}",
+        print(f"[api] download_image rejected (host not on the allowlist): {url!r}",
               file=sys.stderr, flush=True)
         return None
     try:
@@ -653,7 +656,7 @@ def download_image(url: str) -> tuple[bytes, str] | None:
             return None
         return r.content, ct
     except Exception as exc:
-        print(f"[api] download_image blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] download_image error: {exc}", file=sys.stderr, flush=True)
         return None
 
 
@@ -795,11 +798,11 @@ def get_messages(conversation_id: str = NOTES_CONV_ID, n: int = 20) -> list[dict
                     continue
                 _needs_token_refresh = True
                 dbg = _token_debug_info()
-                print(f"[api] get_messages 401 — token wymaga odswiezenia | {dbg}", file=sys.stderr, flush=True)
+                print(f"[api] get_messages 401 — token needs a refresh | {dbg}", file=sys.stderr, flush=True)
                 return []
             if status is not None and 500 <= status < 600 and _attempt < 2:
                 _delay = 3 * (2 ** _attempt)
-                print(f"[api] get_messages {status} — retry {_attempt + 1}/2 za {_delay}s", file=sys.stderr, flush=True)
+                print(f"[api] get_messages {status} — retry {_attempt + 1}/2 in {_delay}s", file=sys.stderr, flush=True)
                 _time.sleep(_delay)
                 continue
             break
@@ -808,7 +811,7 @@ def get_messages(conversation_id: str = NOTES_CONV_ID, n: int = 20) -> list[dict
         err_type = type(_last_exc).__name__
         dbg = _token_debug_info()
         print(
-            f"[api] get_messages blad [{err_type} status={status}] | {dbg} | {_last_exc}",
+            f"[api] get_messages error [{err_type} status={status}] | {dbg} | {_last_exc}",
             file=sys.stderr, flush=True,
         )
         global _diag_logged_at
@@ -1024,17 +1027,17 @@ def edit_message(
                     "status": 401, "err_type": err_type,
                     "message": str(exc), "attempts": _attempt + 1,
                 })
-                print("[api] edit_message 401 — token wymaga odświeżenia", file=sys.stderr, flush=True)
+                print("[api] edit_message 401 — token needs a refresh", file=sys.stderr, flush=True)
                 return False
             if (status is None or 500 <= status < 600) and _attempt < 2:
                 _delay = 3 * (2 ** _attempt)
                 print(
-                    f"[api] edit_message blad [{err_type} status={status}] — retry {_attempt + 1}/2 za {_delay}s",
+                    f"[api] edit_message error [{err_type} status={status}] — retry {_attempt + 1}/2 in {_delay}s",
                     file=sys.stderr, flush=True,
                 )
                 _time.sleep(_delay)
                 continue
-            print(f"[api] edit_message błąd: {exc}", file=sys.stderr, flush=True)
+            print(f"[api] edit_message error: {exc}", file=sys.stderr, flush=True)
             break
     if _last_exc is not None:
         status = getattr(getattr(_last_exc, "response", None), "status_code", None)
@@ -1080,8 +1083,8 @@ def delete_message(msg_id: str, conversation_id: str = NOTES_CONV_ID) -> bool:
         return False
     if not _is_bots_own_message(msg_id, conversation_id):
         print(
-            f"[api] delete_message ODMOWA — {msg_id} nie wyglada na wiadomosc Boba, "
-            "pomijam usuwanie",
+            f"[api] delete_message REFUSED — {msg_id} does not look like a Bob message, "
+            "skipping the delete",
             file=sys.stderr, flush=True,
         )
         return False
@@ -1097,9 +1100,9 @@ def delete_message(msg_id: str, conversation_id: str = NOTES_CONV_ID) -> bool:
     except Exception as exc:
         if getattr(getattr(exc, "response", None), "status_code", None) == 401:
             _needs_token_refresh = True
-            print("[api] delete_message 401 — token wymaga odświeżenia", file=sys.stderr, flush=True)
+            print("[api] delete_message 401 — token needs a refresh", file=sys.stderr, flush=True)
         else:
-            print(f"[api] delete_message błąd: {exc}", file=sys.stderr, flush=True)
+            print(f"[api] delete_message error: {exc}", file=sys.stderr, flush=True)
         return False
 
 
@@ -1168,9 +1171,9 @@ def add_reaction(msg_id: str, conversation_id: str, reaction_type: str = "like")
     except Exception as exc:
         if getattr(getattr(exc, "response", None), "status_code", None) == 401:
             _needs_token_refresh = True
-            print("[api] add_reaction 401 — token wymaga odświeżenia", file=sys.stderr, flush=True)
+            print("[api] add_reaction 401 — token needs a refresh", file=sys.stderr, flush=True)
         else:
-            print(f"[api] add_reaction błąd: {exc}", file=sys.stderr, flush=True)
+            print(f"[api] add_reaction error: {exc}", file=sys.stderr, flush=True)
         return False
 
 
@@ -1186,7 +1189,7 @@ def search_gif(query: str) -> str | None:
     """
     api_key = os.environ.get("GIPHY_API_KEY", "")
     if not api_key:
-        print("[api] GIPHY_API_KEY nie ustawiony — pomijam gif", file=sys.stderr, flush=True)
+        print("[api] GIPHY_API_KEY not set — skipping the gif", file=sys.stderr, flush=True)
         return None
     try:
         r = _requests.get(
@@ -1207,7 +1210,7 @@ def search_gif(query: str) -> str | None:
         item = random.choice(items)  # noqa: S311
         return item["images"]["original"]["url"]
     except Exception as exc:
-        print(f"[api] search_gif blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] search_gif error: {exc}", file=sys.stderr, flush=True)
         return None
 
 
@@ -1225,7 +1228,7 @@ def send_gif(query: str, conversation_id: str = NOTES_CONV_ID, persona: str | No
     safe_url = _escape(url)
     agent_prefix = agent_html_prefix(persona)
     html = (
-        f'<p>{agent_prefix}: wysłał GIF-a:</p>'
+        f'<p>{agent_prefix}: sent a GIF:</p>'
         f'<p><img src="{safe_url}" alt="{safe_query}" width="320"/></p>'
     )
     return _post(conversation_id, html)
@@ -1303,7 +1306,7 @@ _seed_receive_only()
 def _refuse_write(conv_id: str, op: str) -> bool:
     """True (and logs) when conv_id is receive-only: the caller must fail without sending."""
     if conv_id in RECEIVE_ONLY_CONV_IDS:
-        print(f"[api] ODMOWA {op}: receive-only conv", file=sys.stderr, flush=True)
+        print(f"[api] REFUSED {op}: receive-only conv", file=sys.stderr, flush=True)
         return True
     return False
 
@@ -1327,7 +1330,7 @@ def send_ams_image_message(
     _post_returning_id receive-only guard still applies. Returns the message id or None.
     """
     if allowed_conv_id is not None and conversation_id != allowed_conv_id:
-        print("[api] ODMOWA ams_image: inna konwersacja niz dozwolona", file=sys.stderr, flush=True)
+        print("[api] REFUSED ams_image: a different conversation than the allowed one", file=sys.stderr, flush=True)
         return None
     if _refuse_write(conversation_id, "ams_image"):
         return None
@@ -1369,7 +1372,7 @@ def fetch_raw_messages_since(conversation_id: str, after_seq: int, max_pages: in
             status = getattr(getattr(exc, "response", None), "status_code", None)
             if status == 401:
                 _needs_token_refresh = True
-            print(f"[api] fetch_raw_messages_since blad (status={status}): {exc}", file=sys.stderr, flush=True)
+            print(f"[api] fetch_raw_messages_since error (status={status}): {exc}", file=sys.stderr, flush=True)
             return []
         msgs = data.get("messages", [])
         seqs = []
@@ -1383,7 +1386,8 @@ def fetch_raw_messages_since(conversation_id: str, after_seq: int, max_pages: in
                 found[seq] = m
         url = (data.get("_metadata") or {}).get("backwardLink")
         if url and not str(url).startswith(_BASE + "/"):
-            print("[api] fetch_raw_messages_since: backwardLink poza Teams, nie podazam", file=sys.stderr, flush=True)
+            print("[api] fetch_raw_messages_since: backwardLink outside Teams, not followed",
+                  file=sys.stderr, flush=True)
             url = None                                   # the bearer session goes to the Teams API only
         params = None  # backwardLink already carries the query
         if not seqs or min(seqs) <= after_seq:
@@ -1424,7 +1428,7 @@ def _post_returning_id(
         try:
             r = _session().post(url, json=body, timeout=10)
             r.raise_for_status()
-            print(f"[api] wyslano ({r.status_code})", file=sys.stderr, flush=True)
+            print(f"[api] sent ({r.status_code})", file=sys.stderr, flush=True)
             # Teams returns the assigned message ID in the response body.
             try:
                 msg_id = r.json().get("id") or r.json().get("OriginalArrivalTime")
@@ -1449,17 +1453,17 @@ def _post_returning_id(
                     "status": 401, "err_type": err_type,
                     "message": str(exc), "attempts": _attempt + 1,
                 })
-                print(f"[api] _post 401 — token wymaga odswiezenia | {dbg}", file=sys.stderr, flush=True)
+                print(f"[api] _post 401 — token needs a refresh | {dbg}", file=sys.stderr, flush=True)
                 return None
             if (status is None or 500 <= status < 600) and _attempt < 2:
                 _delay = 3 * (2 ** _attempt)
                 print(
-                    f"[api] _post blad [{err_type} status={status}] — retry {_attempt + 1}/2 za {_delay}s",
+                    f"[api] _post error [{err_type} status={status}] — retry {_attempt + 1}/2 in {_delay}s",
                     file=sys.stderr, flush=True,
                 )
                 _time.sleep(_delay)
                 continue
-            print(f"[api] _post blad [{err_type} status={status}] | {dbg} | {exc}", file=sys.stderr, flush=True)
+            print(f"[api] _post error [{err_type} status={status}] | {dbg} | {exc}", file=sys.stderr, flush=True)
             break
     if _last_exc is not None:
         status = getattr(getattr(_last_exc, "response", None), "status_code", None)
@@ -1557,17 +1561,17 @@ def post_card(card_json: dict, conversation_id: str = NOTES_CONV_ID) -> str | No
                     "status": 401, "err_type": err_type,
                     "message": str(exc), "attempts": _attempt + 1,
                 })
-                print("[api] post_card 401 — token wymaga odswiezenia", file=sys.stderr, flush=True)
+                print("[api] post_card 401 — token needs a refresh", file=sys.stderr, flush=True)
                 return None
             if (status is None or 500 <= status < 600) and _attempt < 2:
                 _delay = 3 * (2 ** _attempt)
                 print(
-                    f"[api] post_card blad [{err_type} status={status}] — retry {_attempt + 1}/2 za {_delay}s",
+                    f"[api] post_card error [{err_type} status={status}] — retry {_attempt + 1}/2 in {_delay}s",
                     file=sys.stderr, flush=True,
                 )
                 _time.sleep(_delay)
                 continue
-            print(f"[api] post_card blad: {exc}", file=sys.stderr, flush=True)
+            print(f"[api] post_card error: {exc}", file=sys.stderr, flush=True)
             break
     if _last_exc is not None:
         status = getattr(getattr(_last_exc, "response", None), "status_code", None)
@@ -1598,7 +1602,7 @@ def find_conversation_id(display_name: str) -> str | None:
         r = _session().get(url, params=params, timeout=10)
         r.raise_for_status()
     except Exception as exc:
-        print(f"[api] find_conversation_id blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] find_conversation_id error: {exc}", file=sys.stderr, flush=True)
         return None
 
     data = r.json()
@@ -1622,8 +1626,8 @@ def find_conversation_id(display_name: str) -> str | None:
             if target in name:
                 return conv_id
 
-    print(f"[api] find_conversation_id: brak dopasowania dla {display_name!r} "
-          f"(sprawdzono {len(conversations)} konwersacji)", file=sys.stderr, flush=True)
+    print(f"[api] find_conversation_id: no match for {display_name!r} "
+          f"(checked {len(conversations)} conversations)", file=sys.stderr, flush=True)
     return None
 
 
@@ -1643,7 +1647,7 @@ def _fuzzy_find_conversations(display_name: str) -> list[tuple[str, str]]:
         r = _session().get(url, params=params, timeout=10)
         r.raise_for_status()
     except Exception as exc:
-        print(f"[api] _fuzzy_find_conversations blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] _fuzzy_find_conversations error: {exc}", file=sys.stderr, flush=True)
         return []
 
     data = r.json()
@@ -1713,12 +1717,12 @@ def _ams_upload_gif(gif_file: Path, conv_id: str) -> tuple[str, int] | None:
     """
     token = _ic3_token or _load_cached_ic3_token()[0]
     if not token:
-        print("[api] ams_upload_gif: brak tokenu ic3 — pomijam upload", file=sys.stderr, flush=True)
+        print("[api] ams_upload_gif: no ic3 token — skipping the upload", file=sys.stderr, flush=True)
         return None
     try:
         data = gif_file.read_bytes()
     except Exception as exc:
-        print(f"[api] ams_upload_gif: nie mozna wczytac {gif_file}: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] ams_upload_gif: could not read {gif_file}: {exc}", file=sys.stderr, flush=True)
         return None
 
     base_headers = dict(_AMS_CLIENT_HINTS)
@@ -1745,10 +1749,10 @@ def _ams_upload_gif(gif_file: Path, conv_id: str) -> tuple[str, int] | None:
         r.raise_for_status()
         object_id = r.json().get("id")
         if not object_id:
-            print("[api] ams_upload_gif: brak id w odpowiedzi object-create", file=sys.stderr, flush=True)
+            print("[api] ams_upload_gif: no id in the object-create response", file=sys.stderr, flush=True)
             return None
     except Exception as exc:
-        print(f"[api] ams_upload_gif object-create blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] ams_upload_gif object-create error: {exc}", file=sys.stderr, flush=True)
         return None
 
     try:
@@ -1760,7 +1764,7 @@ def _ams_upload_gif(gif_file: Path, conv_id: str) -> tuple[str, int] | None:
         )
         r2.raise_for_status()
     except Exception as exc:
-        print(f"[api] ams_upload_gif content-put blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[api] ams_upload_gif content-put error: {exc}", file=sys.stderr, flush=True)
         return None
     return object_id, len(data)
 

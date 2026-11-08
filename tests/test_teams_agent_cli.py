@@ -224,7 +224,7 @@ def test_log_ensure_ascii_false(tmp_path):
     args = _make_args(log_file)
     page = _make_page_mock()
 
-    polish_draft = "Czesc, jak sie masz?"
+    polish_draft = "Cześć, jak się masz?"  # Polish on purpose: checks non-ASCII stays UTF-8
     with (
         patch.object(cli.scraper, "switch_to_chat", return_value=True),
         patch.object(cli.scraper, "read_messages", return_value=_FAKE_MESSAGES),
@@ -267,11 +267,13 @@ def test_approval_send_failure_adds_neutral_retry_fields(tmp_path):
 
 class TestExtractTrigger:
     def test_matches_with_comma(self):
-        assert cli._extract_trigger("Hej Claude, jaka jest stolica Polski?") == "jaka jest stolica Polski?"
+        assert cli._extract_trigger("Hey Claude, what is the capital of France?") == "what is the capital of France?"
+        # the Polish "Hej" form stays accepted
+        assert cli._extract_trigger("Hej Claude, what time is it?") == "what time is it?"
 
     def test_matches_case_insensitive(self):
-        assert cli._extract_trigger("hej claude jak sie masz") == "jak sie masz"
-        assert cli._extract_trigger("HEJ CLAUDE napisz cos") == "napisz cos"
+        assert cli._extract_trigger("hey claude how are you") == "how are you"
+        assert cli._extract_trigger("HEY CLAUDE write something") == "write something"
 
     def test_matches_english_hey(self):
         assert cli._extract_trigger("Hey Claude, introduce yourself") == "introduce yourself"
@@ -279,12 +281,12 @@ class TestExtractTrigger:
 
     def test_matches_with_sender_prefix(self):
         # Teams inner_text often prefixes sender/time; the trigger lives mid-message.
-        text = "Person 40 11:23 Hej Claude, czy Jan jest jutro?"
-        assert cli._extract_trigger(text) == "czy Jan jest jutro?"
+        text = "Person 40 11:23 Hey Claude, is Alex in tomorrow?"
+        assert cli._extract_trigger(text) == "is Alex in tomorrow?"
 
     def test_matches_multiline_prompt(self):
-        text = "Hej Claude\nNapisz krotkie streszczenie."
-        assert cli._extract_trigger(text) == "Napisz krotkie streszczenie."
+        text = "Hey Claude\nWrite a short summary."
+        assert cli._extract_trigger(text) == "Write a short summary."
 
     def test_no_match_returns_none(self):
         assert cli._extract_trigger("Hello world") is None
@@ -330,7 +332,7 @@ def test_save_chat_config_writes_chats(tmp_path):
     """_save_chat_config writes a valid JSON file with the given chat_config."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    chat_config = {"Kanal AI": {"knowledge": None, "mcp": ["jira"]}}
+    chat_config = {"AI Channel": {"knowledge": None, "mcp": ["jira"]}}
     cli._save_chat_config(chat_config, path=cfg_path)
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
     assert data["chats"] == chat_config
@@ -364,12 +366,12 @@ def test_save_chat_config_ensure_ascii_false(tmp_path):
     """Polish characters are stored as UTF-8, not escaped."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    chat_config = {"Kanal AI": {"epithets": ["zwiezly", "formalny"]}}
+    chat_config = {"AI Channel": {"epithets": ["zwiezly", "formalny"]}}
     cli._save_chat_config(chat_config, path=cfg_path)
     raw = cfg_path.read_bytes().decode("utf-8")
     # No escaped Unicode sequences for ASCII-range strings, file is readable
     data = json.loads(raw)
-    assert data["chats"]["Kanal AI"]["epithets"] == ["zwiezly", "formalny"]
+    assert data["chats"]["AI Channel"]["epithets"] == ["zwiezly", "formalny"]
 
 
 # ---------------------------------------------------------------------------
@@ -381,55 +383,55 @@ def test_apply_chat_config_change_mcp(tmp_path):
     """Sets mcp field and calls _save_chat_config."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {"knowledge": None}}}), encoding="utf-8")
-    chat_config = {"Kanal AI": {"knowledge": None}}
-    cli._apply_chat_config_change("Kanal AI", "mcp", ["jira", "todos"], chat_config, path=cfg_path)
-    assert chat_config["Kanal AI"]["mcp"] == ["jira", "todos"]
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {"knowledge": None}}}), encoding="utf-8")
+    chat_config = {"AI Channel": {"knowledge": None}}
+    cli._apply_chat_config_change("AI Channel", "mcp", ["jira", "todos"], chat_config, path=cfg_path)
+    assert chat_config["AI Channel"]["mcp"] == ["jira", "todos"]
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    assert data["chats"]["Kanal AI"]["mcp"] == ["jira", "todos"]
+    assert data["chats"]["AI Channel"]["mcp"] == ["jira", "todos"]
 
 
 def test_apply_chat_config_change_epithets_sets_list(tmp_path):
     """Sets epithets to a list of strings."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {}}}), encoding="utf-8")
-    chat_config = {"Kanal AI": {}}
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {}}}), encoding="utf-8")
+    chat_config = {"AI Channel": {}}
     cli._apply_chat_config_change(
-        "Kanal AI", "epithets", ["zwiezly", "formalny"], chat_config, path=cfg_path
+        "AI Channel", "epithets", ["zwiezly", "formalny"], chat_config, path=cfg_path
     )
-    assert chat_config["Kanal AI"]["epithets"] == ["zwiezly", "formalny"]
+    assert chat_config["AI Channel"]["epithets"] == ["zwiezly", "formalny"]
 
 
 def test_apply_chat_config_change_epithets_none_deletes_key(tmp_path):
     """Setting epithets=None removes the key (default prompt)."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {"epithets": ["zwiezly"]}}}),
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {"epithets": ["zwiezly"]}}}),
                         encoding="utf-8")
-    chat_config = {"Kanal AI": {"epithets": ["zwiezly"]}}
-    cli._apply_chat_config_change("Kanal AI", "epithets", None, chat_config, path=cfg_path)
-    assert "epithets" not in chat_config["Kanal AI"]
+    chat_config = {"AI Channel": {"epithets": ["zwiezly"]}}
+    cli._apply_chat_config_change("AI Channel", "epithets", None, chat_config, path=cfg_path)
+    assert "epithets" not in chat_config["AI Channel"]
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    assert "epithets" not in data["chats"]["Kanal AI"]
+    assert "epithets" not in data["chats"]["AI Channel"]
 
 
 def test_apply_chat_config_change_caller_clear_deletes_key(tmp_path):
     """Setting caller=None removes the key (fallback to args.caller)."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {"caller": "owner"}}}),
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {"caller": "owner"}}}),
                         encoding="utf-8")
-    chat_config = {"Kanal AI": {"caller": "owner"}}
-    cli._apply_chat_config_change("Kanal AI", "caller", None, chat_config, path=cfg_path)
-    assert "caller" not in chat_config["Kanal AI"]
+    chat_config = {"AI Channel": {"caller": "owner"}}
+    cli._apply_chat_config_change("AI Channel", "caller", None, chat_config, path=cfg_path)
+    assert "caller" not in chat_config["AI Channel"]
 
 
 def test_apply_chat_config_change_invalid_field(tmp_path):
     """Invalid field is rejected silently (no crash, no mutation)."""
-    chat_config = {"Kanal AI": {"knowledge": None}}
-    cli._apply_chat_config_change("Kanal AI", "conv_id", "evil", chat_config)
-    assert chat_config["Kanal AI"].get("conv_id") is None
+    chat_config = {"AI Channel": {"knowledge": None}}
+    cli._apply_chat_config_change("AI Channel", "conv_id", "evil", chat_config)
+    assert chat_config["AI Channel"].get("conv_id") is None
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +446,9 @@ class TestBobPollRe:
         assert m.group(1).strip() == "model"
 
     def test_per_chat_topic(self):
-        m = cli._BOB_POLL_RE.search("bob ankieta chat Kanal AI mcp")
+        m = cli._BOB_POLL_RE.search("bob ankieta chat AI Channel mcp")
         assert m is not None
-        assert "Kanal AI mcp" in m.group(1)
+        assert "AI Channel mcp" in m.group(1)
 
     def test_case_insensitive(self):
         assert cli._BOB_POLL_RE.search("BOB ANKIETA pause") is not None
@@ -457,23 +459,23 @@ class TestBobPollRe:
 
 class TestFallbackRegexes:
     def test_mcp_csv(self):
-        m = cli._BOB_CHAT_MCP_RE.search("Bob chat Kanal AI mcp jira,todos")
+        m = cli._BOB_CHAT_MCP_RE.search("Bob chat AI Channel mcp jira,todos")
         assert m is not None
-        assert m.group(1).strip() == "Kanal AI"
+        assert m.group(1).strip() == "AI Channel"
         assert m.group(2).strip() == "jira,todos"
 
     def test_caller(self):
-        m = cli._BOB_CHAT_CALLER_RE.search("Bob chat Kanal AI caller owner")
+        m = cli._BOB_CHAT_CALLER_RE.search("Bob chat AI Channel caller owner")
         assert m is not None
         assert m.group(2).strip() == "owner"
 
     def test_epithets_csv(self):
-        m = cli._BOB_CHAT_EPITHETS_RE.search("Bob chat Kanal AI epithets zwiezly,formalny")
+        m = cli._BOB_CHAT_EPITHETS_RE.search("Bob chat AI Channel epithets zwiezly,formalny")
         assert m is not None
         assert m.group(2).strip() == "zwiezly,formalny"
 
     def test_epithets_none(self):
-        m = cli._BOB_CHAT_EPITHETS_RE.search("Bob chat Kanal AI epithets none")
+        m = cli._BOB_CHAT_EPITHETS_RE.search("Bob chat AI Channel epithets none")
         assert m is not None
         assert m.group(2).strip() == "none"
 
@@ -486,17 +488,17 @@ class TestFallbackRegexes:
 class TestPersistentHistory:
     def test_load_empty_when_no_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(cli, "_HISTORY_DIR", tmp_path)
-        result = cli._load_history_from_disk("Kanal AI")
+        result = cli._load_history_from_disk("AI Channel")
         assert result == []
 
     def test_roundtrip(self, tmp_path, monkeypatch):
         monkeypatch.setattr(cli, "_HISTORY_DIR", tmp_path)
         entries = [
-            {"sender": "Alice", "text": "Cześć Bob"},
-            {"sender": "Bob", "text": "Cześć!"},
+            {"sender": "Alice", "text": "Hi Bob, zażółć gęślą jaźń"},
+            {"sender": "Bob", "text": "Hi!"},
         ]
-        cli._append_history_to_disk("Kanal AI", entries)
-        loaded = cli._load_history_from_disk("Kanal AI")
+        cli._append_history_to_disk("AI Channel", entries)
+        loaded = cli._load_history_from_disk("AI Channel")
         assert loaded == entries
 
     def test_respects_char_budget(self, tmp_path, monkeypatch):
@@ -514,9 +516,9 @@ class TestPersistentHistory:
 
     def test_rewrite_replaces_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(cli, "_HISTORY_DIR", tmp_path)
-        old = [{"sender": "Alice", "text": "stare"}]
+        old = [{"sender": "Alice", "text": "old"}]
         cli._append_history_to_disk("rewrite_chat", old)
-        new = [{"sender": "STRESZCZENIE", "text": "skompresowane"}]
+        new = [{"sender": "SUMMARY", "text": "compacted"}]
         cli._rewrite_history_on_disk("rewrite_chat", new)
         loaded = cli._load_history_from_disk("rewrite_chat")
         assert loaded == new
@@ -566,7 +568,7 @@ def _make_owner_msg(text: str, seq: int = 2) -> dict:
     return {
         "id": f"msg_{seq}",
         "sequence_id": seq,
-        "sender": "Szef",
+        "sender": "Boss",
         "sender_mri": cli.api_client.USER_MRI,
         "text": text,
         "raw_html": f"<p>{text}</p>",
@@ -581,7 +583,7 @@ def test_notif_set_command(tmp_path, monkeypatch):
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    msg_text = "Bob, przypomnij dzis 15:00 na Kanal AI: test ping"
+    msg_text = "Bob, remind today 15:00 in AI Channel: test ping"
     fake_msgs = [_make_owner_msg(msg_text)]
 
     ack_calls = []
@@ -601,12 +603,12 @@ def test_notif_set_command(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         cli, "_load_chat_config",
-        lambda path: {"Kanal AI": {"knowledge": None}},
+        lambda path: {"AI Channel": {"knowledge": None}},
     )
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Notatki", "conv-notatki", args, state, [0.0],
+        "Notes", "conv-notes", args, state, [0.0],
         control_chat=True,
         caller="owner",
     )
@@ -637,7 +639,7 @@ def test_notif_show_command(tmp_path, monkeypatch):
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Notatki", "conv-notatki", args, state, [0.0],
+        "Notes", "conv-notes", args, state, [0.0],
         control_chat=True,
         caller="owner",
     )
@@ -646,7 +648,7 @@ def test_notif_show_command(tmp_path, monkeypatch):
 
 
 def test_notif_del_command(tmp_path, monkeypatch):
-    """_NOTIF_DEL_RE handler calls delete_notification and acks 'Usuniete.'."""
+    """_NOTIF_DEL_RE handler calls delete_notification and acks 'Deleted.'."""
     log_file = str(tmp_path / "log.jsonl")
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
@@ -669,13 +671,13 @@ def test_notif_del_command(tmp_path, monkeypatch):
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Notatki", "conv-notatki", args, state, [0.0],
+        "Notes", "conv-notes", args, state, [0.0],
         control_chat=True,
         caller="owner",
     )
 
     assert del_calls == ["sn_xyz"], f"Expected delete called with sn_xyz: {del_calls}"
-    assert any("Usuniete." in ack for ack in ack_calls), f"Expected Usuniete. in acks: {ack_calls}"
+    assert any("Deleted." in ack for ack in ack_calls), f"Expected Deleted. in acks: {ack_calls}"
 
 
 # ---------------------------------------------------------------------------
@@ -704,13 +706,13 @@ def test_internet_allows(setting, is_owner, expected):
 
 
 def test_internet_for_returns_setting():
-    cfg = {"Kanal AI": {"internet": "all"}}
-    assert cli._internet_for("Kanal AI", cfg) == "all"
+    cfg = {"AI Channel": {"internet": "all"}}
+    assert cli._internet_for("AI Channel", cfg) == "all"
 
 
 def test_internet_for_only_me():
-    cfg = {"Kanal AI": {"internet": "only_me"}}
-    assert cli._internet_for("Kanal AI", cfg) == "only_me"
+    cfg = {"AI Channel": {"internet": "only_me"}}
+    assert cli._internet_for("AI Channel", cfg) == "only_me"
 
 
 def test_internet_for_missing_chat_returns_none():
@@ -718,18 +720,18 @@ def test_internet_for_missing_chat_returns_none():
 
 
 def test_internet_for_missing_field_returns_none():
-    cfg = {"Kanal AI": {"mcp": None}}
-    assert cli._internet_for("Kanal AI", cfg) is None
+    cfg = {"AI Channel": {"mcp": None}}
+    assert cli._internet_for("AI Channel", cfg) is None
 
 
 def test_internet_for_null_value_returns_none():
-    cfg = {"Kanal AI": {"internet": None}}
-    assert cli._internet_for("Kanal AI", cfg) is None
+    cfg = {"AI Channel": {"internet": None}}
+    assert cli._internet_for("AI Channel", cfg) is None
 
 
 def test_internet_for_invalid_value_returns_none():
-    cfg = {"Kanal AI": {"internet": "true"}}
-    assert cli._internet_for("Kanal AI", cfg) is None
+    cfg = {"AI Channel": {"internet": "true"}}
+    assert cli._internet_for("AI Channel", cfg) is None
 
 
 # ---------------------------------------------------------------------------
@@ -739,18 +741,18 @@ def test_internet_for_invalid_value_returns_none():
 
 class TestBobChatInternetRe:
     def test_all(self):
-        m = cli._BOB_CHAT_INTERNET_RE.search("Bob chat Kanal AI internet all")
+        m = cli._BOB_CHAT_INTERNET_RE.search("Bob chat AI Channel internet all")
         assert m is not None
-        assert m.group(1).strip() == "Kanal AI"
+        assert m.group(1).strip() == "AI Channel"
         assert m.group(2).strip() == "all"
 
     def test_only_me(self):
-        m = cli._BOB_CHAT_INTERNET_RE.search("bob chat Kanal AI internet only_me")
+        m = cli._BOB_CHAT_INTERNET_RE.search("bob chat AI Channel internet only_me")
         assert m is not None
         assert m.group(2).strip() == "only_me"
 
     def test_off(self):
-        m = cli._BOB_CHAT_INTERNET_RE.search("Bob chat Kanal AI internet off")
+        m = cli._BOB_CHAT_INTERNET_RE.search("Bob chat AI Channel internet off")
         assert m is not None
         assert m.group(2).strip() == "off"
 
@@ -758,7 +760,7 @@ class TestBobChatInternetRe:
         assert cli._BOB_CHAT_INTERNET_RE.search("BOB CHAT test internet ALL") is not None
 
     def test_no_match_without_keyword(self):
-        assert cli._BOB_CHAT_INTERNET_RE.search("Bob chat Kanal AI mcp jira") is None
+        assert cli._BOB_CHAT_INTERNET_RE.search("Bob chat AI Channel mcp jira") is None
 
 
 # ---------------------------------------------------------------------------
@@ -770,22 +772,22 @@ def test_apply_chat_config_change_internet_all(tmp_path):
     """Setting internet='all' stores the value."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {}}}), encoding="utf-8")
-    chat_config = {"Kanal AI": {}}
-    cli._apply_chat_config_change("Kanal AI", "internet", "all", chat_config, path=cfg_path)
-    assert chat_config["Kanal AI"]["internet"] == "all"
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {}}}), encoding="utf-8")
+    chat_config = {"AI Channel": {}}
+    cli._apply_chat_config_change("AI Channel", "internet", "all", chat_config, path=cfg_path)
+    assert chat_config["AI Channel"]["internet"] == "all"
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    assert data["chats"]["Kanal AI"]["internet"] == "all"
+    assert data["chats"]["AI Channel"]["internet"] == "all"
 
 
 def test_apply_chat_config_change_internet_only_me(tmp_path):
     """Setting internet='only_me' stores the value."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {}}}), encoding="utf-8")
-    chat_config = {"Kanal AI": {}}
-    cli._apply_chat_config_change("Kanal AI", "internet", "only_me", chat_config, path=cfg_path)
-    assert chat_config["Kanal AI"]["internet"] == "only_me"
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {}}}), encoding="utf-8")
+    chat_config = {"AI Channel": {}}
+    cli._apply_chat_config_change("AI Channel", "internet", "only_me", chat_config, path=cfg_path)
+    assert chat_config["AI Channel"]["internet"] == "only_me"
 
 
 def test_apply_chat_config_change_internet_off_removes_key(tmp_path):
@@ -793,13 +795,13 @@ def test_apply_chat_config_change_internet_off_removes_key(tmp_path):
     import json
     cfg_path = tmp_path / "chat-config.json"
     cfg_path.write_text(
-        json.dumps({"chats": {"Kanal AI": {"internet": "all"}}}), encoding="utf-8"
+        json.dumps({"chats": {"AI Channel": {"internet": "all"}}}), encoding="utf-8"
     )
-    chat_config = {"Kanal AI": {"internet": "all"}}
-    cli._apply_chat_config_change("Kanal AI", "internet", None, chat_config, path=cfg_path)
-    assert "internet" not in chat_config["Kanal AI"]
+    chat_config = {"AI Channel": {"internet": "all"}}
+    cli._apply_chat_config_change("AI Channel", "internet", None, chat_config, path=cfg_path)
+    assert "internet" not in chat_config["AI Channel"]
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    assert "internet" not in data["chats"]["Kanal AI"]
+    assert "internet" not in data["chats"]["AI Channel"]
 
 
 def test_apply_chat_config_change_internet_off_string_removes_key(tmp_path):
@@ -807,23 +809,23 @@ def test_apply_chat_config_change_internet_off_string_removes_key(tmp_path):
     import json
     cfg_path = tmp_path / "chat-config.json"
     cfg_path.write_text(
-        json.dumps({"chats": {"Kanal AI": {"internet": "only_me"}}}), encoding="utf-8"
+        json.dumps({"chats": {"AI Channel": {"internet": "only_me"}}}), encoding="utf-8"
     )
-    chat_config = {"Kanal AI": {"internet": "only_me"}}
-    cli._apply_chat_config_change("Kanal AI", "internet", "off", chat_config, path=cfg_path)
-    assert "internet" not in chat_config["Kanal AI"]
+    chat_config = {"AI Channel": {"internet": "only_me"}}
+    cli._apply_chat_config_change("AI Channel", "internet", "off", chat_config, path=cfg_path)
+    assert "internet" not in chat_config["AI Channel"]
 
 
 def test_apply_chat_config_change_internet_invalid_no_mutation(tmp_path, capsys):
     """Invalid internet value is rejected, config unchanged."""
     import json
     cfg_path = tmp_path / "chat-config.json"
-    cfg_path.write_text(json.dumps({"chats": {"Kanal AI": {}}}), encoding="utf-8")
-    chat_config = {"Kanal AI": {}}
-    cli._apply_chat_config_change("Kanal AI", "internet", "yes", chat_config, path=cfg_path)
-    assert "internet" not in chat_config["Kanal AI"]
+    cfg_path.write_text(json.dumps({"chats": {"AI Channel": {}}}), encoding="utf-8")
+    chat_config = {"AI Channel": {}}
+    cli._apply_chat_config_change("AI Channel", "internet", "yes", chat_config, path=cfg_path)
+    assert "internet" not in chat_config["AI Channel"]
     captured = capsys.readouterr()
-    assert "nieprawidlowa wartosc internet" in captured.err
+    assert "invalid internet value" in captured.err
 
 
 # ---------------------------------------------------------------------------
@@ -850,7 +852,7 @@ def test_apply_chat_config_change_internet_invalid_no_mutation(tmp_path, capsys)
     "co jest w pliku",
 ])
 def test_read_file_trigger_pl_matches(text):
-    """Polish trigger phrases must match _READ_FILE_TRIGGER_RE."""
+    """Polish trigger phrases (kept as aliases) must match _READ_FILE_TRIGGER_RE."""
     assert cli._READ_FILE_TRIGGER_RE.search(text), f"Expected match for: {text!r}"
 
 
@@ -873,16 +875,16 @@ def test_read_file_trigger_en_matches(text):
 
 
 @pytest.mark.parametrize("text", [
-    "dziekuje",
+    "thanks",
     "ok",
-    "tak, Bob",
+    "yes, Bob",
+    "great",
+    "got it",
+    "sure",
+    # Polish small talk must not match either
+    "dziekuje",
     "co u Ciebie",
     "zrob mi taski",
-    "hej",
-    "dobra",
-    "swietnie",
-    "rozumiem",
-    "jasne",
 ])
 def test_read_file_trigger_no_match(text):
     """Unrelated phrases must NOT match _READ_FILE_TRIGGER_RE."""
@@ -901,7 +903,7 @@ def test_read_file_trigger_no_match(text):
 
 
 @pytest.mark.parametrize("text", [
-    "bob,", "bob, co tam", ",bob", "a bob, siema",
+    "bob,", "bob, what's up", ",bob", "hey bob, hi",
     "bob!", "bob?", "bob.", "bob;", "bob:",
     "(bob)", "bob-", "-bob", "bob—",
     "Bob,", "BOB,",
@@ -930,7 +932,7 @@ def test_trigger_re_for_falls_back_to_bob_re_with_no_chat_config(monkeypatch):
     """A chat with no configured custom trigger word uses _BOB_RE and its comma handling."""
     monkeypatch.setattr(cli, "_TRIGGER_RE_CACHE", {})
     pat = cli._trigger_re_for("SomeChat", {})
-    assert pat.search("bob, co tam")
+    assert pat.search("bob, what's up")
 
 
 # ---------------------------------------------------------------------------
@@ -948,13 +950,13 @@ def test_enrich_text_with_images_stub_no_network():
                                                mode="stub")
     mock_download.assert_not_called()
     mock_describe.assert_not_called()
-    assert "[Obraz dolaczony do wiadomosci]" in result or "Obraz" in result
+    assert "[Image attached to the message]" in result
 
 
 def test_enrich_text_with_images_stub_single_image():
     """mode='stub' with 1 image url returns singular placeholder."""
     result = cli._enrich_text_with_images("some text", ["http://x.com/a.jpg"], mode="stub")
-    assert "Obraz" in result
+    assert "[Image attached to the message]" in result
     assert "some text" in result
 
 
@@ -962,8 +964,7 @@ def test_enrich_text_with_images_stub_multiple_images():
     """mode='stub' with N>1 images returns plural placeholder."""
     result = cli._enrich_text_with_images("msg", ["http://x.com/a.jpg", "http://x.com/b.jpg"],
                                            mode="stub")
-    assert "2" in result
-    assert "obraz" in result.lower()
+    assert "[2 images attached to the message]" in result
 
 
 def test_enrich_text_with_images_stub_no_urls_returns_text():
@@ -1108,7 +1109,7 @@ def test_full_mode_reply_uses_image_paths_not_describe_image(tmp_path):
         mock_describe.assert_not_called()
         # Simulate passing image_paths to freeform_reply (as the watch loop does)
         cli.ai.freeform_reply(
-            "co jest na tym obrazku?",
+            "what is in this picture?",
             image_paths=paths or None,
         )
 
@@ -1216,15 +1217,26 @@ def test_safe_relative_path_traversal_rejected(tmp_path):
 
 
 class TestBobForwardRe:
-    def test_name_form(self):
-        m = cli._BOB_FORWARD_RE.search("Bob, wyslij na Kanal AI")
+    def test_english_forward_to(self):
+        m = cli._BOB_FORWARD_RE.search("Bob, forward to AI Channel")
         assert m is not None
-        assert m.group(1).strip() == "Kanal AI"
+        assert m.group(1).strip() == "AI Channel"
+
+    def test_english_send_it_to(self):
+        m = cli._BOB_FORWARD_RE.search("Bob - send it to AI Channel")
+        assert m is not None
+        assert m.group(1).strip() == "AI Channel"
+
+    def test_name_form(self):
+        """Polish alias "wyslij na" still works."""
+        m = cli._BOB_FORWARD_RE.search("Bob, wyslij na AI Channel")
+        assert m is not None
+        assert m.group(1).strip() == "AI Channel"
 
     def test_wyslij_with_s_caron(self):
-        m = cli._BOB_FORWARD_RE.search("Bob, wyślij na Kanal AI")
+        m = cli._BOB_FORWARD_RE.search("Bob, wyślij na AI Channel")
         assert m is not None
-        assert m.group(1).strip() == "Kanal AI"
+        assert m.group(1).strip() == "AI Channel"
 
     def test_link_form(self):
         url = (
@@ -1240,6 +1252,7 @@ class TestBobForwardRe:
 
     def test_no_match_without_bob(self):
         assert cli._BOB_FORWARD_RE.search("wyslij na gdzies") is None
+        assert cli._BOB_FORWARD_RE.search("forward to somewhere") is None
 
     def test_no_match_different_command(self):
         assert cli._BOB_FORWARD_RE.search("Bob pause 30m") is None
@@ -1256,7 +1269,7 @@ class TestTeamsLinkRe:
         assert cli._TEAMS_LINK_RE.search("https://example.com/chat/19:abc") is None
 
     def test_no_match_plain_text(self):
-        assert cli._TEAMS_LINK_RE.search("Kanal AI chat name") is None
+        assert cli._TEAMS_LINK_RE.search("AI Channel chat name") is None
 
 
 # ---------------------------------------------------------------------------
@@ -1267,10 +1280,10 @@ class TestTeamsLinkRe:
 def test_watch_state_last_forward_text_roundtrip(tmp_path):
     """last_forward_text with Polish chars is stored and loaded without escaping."""
     state_path = str(tmp_path / "watch-state.json")
-    polish_reply = "Zadzwoń do mnie jutro rano."
-    cli._save_watch_state(state_path, "Notatki", {"last_forward_text": polish_reply})
+    polish_reply = "Zadzwoń do mnie jutro rano."  # Polish on purpose: non-ASCII must stay unescaped
+    cli._save_watch_state(state_path, "Notes", {"last_forward_text": polish_reply})
     loaded = cli._load_watch_state(state_path)
-    assert loaded["Notatki"]["last_forward_text"] == polish_reply
+    assert loaded["Notes"]["last_forward_text"] == polish_reply
     # Verify stored as real UTF-8, not escaped
     raw = Path(state_path).read_bytes().decode("utf-8")
     assert polish_reply in raw
@@ -1279,10 +1292,10 @@ def test_watch_state_last_forward_text_roundtrip(tmp_path):
 def test_watch_state_pending_forward_roundtrip(tmp_path):
     """pending_forward dict is stored and loaded correctly."""
     state_path = str(tmp_path / "watch-state.json")
-    pf = {"conv_id": "19:chat06@thread.v2", "chat_name": "Grafikowanie Internal"}
-    cli._save_watch_state(state_path, "Notatki", {"pending_forward": pf})
+    pf = {"conv_id": "19:chat06@thread.v2", "chat_name": "Rota Internal"}
+    cli._save_watch_state(state_path, "Notes", {"pending_forward": pf})
     loaded = cli._load_watch_state(state_path)
-    assert loaded["Notatki"]["pending_forward"] == pf
+    assert loaded["Notes"]["pending_forward"] == pf
 
 
 # ---------------------------------------------------------------------------
@@ -1296,7 +1309,7 @@ def test_forward_fuzzy_single_match_sets_pending(tmp_path, monkeypatch):
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    msg_text = "Bob, wyslij na Grafikowanie"
+    msg_text = "Bob, forward to Rota"
     fake_msgs = [_make_owner_msg(msg_text)]
 
     ack_calls = []
@@ -1308,26 +1321,26 @@ def test_forward_fuzzy_single_match_sets_pending(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         cli.api_client, "_fuzzy_find_conversations",
-        lambda q: [("19:chat32@thread.v2", "Grafikowanie Internal")],
+        lambda q: [("19:chat32@thread.v2", "Rota Internal")],
     )
     monkeypatch.setattr(
         cli, "_load_chat_config",
         lambda path: {},
     )
 
-    state = {"last_sequence_id": 1, "last_forward_text": "Ostatnia odpowiedz Boba."}
+    state = {"last_sequence_id": 1, "last_forward_text": "Bob's last reply."}
     cli._process_chat_messages(
-        "Notatki", "conv-notatki", args, state, [0.0],
+        "Notes", "conv-notes", args, state, [0.0],
         control_chat=True,
         caller="owner",
     )
 
     saved = cli._load_watch_state(state_path)
-    pf = saved.get("Notatki", {}).get("pending_forward")
+    pf = saved.get("Notes", {}).get("pending_forward")
     assert pf is not None, f"pending_forward not set, acks: {ack_calls}"
     assert pf["conv_id"] == "19:chat32@thread.v2"
-    assert pf["chat_name"] == "Grafikowanie Internal"
-    assert any("Chodzi o" in ack for ack in ack_calls), f"Unexpected acks: {ack_calls}"
+    assert pf["chat_name"] == "Rota Internal"
+    assert any("Do you mean" in ack for ack in ack_calls), f"Unexpected acks: {ack_calls}"
 
 
 # ---------------------------------------------------------------------------
@@ -1335,13 +1348,13 @@ def test_forward_fuzzy_single_match_sets_pending(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_forward_confirmation_tak_sends_and_clears(tmp_path, monkeypatch):
-    """Sending 'tak' with pending_forward calls send_html_message with Bob header and clears pending_forward."""
+@pytest.mark.parametrize("msg_text", ["yes", "tak"])
+def test_forward_confirmation_tak_sends_and_clears(tmp_path, monkeypatch, msg_text):
+    """Sending 'yes' (or the Polish 'tak') with pending_forward sends with the Bob header and clears it."""
     log_file = str(tmp_path / "log.jsonl")
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    msg_text = "tak"
     fake_msgs = [_make_owner_msg(msg_text)]
 
     ack_calls = []
@@ -1357,14 +1370,14 @@ def test_forward_confirmation_tak_sends_and_clears(tmp_path, monkeypatch):
         lambda html, cid: html_calls.append((html, cid)) or "msg-id-123",
     )
 
-    pf_data = {"conv_id": "19:chat32@thread.v2", "chat_name": "Grafikowanie Internal"}
+    pf_data = {"conv_id": "19:chat32@thread.v2", "chat_name": "Rota Internal"}
     state = {
         "last_sequence_id": 1,
-        "last_forward_text": "Ostatnia odpowiedz Boba.",
+        "last_forward_text": "Bob's last reply.",
         "pending_forward": pf_data,
     }
     cli._process_chat_messages(
-        "Notatki", "conv-notatki", args, state, [0.0],
+        "Notes", "conv-notes", args, state, [0.0],
         control_chat=True,
         caller="owner",
     )
@@ -1372,13 +1385,13 @@ def test_forward_confirmation_tak_sends_and_clears(tmp_path, monkeypatch):
     assert html_calls, f"send_html_message not called, acks: {ack_calls}"
     sent_html, sent_cid = html_calls[0]
     assert "[Bob]" in sent_html, f"Bob header missing in HTML: {sent_html!r}"
-    assert "Ostatnia odpowiedz Boba." in sent_html
+    assert "Bob's last reply." in sent_html
     assert sent_cid == "19:chat32@thread.v2"
-    assert any("Wyslane" in ack for ack in ack_calls), f"Unexpected acks: {ack_calls}"
+    assert any("Sent to" in ack for ack in ack_calls), f"Unexpected acks: {ack_calls}"
 
     # pending_forward must be cleared
     saved = cli._load_watch_state(state_path)
-    assert saved.get("Notatki", {}).get("pending_forward") is None
+    assert saved.get("Notes", {}).get("pending_forward") is None
 
 
 # ---------------------------------------------------------------------------
@@ -1393,7 +1406,7 @@ def test_watch_send_failure_enriches_log_with_send_error(tmp_path, monkeypatch):
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    msg_text = "Bob, jak sie masz?"
+    msg_text = "Bob, how are you?"
     fake_msgs = [_make_owner_msg(msg_text, seq=2)]
 
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=20: fake_msgs)
@@ -1409,7 +1422,7 @@ def test_watch_send_failure_enriches_log_with_send_error(tmp_path, monkeypatch):
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Kanal AI", "conv-ai", args, state, 1,
+        "AI Channel", "conv-ai", args, state, 1,
         control_chat=False,
         caller="owner",
         chat_config={},
@@ -1433,7 +1446,7 @@ def test_watch_send_success_no_send_error_fields(tmp_path, monkeypatch):
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    msg_text = "Bob, jak sie masz?"
+    msg_text = "Bob, how are you?"
     fake_msgs = [_make_owner_msg(msg_text, seq=2)]
 
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=20: fake_msgs)
@@ -1442,7 +1455,7 @@ def test_watch_send_success_no_send_error_fields(tmp_path, monkeypatch):
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Kanal AI", "conv-ai", args, state, 1,
+        "AI Channel", "conv-ai", args, state, 1,
         control_chat=False,
         caller="owner",
         chat_config={},
@@ -1481,9 +1494,9 @@ def test_persona_for_returns_configured_value():
 def test_persona_for_returns_none_when_key_absent():
     """Returns None when chat has no persona key (Bob is default)."""
     chat_config = {
-        "Kanal AI": {"knowledge": None, "mcp": ["jira"]}
+        "AI Channel": {"knowledge": None, "mcp": ["jira"]}
     }
-    result = cli._persona_for("Kanal AI", chat_config)
+    result = cli._persona_for("AI Channel", chat_config)
     assert result is None
 
 
@@ -1522,14 +1535,14 @@ def test_thinking_placeholder_mechanism_removed():
 
 
 def test_plan_gifs_giphy_fallback():
-    cleaned, plan = cli._plan_gifs("Patrz na to. [GIF: dog dancing]", persona=None)
-    assert cleaned == "Patrz na to."
+    cleaned, plan = cli._plan_gifs("Look at this. [GIF: dog dancing]", persona=None)
+    assert cleaned == "Look at this."
     assert plan == {"kind": "giphy", "queries": ["dog dancing"]}
 
 
 def test_plan_gifs_no_tag_returns_none():
-    cleaned, plan = cli._plan_gifs("Zwykla odpowiedz bez tagow.", persona=None)
-    assert cleaned == "Zwykla odpowiedz bez tagow."
+    cleaned, plan = cli._plan_gifs("A plain reply without tags.", persona=None)
+    assert cleaned == "A plain reply without tags."
     assert plan is None
 
 
@@ -1554,7 +1567,7 @@ def test_gif_plan_not_executed_when_reply_is_silent(tmp_path, monkeypatch):
     state_path = str(tmp_path / "state.json")
     args = _make_notif_args(log_file, state_path)
 
-    fake_msgs = [_make_owner_msg("Bob, cos tam", seq=2)]
+    fake_msgs = [_make_owner_msg("Bob, something", seq=2)]
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=20: fake_msgs)
     monkeypatch.setattr(cli.ai, "freeform_reply", lambda *a, **kw: "<silent/> [GIF: dog dancing]")
 
@@ -1563,7 +1576,7 @@ def test_gif_plan_not_executed_when_reply_is_silent(tmp_path, monkeypatch):
 
     state = {"last_sequence_id": 1}
     cli._process_chat_messages(
-        "Kanal AI", "conv-ai", args, state, 1,
+        "AI Channel", "conv-ai", args, state, 1,
         control_chat=False,
         caller="owner",
         chat_config={},
@@ -1573,44 +1586,50 @@ def test_gif_plan_not_executed_when_reply_is_silent(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# @-mention escalation token: [BOB-WYWOLAJ:...]
+# @-mention escalation token: [BOB-CALL:...] (Polish alias [BOB-WYWOLAJ:...])
 # ---------------------------------------------------------------------------
 
 
 def test_bob_mention_re_matches_single_key():
-    m = cli._BOB_MENTION_RE.search("tekst [BOB-WYWOLAJ: kowalski] koniec")
+    m = cli._BOB_MENTION_RE.search("text [BOB-CALL: kowalski] end")
     assert m is not None
     assert m.group("who") == "kowalski"
 
 
 def test_bob_mention_re_matches_multiple_keys():
-    m = cli._BOB_MENTION_RE.search("[BOB-WYWOLAJ: kowalski,ala]")
+    m = cli._BOB_MENTION_RE.search("[BOB-CALL: kowalski,ala]")
     assert m is not None
     assert m.group("who") == "kowalski,ala"
 
 
 def test_bob_mention_re_case_insensitive():
-    m = cli._BOB_MENTION_RE.search("[bob-wywolaj: kowalski]")
+    m = cli._BOB_MENTION_RE.search("[bob-call: kowalski]")
     assert m is not None
 
 
+@pytest.mark.parametrize("token", ["[BOB-WYWOLAJ: kowalski]", "[bob-wywolaj: kowalski]"])
+def test_bob_mention_re_accepts_polish_alias(token):
+    m = cli._BOB_MENTION_RE.search(f"text {token} end")
+    assert m is not None and m.group("who") == "kowalski"
+
+
 def test_bob_mention_re_no_match_on_plain_text():
-    assert cli._BOB_MENTION_RE.search("zwykla wiadomosc bez tokenu") is None
+    assert cli._BOB_MENTION_RE.search("a plain message without a token") is None
 
 
 def test_handle_bob_mention_empty_dict_does_not_crash_and_strips_token():
     """Empty _BOB_MENTION_PEOPLE (default state) must not crash; token is stripped
     from the visible reply even though no mention can be resolved."""
-    reply, html, entries = cli._handle_bob_mention("odpowiedz [BOB-WYWOLAJ: ktokolwiek] koniec")
+    reply, html, entries = cli._handle_bob_mention("reply [BOB-CALL: anyone] end")
     assert html == ""
     assert entries == []
-    assert "BOB-WYWOLAJ" not in reply
-    assert "koniec" in reply
+    assert "BOB-CALL" not in reply
+    assert "end" in reply
 
 
 def test_handle_bob_mention_no_token_returns_reply_unchanged():
-    reply, html, entries = cli._handle_bob_mention("zwykla odpowiedz bez tokenu")
-    assert reply == "zwykla odpowiedz bez tokenu"
+    reply, html, entries = cli._handle_bob_mention("a plain reply without a token")
+    assert reply == "a plain reply without a token"
     assert html == ""
     assert entries == []
 
@@ -1619,10 +1638,10 @@ def test_handle_bob_mention_unknown_key_no_mention():
     """A token with a key that isn't in _BOB_MENTION_PEOPLE yields no mention,
     even if the dict is populated with other entries."""
     with patch.dict(cli._BOB_MENTION_PEOPLE, {"kowalski": ("Jan Test", "8:orgid:xxx")}, clear=True):
-        reply, html, entries = cli._handle_bob_mention("[BOB-WYWOLAJ: nieznany]")
+        reply, html, entries = cli._handle_bob_mention("[BOB-CALL: unknown]")
     assert html == ""
     assert entries == []
-    assert "BOB-WYWOLAJ" not in reply
+    assert "BOB-CALL" not in reply
 
 
 def test_handle_bob_mention_known_key_resolves_via_build_mentions_html():
@@ -1630,17 +1649,26 @@ def test_handle_bob_mention_known_key_resolves_via_build_mentions_html():
     fake_entries = [{"id": "0", "mri": "8:orgid:xxx", "displayName": "Jan Test"}]
     with patch.dict(cli._BOB_MENTION_PEOPLE, {"kowalski": ("Jan Test", "8:orgid:xxx")}, clear=True), \
          patch.object(cli.api_client, "build_mentions_html", return_value=(fake_html, fake_entries)) as mock_build:
-        reply, html, entries = cli._handle_bob_mention("prosze [BOB-WYWOLAJ: kowalski] pomoc")
+        reply, html, entries = cli._handle_bob_mention("please [BOB-CALL: kowalski] help")
     mock_build.assert_called_once_with([("Jan Test", "8:orgid:xxx")])
     assert html == fake_html
     assert entries == fake_entries
-    assert "BOB-WYWOLAJ" not in reply
+    assert "BOB-CALL" not in reply
+
+
+def test_handle_bob_mention_polish_alias_resolves_too():
+    fake_html = '<at id="0">Jan Test</at>'
+    fake_entries = [{"id": "0", "mri": "8:orgid:xxx", "displayName": "Jan Test"}]
+    with patch.dict(cli._BOB_MENTION_PEOPLE, {"kowalski": ("Jan Test", "8:orgid:xxx")}, clear=True), \
+         patch.object(cli.api_client, "build_mentions_html", return_value=(fake_html, fake_entries)):
+        reply, html, entries = cli._handle_bob_mention("please [BOB-WYWOLAJ: kowalski] help")
+    assert html == fake_html and "BOB-WYWOLAJ" not in reply and reply == "please  help"
 
 
 def test_handle_bob_mention_ignores_other_prefixes():
-    """_handle_bob_mention must not match another persona's [X-WYWOLAJ:...] token."""
-    reply, html, entries = cli._handle_bob_mention("tekst [EXAMPLE-WYWOLAJ: nowak] koniec")
-    assert "[EXAMPLE-WYWOLAJ: nowak]" in reply
+    """_handle_bob_mention must not match another persona's [X-CALL:...] token."""
+    reply, html, entries = cli._handle_bob_mention("text [EXAMPLE-CALL: nowak] end")
+    assert "[EXAMPLE-CALL: nowak]" in reply
     assert html == ""
     assert entries == []
 
@@ -1660,26 +1688,26 @@ def test_handle_bob_mention_falls_back_to_user_memory_when_key_not_in_dict():
              return_value=("Person 40", "8:orgid:person-40"),
          ) as mock_find, \
          patch.object(cli.api_client, "build_mentions_html", return_value=(fake_html, fake_entries)) as mock_build:
-        reply, html, entries = cli._handle_bob_mention("oznacz [BOB-WYWOLAJ: ewa nowak] prosze")
+        reply, html, entries = cli._handle_bob_mention("tag [BOB-CALL: ewa nowak] please")
     mock_find.assert_called_once_with("ewa nowak")
     mock_build.assert_called_once_with([("Person 40", "8:orgid:person-40")])
     assert html == fake_html
     assert entries == fake_entries
-    assert "BOB-WYWOLAJ" not in reply
+    assert "BOB-CALL" not in reply
 
 
 def test_handle_bob_mention_ambiguous_fallback_yields_no_mention():
     """When find_profile_by_name returns None (ambiguous match), token is stripped, no mention."""
     with patch.dict(cli._BOB_MENTION_PEOPLE, {}, clear=True), \
          patch.object(cli.user_memory, "find_profile_by_name", return_value=None):
-        reply, html, entries = cli._handle_bob_mention("[BOB-WYWOLAJ: jan kowalski]")
+        reply, html, entries = cli._handle_bob_mention("[BOB-CALL: jan kowalski]")
     assert html == ""
     assert entries == []
-    assert "BOB-WYWOLAJ" not in reply
+    assert "BOB-CALL" not in reply
 
 
 def test_bob_mention_re_matches_polish_diacritics():
-    m = cli._BOB_MENTION_RE.search("[BOB-WYWOLAJ: Żaneta Ćwiklińska]")
+    m = cli._BOB_MENTION_RE.search("[BOB-CALL: Żaneta Ćwiklińska]")
     assert m is not None
     assert m.group("who") == "Żaneta Ćwiklińska"
 
@@ -1773,8 +1801,8 @@ def test_scheduler_skips_non_generator_job_without_generated_file(tmp_path, monk
 
 
 def test_scheduler_skips_disabled_job(tmp_path, monkeypatch):
-    """enabled=false: zadna faza nie jest odpalana, nawet gdy job (generator,
-    okno czasowe) poza tym by wystartowal -- runner i tak przerwalby z exit 1."""
+    """enabled=false: no phase fires, even when the job (generator, time window)
+    would otherwise start -- the runner would exit 1 anyway."""
     job_def = {
         "id": "sprint-hygiene-teamb-0700",
         "schedule_type": "daily",
@@ -1806,7 +1834,7 @@ def test_check_skip_answered_no_newer_messages_skips_ai_call(monkeypatch):
         lambda *a, **kw: ai_called.append((a, kw)) or {"answered": True, "override": False},
     )
 
-    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp")
+    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply")
 
     assert (skip, reason) == (False, "")
     assert ai_called == []
@@ -1814,39 +1842,39 @@ def test_check_skip_answered_no_newer_messages_skips_ai_call(monkeypatch):
 
 def test_check_skip_answered_ignores_bobs_own_still_working_note(monkeypatch):
     """The "still working" note Bob posts between the question and the reply is not someone answering."""
-    html = cli.api_client.bob_html("⏳ Nadal pracuję nad odpowiedzią (2 min)")
+    html = cli.api_client.bob_html("⏳ Still working on the answer (2 min)")
     fake_msgs = [{"id": "m2", "sender_mri": cli.api_client.USER_MRI, "sequence_id": 11, "raw_html": html,
                   "text": cli.api_client._strip_html(html)}]
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=10: fake_msgs)
     monkeypatch.setattr(cli.ai, "check_already_answered",
                         lambda *a, **kw: pytest.fail("Bob's own note must not reach the classifier"))
 
-    assert cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp") == (False, "")
+    assert cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply") == (False, "")
 
 
 def test_check_skip_answered_newer_and_answered_skips(monkeypatch):
     """Newer message present + classifier says answered, no override -> skip."""
     fake_msgs = [
-        {"id": "m2", "sender_mri": "8:orgid:other", "text": "juz odpowiedziane", "sequence_id": 11},
+        {"id": "m2", "sender_mri": "8:orgid:other", "text": "already answered", "sequence_id": 11},
     ]
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=10: fake_msgs)
     monkeypatch.setattr(
         cli.ai, "check_already_answered",
         lambda question, reply, newer: {
-            "answered": True, "override": False, "evidence": "juz odpowiedziane",
+            "answered": True, "override": False, "evidence": "already answered",
         },
     )
 
-    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp")
+    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply")
 
     assert skip is True
-    assert reason == "juz odpowiedziane"
+    assert reason == "already answered"
 
 
 def test_check_skip_answered_override_sends_anyway(monkeypatch):
     """Newer message answered but with explicit override -> do not skip."""
     fake_msgs = [
-        {"id": "m2", "sender_mri": "8:orgid:other", "text": "Bob i tak odpowiedz", "sequence_id": 11},
+        {"id": "m2", "sender_mri": "8:orgid:other", "text": "Bob answer anyway", "sequence_id": 11},
     ]
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=10: fake_msgs)
     monkeypatch.setattr(
@@ -1854,7 +1882,7 @@ def test_check_skip_answered_override_sends_anyway(monkeypatch):
         lambda question, reply, newer: {"answered": True, "override": True, "evidence": "x"},
     )
 
-    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp")
+    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply")
 
     assert skip is False
 
@@ -1868,7 +1896,7 @@ def test_check_skip_answered_empty_get_messages_result(monkeypatch):
         lambda *a, **kw: ai_called.append((a, kw)) or {"answered": True, "override": False},
     )
 
-    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp")
+    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply")
 
     assert (skip, reason) == (False, "")
     assert ai_called == []
@@ -1901,7 +1929,7 @@ def test_parse_json_payload_malformed_json_returns_empty_dict():
 
 
 # ---------------------------------------------------------------------------
-# _extract_and_send_files ([WYSLIJ_PLIK] inline-content tag handling)
+# _extract_and_send_files ([SEND_FILE] inline-content tag handling, Polish [WYSLIJ_PLIK] alias)
 # ---------------------------------------------------------------------------
 
 import attachments_upload  # noqa: E402
@@ -1909,37 +1937,37 @@ import sharepoint_upload  # noqa: E402
 
 
 def test_extract_and_send_files_skips_empty_inline_body(monkeypatch):
-    mock_upload = MagicMock(return_value="https://contoso.sharepoint.com/x/raport.md")
+    mock_upload = MagicMock(return_value="https://contoso.sharepoint.com/x/report.md")
     monkeypatch.setattr(sharepoint_upload, "upload_file", mock_upload)
-    reply = "Mam dane.\n[WYSLIJ_PLIK: raport.md]\n\n[/WYSLIJ_PLIK]"
+    reply = "I have the data.\n[SEND_FILE: report.md]\n\n[/SEND_FILE]"
 
     cleaned = cli._extract_and_send_files(reply, conv_id="19:abc", chat_name="Test")
 
     mock_upload.assert_not_called()
-    assert "WYSLIJ_PLIK" not in cleaned
-    assert cleaned == "Mam dane."
+    assert "SEND_FILE" not in cleaned
+    assert cleaned == "I have the data."
 
 
 def test_extract_and_send_files_sends_nonempty_inline_body(monkeypatch):
-    mock_upload = MagicMock(return_value="https://contoso.sharepoint.com/x/raport.md")
+    mock_upload = MagicMock(return_value="https://contoso.sharepoint.com/x/report.md")
     monkeypatch.setattr(sharepoint_upload, "upload_file", mock_upload)
     mock_send = MagicMock(return_value=True)
     monkeypatch.setattr(cli.api_client, "send_message", mock_send)
-    reply = "Oto plik.\n[WYSLIJ_PLIK: raport.md]\ntresc raportu\n[/WYSLIJ_PLIK]"
+    reply = "Here is the file.\n[SEND_FILE: report.md]\nreport body\n[/SEND_FILE]"
 
     cleaned = cli._extract_and_send_files(reply, conv_id="19:abc", chat_name="Test")
 
     mock_upload.assert_called_once()
     sent_path = mock_upload.call_args[0][0]
-    assert sent_path.name.endswith("_raport.md")
+    assert sent_path.name.endswith("_report.md")
     dest_name = mock_upload.call_args.kwargs["dest_name"]
-    assert dest_name.endswith("_raport.md")
-    assert cleaned == "Oto plik."
+    assert dest_name.endswith("_report.md")
+    assert cleaned == "Here is the file."
     mock_send.assert_called_once()
     msg, conv = mock_send.call_args[0]
     assert conv == "19:abc"
-    assert "raport.md" in msg
-    assert "https://contoso.sharepoint.com/x/raport.md" in msg
+    assert "report.md" in msg
+    assert "https://contoso.sharepoint.com/x/report.md" in msg
 
 
 def test_extract_and_send_files_inline_failure_saves_fallback_and_notifies(monkeypatch, tmp_path):
@@ -1948,18 +1976,18 @@ def test_extract_and_send_files_inline_failure_saves_fallback_and_notifies(monke
     mock_send = MagicMock(return_value=True)
     monkeypatch.setattr(cli.api_client, "send_message", mock_send)
     monkeypatch.setattr(cli, "_ALLOWED_UPLOAD_ROOT", tmp_path)
-    reply = "Oto plik.\n[WYSLIJ_PLIK: raport.md]\ntresc raportu\n[/WYSLIJ_PLIK]"
+    reply = "Here is the file.\n[SEND_FILE: report.md]\nreport body\n[/SEND_FILE]"
 
     cleaned = cli._extract_and_send_files(reply, conv_id="19:abc", chat_name="Test")
 
-    assert cleaned == "Oto plik."
-    fallbacks = list((tmp_path / "failed-uploads").glob("*_raport.md"))
+    assert cleaned == "Here is the file."
+    fallbacks = list((tmp_path / "failed-uploads").glob("*_report.md"))
     assert len(fallbacks) == 1
-    assert fallbacks[0].read_text(encoding="utf-8") == "tresc raportu"
+    assert fallbacks[0].read_text(encoding="utf-8") == "report body"
     mock_send.assert_called_once()
     msg, conv = mock_send.call_args[0]
     assert conv == "19:abc"
-    assert "Nie udało się wysłać pliku" in msg
+    assert "Could not send the file" in msg
     assert str(fallbacks[0]) in msg
 
 
@@ -1969,17 +1997,17 @@ def test_extract_and_send_files_disk_failure_notifies_with_src_path(monkeypatch,
     mock_send = MagicMock(return_value=True)
     monkeypatch.setattr(cli.api_client, "send_message", mock_send)
     monkeypatch.setattr(cli, "_ALLOWED_UPLOAD_ROOTS", [tmp_path])
-    src = tmp_path / "nagranie.mp3"
+    src = tmp_path / "recording.mp3"
     src.write_bytes(b"abc")
-    reply = f"Prosze.\n[WYSLIJ_PLIK_Z_DYSKU: {src}]"
+    reply = f"Here you go.\n[SEND_FILE_FROM_DISK: {src}]"
 
     cleaned = cli._extract_and_send_files(reply, conv_id="19:abc", chat_name="Test")
 
-    assert cleaned == "Prosze."
+    assert cleaned == "Here you go."
     mock_send.assert_called_once()
     msg, conv = mock_send.call_args[0]
     assert conv == "19:abc"
-    assert "Nie udało się wysłać pliku" in msg
+    assert "Could not send the file" in msg
     assert str(src) in msg
 
 
@@ -2001,10 +2029,10 @@ def test_extract_and_send_gifs_giphy_fallback_intact(monkeypatch):
     mock_giphy = MagicMock(return_value=True)
     monkeypatch.setattr(cli.api_client, "send_gif", mock_giphy)
 
-    reply = "Patrz na to. [GIF: dog dancing]"
+    reply = "Look at this. [GIF: dog dancing]"
     cleaned = cli._extract_and_send_gifs(reply, conv_id="19:abc", persona=None)
 
-    assert cleaned == "Patrz na to."
+    assert cleaned == "Look at this."
     mock_giphy.assert_called_once_with("dog dancing", "19:abc", persona=None)
 
 
@@ -2012,24 +2040,24 @@ def test_extract_and_send_gifs_no_tag_sends_nothing(monkeypatch):
     mock_giphy = MagicMock(return_value=True)
     monkeypatch.setattr(cli.api_client, "send_gif", mock_giphy)
 
-    reply = "Zwykla odpowiedz bez tagow."
+    reply = "A plain reply without tags."
     cleaned = cli._extract_and_send_gifs(reply, conv_id="19:abc", persona=None)
 
-    assert cleaned == "Zwykla odpowiedz bez tagow."
+    assert cleaned == "A plain reply without tags."
     mock_giphy.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# Regresja: per-kanalowy trigger MUSI dzialac dla wiadomosci wlasciciela.
+# Regression: a per-channel trigger MUST work for the owner's messages.
 #
-# Bramka na wiadomosci wlasciciela w _process_chat_messages nie moze uzywac
-# zahardkodowanego _BOB_RE: "<trigger> daj glos" od wlasciciela na kanale persony
-# z wlasnym triggerem musi dojsc do NORMAL MODE, a nie byc po cichu odrzucone.
+# The gate on the owner's messages in _process_chat_messages must not use the
+# hard-coded _BOB_RE: "<trigger> speak up" from the owner on a persona channel
+# with its own trigger must reach NORMAL MODE, not be silently dropped.
 # ---------------------------------------------------------------------------
 
-_PERSONA_CHAT = "Asystent - testy agenta"
-_PERSONA_CFG = {_PERSONA_CHAT: {"persona": "example", "caller": "auto", "trigger": "asystent"}}
-_BOB_CHAT = "Kanal release notes"
+_PERSONA_CHAT = "Assistant - agent tests"
+_PERSONA_CFG = {_PERSONA_CHAT: {"persona": "example", "caller": "auto", "trigger": "assistant"}}
+_BOB_CHAT = "Release notes channel"
 _BOB_CFG = {_BOB_CHAT: {"caller": "all"}}
 
 
@@ -2048,7 +2076,7 @@ def _owner_msg(text: str, seq: int = 500) -> dict:
 
 
 def _run_one_message(tmp_path, chat_name, chat_config, msg, caller):
-    """Przepusc jedna wiadomosc przez _process_chat_messages. Zwraca mock ai.freeform_reply."""
+    """Run one message through _process_chat_messages. Returns the ai.freeform_reply mock."""
     args = cli.argparse.Namespace(
         model="claude-haiku-4-5",
         log_file=str(tmp_path / "log.jsonl"),
@@ -2059,12 +2087,12 @@ def _run_one_message(tmp_path, chat_name, chat_config, msg, caller):
         max_chats=1,
         force_login=False,
     )
-    # seq baseline nizszy niz wiadomosc => wiadomosc jest "nowa"
+    # seq baseline lower than the message => the message is "new"
     state = {"last_sequence_id": msg["sequence_id"] - 1, "last_composetime": "2026-08-20T10:00:00.000Z"}
 
     with patch.object(cli.api_client, "get_messages", return_value=[msg]), \
          patch.object(cli.api_client, "reply_to_message", return_value=True), \
-         patch.object(cli.ai, "freeform_reply", return_value="odpowiedz") as mock_reply, \
+         patch.object(cli.ai, "freeform_reply", return_value="reply") as mock_reply, \
          patch.object(cli, "_build_schedule_context", return_value=""), \
          patch.object(cli, "_load_private_notes", return_value=None), \
          patch.object(cli, "_load_user_context", return_value=None), \
@@ -2084,36 +2112,36 @@ def _run_one_message(tmp_path, chat_name, chat_config, msg, caller):
 
 
 def test_owner_persona_trigger_reaches_reply_on_persona_channel(tmp_path):
-    """'Asystent daj glos' od wlasciciela na kanale trigger='asystent' musi dojsc do generowania."""
+    """'Assistant speak up' from the owner on a channel with trigger='assistant' must reach generation."""
     mock_reply = _run_one_message(
-        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("Asystent daj głos"), caller="auto",
+        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("Assistant speak up"), caller="auto",
     )
     assert mock_reply.called, (
-        "wiadomosc wlasciciela z triggerem kanalu zostala odrzucona — "
-        "bramka znowu uzywa zahardkodowanego \\bbob\\b"
+        "the owner's message with the channel trigger was dropped — "
+        "the gate uses the hard-coded \\bbob\\b again"
     )
 
 
 def test_owner_message_without_channel_trigger_still_skipped(tmp_path):
-    """Bez slowa-triggera wiadomosc wlasciciela nadal ma byc pominieta (echo prevention)."""
+    """Without the trigger word the owner's message is still skipped (echo prevention)."""
     mock_reply = _run_one_message(
-        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("ok bo te krzyska on tam zalozyl"),
+        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("ok, he set those up over there"),
         caller="auto",
     )
     assert not mock_reply.called
 
 
 def test_owner_bob_word_does_not_trigger_persona_channel(tmp_path):
-    """Na kanale persony slowo 'Bob' NIE jest triggerem — tam odpowiada persona."""
+    """On a persona channel the word 'Bob' is NOT a trigger — the persona answers there."""
     mock_reply = _run_one_message(
-        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("Bob daj głos"), caller="auto",
+        tmp_path, _PERSONA_CHAT, _PERSONA_CFG, _owner_msg("Bob speak up"), caller="auto",
     )
     assert not mock_reply.called
 
 def test_owner_bob_trigger_still_works_on_normal_channel(tmp_path):
-    """Regresja w druga strone: zwykly kanal nadal reaguje na 'Bob'."""
+    """Regression the other way: a normal channel still reacts to 'Bob'."""
     mock_reply = _run_one_message(
-        tmp_path, _BOB_CHAT, _BOB_CFG, _owner_msg("Bob - co z raportem?"), caller="all",
+        tmp_path, _BOB_CHAT, _BOB_CFG, _owner_msg("Bob - what about the report?"), caller="all",
     )
     assert mock_reply.called
 
@@ -2133,7 +2161,7 @@ def _poller_source() -> str:
 def test_all_poller_subprocesses_use_the_shared_timeout():
     """No poller may reintroduce a bare timeout=120 -- pollers share the constant."""
     src = _poller_source()
-    assert src.count("timeout=_POLLER_SUBPROCESS_TIMEOUT_S,") == 1  # tylko poller urlopow
+    assert src.count("timeout=_POLLER_SUBPROCESS_TIMEOUT_S,") == 1  # only the leave poller
     assert "timeout=120," not in src
 
 
@@ -2146,7 +2174,7 @@ def test_refresh_gate_reads_token_generation_not_timestamp():
     """The success check must key on the token VALUE, not on _auth_token_ts.
 
     _auth_token_ts advances on every capture, including a re-capture of the
-    identical token, so gating on it printed "Bearer token odswiezony OK" while
+    identical token, so gating on it printed "Bearer token refreshed OK" while
     nothing had changed -- hiding a 401 loop.
     """
     src = Path(cli.__file__).read_text(encoding="utf-8")
@@ -2159,10 +2187,10 @@ def test_refresh_gate_reads_token_generation_not_timestamp():
     )
 
 
-def test_refresh_does_not_navigate_to_notatki():
-    """The chat-to-self is 'Kowalski Jan (Ty)' in the Teams DOM, never 'Notatki'.
+def test_refresh_does_not_navigate_to_notes():
+    """The chat-to-self is 'Kowalski Jan (You)' in the Teams DOM, never 'Notes'.
 
-    switch_to_chat_by_name(page, "Notatki") could therefore never match and burned
+    switch_to_chat_by_name(page, "Notes") could therefore never match and burned
     its whole timeout on every refresh. click_any_other_chat() already triggers the
     chatsvc request the refresh needs.
     """
@@ -2174,7 +2202,7 @@ def test_refresh_does_not_navigate_to_notatki():
         ln for ln in body.splitlines() if not ln.lstrip().startswith("#")
     )
 
-    assert 'switch_to_chat_by_name(page, "Notatki"' not in code
+    assert 'switch_to_chat_by_name(page, "Notes"' not in code
 
 
 def test_noop_refresh_backoff_is_monotonic_and_starts_at_zero():
@@ -2219,15 +2247,15 @@ def test_trigger_re_for_accepts_list_of_alternatives():
     """Under caller='auto' this regex is the only gate left on the OWNER's own
     messages, so every spelling the persona answers to must be listed — a missing
     one is dropped before Claude is invoked, silently."""
-    cli._TRIGGER_RE_CACHE.pop("Asystent - testy agenta", None)
-    chat_config = {"Asystent - testy agenta": {"trigger": ["asystent", "asystencie"]}}
-    pat = cli._trigger_re_for("Asystent - testy agenta", chat_config)
-    assert pat.search("asystent, co z formularzem?")
-    assert pat.search("Asystencie zapisz to")
+    cli._TRIGGER_RE_CACHE.pop("Assistant - agent tests", None)
+    chat_config = {"Assistant - agent tests": {"trigger": ["assistant", "helper"]}}
+    pat = cli._trigger_re_for("Assistant - agent tests", chat_config)
+    assert pat.search("assistant, what about the form?")
+    assert pat.search("Helper save this")
     # Word boundaries: a longer word containing the trigger stays out.
-    assert not pat.search("asystentka mowila co innego")
-    assert not pat.search("bob co tam")
-    cli._TRIGGER_RE_CACHE.pop("Asystent - testy agenta", None)
+    assert not pat.search("the assistantship said something else")
+    assert not pat.search("bob what's up")
+    cli._TRIGGER_RE_CACHE.pop("Assistant - agent tests", None)
 
 
 def test_trigger_re_for_still_accepts_plain_string():
@@ -2275,7 +2303,7 @@ def test_catchup_and_normal_paths_run_the_same_reply_postprocessors():
     assert catchup, "catch-up branch parsed as empty — the regex or the code shape changed"
     assert normal, "normal branch parsed as empty — the regex or the code shape changed"
     assert catchup == normal, (
-        f"tylko catch-up: {sorted(catchup - normal)} | tylko normalna: {sorted(normal - catchup)}"
+        f"catch-up only: {sorted(catchup - normal)} | normal only: {sorted(normal - catchup)}"
     )
 
 
@@ -2287,7 +2315,7 @@ def test_every_persona_token_handler_is_wired_into_the_reply_paths():
         name for name in dir(cli)
         if name.startswith("_handle_") and _is_postprocessor(name)
     }
-    assert defined <= wired, f"zdefiniowane, ale niepodpiete: {sorted(defined - wired)}"
+    assert defined <= wired, f"defined but not wired: {sorted(defined - wired)}"
 
 
 # ---------------------------------------------------------------------------
@@ -2312,7 +2340,7 @@ def test_hold_s_for_defaults_to_no_hold():
 def test_hold_s_for_survives_garbage_and_never_goes_negative():
     """Fail-open: a typo in chat-config.json must not crash the watch loop, and a
     negative value must not turn into a negative sleep."""
-    assert cli._hold_s_for("Kanal", {"Kanal": {"hold_s": "szesćdziesiąt"}}) == 0
+    assert cli._hold_s_for("Kanal", {"Kanal": {"hold_s": "sixty"}}) == 0
     assert cli._hold_s_for("Kanal", {"Kanal": {"hold_s": -30}}) == 0
 
 
@@ -2351,7 +2379,7 @@ def test_model_for_per_chat_alias_overrides_global():
     cfg = {"Kanal": {"model": "opus"}, "Inny": {"model": "claude-haiku-4-5-20251001"}}
     assert cli._model_for("Kanal", cfg, args) == "claude-opus-5-5"
     assert cli._model_for("Inny", cfg, args) == "claude-haiku-4-5-20251001"
-    assert cli._model_for("Brak", cfg, args) == "claude-sonnet-5-5"
+    assert cli._model_for("Missing", cfg, args) == "claude-sonnet-5-5"
 
 
 def test_effort_for_accepts_only_known_levels():
@@ -2386,10 +2414,10 @@ def test_mcp_extra_adds_opt_in_group_on_top_of_all(monkeypatch):
     import ai  # noqa: PLC0415
 
     monkeypatch.setattr(ai, "_ALL_GROUPS", [g for g in ai._MCP_GROUPS if g != "md_to_mp3"])
-    cfg = {"Notatki": {"mcp": None, "mcp_extra": ["md_to_mp3", "nie-ma-takiej"]},
+    cfg = {"Notes": {"mcp": None, "mcp_extra": ["md_to_mp3", "no-such-group"]},
            "X": {"mcp": ["jira"], "mcp_extra": ["md_to_mp3"]}, "Y": {"mcp": None}}
-    notes = cli._mcp_for("Notatki", cfg)
-    assert notes[-1] == "md_to_mp3" and set(ai._ALL_GROUPS) <= set(notes) and "nie-ma-takiej" not in notes
+    notes = cli._mcp_for("Notes", cfg)
+    assert notes[-1] == "md_to_mp3" and set(ai._ALL_GROUPS) <= set(notes) and "no-such-group" not in notes
     assert cli._mcp_for("X", cfg) == ["jira", "md_to_mp3"]
     assert cli._mcp_for("Y", cfg) is None
 
@@ -2420,7 +2448,7 @@ def test_chat_config_hot_reload_in_place(tmp_path):
 
 
 def test_agent_html_prefix_example_persona():
-    assert "[Asystent]" in cli._agent_html_prefix("example")
+    assert "[Assistant]" in cli._agent_html_prefix("example")
     assert "[Bob]" in cli._agent_html_prefix(None)
 
 
@@ -2428,19 +2456,19 @@ def test_owner_label_distinguishes_persona_from_owner():
     """All personas post from USER_MRI — without the HTML prefix lookup, the persona's
     own past replies would be shown to the model as the owner's messages."""
     def _msg(raw_html):
-        return {"sender_mri": cli.api_client.USER_MRI, "raw_html": raw_html, "sender": "Szef"}
+        return {"sender_mri": cli.api_client.USER_MRI, "raw_html": raw_html, "sender": "Boss"}
 
     assert cli._owner_label(
-        _msg(f"<p>{cli._agent_html_prefix('example')}: hej</p>")) == "Asystent"
-    assert cli._owner_label(_msg(f"<p>{cli._agent_html_prefix(None)}: hej</p>")) == "Bob"
-    assert cli._owner_label(_msg("<p>zwykła wiadomość właściciela</p>")) == cli.OWNER_LABEL
+        _msg(f"<p>{cli._agent_html_prefix('example')}: hi</p>")) == "Assistant"
+    assert cli._owner_label(_msg(f"<p>{cli._agent_html_prefix(None)}: hi</p>")) == "Bob"
+    assert cli._owner_label(_msg("<p>a plain owner message</p>")) == cli.OWNER_LABEL
 
 
 def test_check_skip_answered_filters_own_agent_message(monkeypatch):
     """Own-account agent-prefixed messages (Bob/persona) are excluded from 'newer'."""
     fake_msgs = [
-        {"id": "m2", "sender_mri": cli.api_client.USER_MRI, "text": "[Bob]: mysle...", "sequence_id": 11},
-        {"id": "m3", "sender_mri": cli.api_client.USER_MRI, "text": "[Asystent]: mysle...", "sequence_id": 12},
+        {"id": "m2", "sender_mri": cli.api_client.USER_MRI, "text": "[Bob]: thinking...", "sequence_id": 11},
+        {"id": "m3", "sender_mri": cli.api_client.USER_MRI, "text": "[Assistant]: thinking...", "sequence_id": 12},
     ]
     monkeypatch.setattr(cli.api_client, "get_messages", lambda conv_id, n=10: fake_msgs)
     ai_called = []
@@ -2449,64 +2477,68 @@ def test_check_skip_answered_filters_own_agent_message(monkeypatch):
         lambda *a, **kw: ai_called.append((a, kw)) or {"answered": True, "override": False},
     )
 
-    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "pytanie?", "odp")
+    skip, reason = cli._check_skip_answered("conv1", 10, "trigger-id", "question?", "reply")
 
     assert (skip, reason) == (False, "")
     assert ai_called == []
 
 
-def test_handle_example_idea_writes_jsonl_and_strips_token(tmp_path):
-    ideas_file = tmp_path / "pomysly.jsonl"
+@pytest.mark.parametrize("tag", ["EXAMPLE-IDEA", "EXAMPLE-POMYSL"])
+def test_handle_example_idea_writes_jsonl_and_strips_token(tmp_path, tag):
+    """The English tag is canonical; the Polish EXAMPLE-POMYSL from older prompts is still accepted."""
+    ideas_file = tmp_path / "ideas.jsonl"
     with patch.object(cli, "_EXAMPLE_IDEAS_FILE", ideas_file):
         reply = cli._handle_example_idea(
-            "Dzięki za pomysł! [EXAMPLE-POMYSL: Alert push | Alert o niezatwierdzonych "
-            "dokumentach.] Zapisałem :)",
+            f"Thanks for the idea! [{tag}: Push alert | An alert about unapproved "
+            "documents.] Saved :)",
             "Nowak Ewa",
         )
-    assert "EXAMPLE-POMYSL" not in reply and "Zapisałem :)" in reply
+    assert tag not in reply and "Saved :)" in reply
     (line,) = ideas_file.read_text(encoding="utf-8").strip().splitlines()
     entry = json.loads(line)
-    assert (entry["sender"], entry["tytul"]) == ("Nowak Ewa", "Alert push")
-    assert "niezatwierdzonych dokumentach" in entry["pomysl"] and "date" in entry
+    assert (entry["sender"], entry["title"]) == ("Nowak Ewa", "Push alert")
+    assert "unapproved documents" in entry["idea"] and "date" in entry
 
 
 def test_handle_example_idea_no_token_returns_reply_unchanged(tmp_path):
-    ideas_file = tmp_path / "pomysly.jsonl"
+    ideas_file = tmp_path / "ideas.jsonl"
     with patch.object(cli, "_EXAMPLE_IDEAS_FILE", ideas_file):
-        assert cli._handle_example_idea("zwykla odpowiedz", "X") == "zwykla odpowiedz"
+        assert cli._handle_example_idea("a plain reply", "X") == "a plain reply"
     assert not ideas_file.exists()
 
 
 def test_handle_example_idea_multiple_tokens_no_blank_gap(tmp_path):
     """Several ideas in one message must not leave a wall of blank lines behind."""
-    ideas_file = tmp_path / "pomysly.jsonl"
+    ideas_file = tmp_path / "ideas.jsonl"
     reply = (
-        "Złota lista! Zapisuję każdy punkt!\n"
-        "[EXAMPLE-POMYSL: Pomysl 1 | Tresc pierwszego pomyslu.]\n"
-        "[EXAMPLE-POMYSL: Pomysl 2 | Tresc drugiego pomyslu.]\n"
-        "[EXAMPLE-POMYSL: Pomysl 3 | Tresc trzeciego pomyslu.]\n"
-        "Dzięki — 3 konkretne pomysły."
+        "A golden list! Saving every point!\n"
+        "[EXAMPLE-IDEA: Idea 1 | Body of the first idea.]\n"
+        "[EXAMPLE-IDEA: Idea 2 | Body of the second idea.]\n"
+        "[EXAMPLE-POMYSL: Idea 3 | Body of the third idea.]\n"
+        "Thanks — 3 concrete ideas."
     )
     with patch.object(cli, "_EXAMPLE_IDEAS_FILE", ideas_file):
         cleaned = cli._handle_example_idea(reply, "Nowak Ewa")
-    assert "EXAMPLE-POMYSL" not in cleaned and "\n\n" not in cleaned
+    assert "EXAMPLE-IDEA" not in cleaned and "EXAMPLE-POMYSL" not in cleaned and "\n\n" not in cleaned
     assert len(ideas_file.read_text(encoding="utf-8").strip().splitlines()) == 3
 
 
-def test_example_learning_only_from_the_owner(tmp_path):
-    """Enforced by MRI: a token anyone else talks the model into is stripped, not saved."""
-    tok = "Ok. [EXAMPLE-UCZY-SIE: tytul | tresc]"
+@pytest.mark.parametrize("tag", ["EXAMPLE-LEARN", "EXAMPLE-UCZY-SIE"])
+def test_example_learning_only_from_the_owner(tmp_path, tag):
+    """Enforced by MRI: a token anyone else talks the model into is stripped, not saved.
+    The Polish EXAMPLE-UCZY-SIE tag is accepted as an alias."""
+    tok = f"Ok. [{tag}: title | content]"
     with patch.object(cli, "_EXAMPLE_LEARN_DIR", tmp_path):
         out = cli._handle_example_learning(tok, "8:orgid:00000000-0000-0000-0000-0000000000ff")
-        assert "EXAMPLE-UCZY-SIE" not in out and not list(tmp_path.glob("*.md"))
+        assert tag not in out and not list(tmp_path.glob("*.md"))
         assert cli._handle_example_learning(tok, cli.api_client.USER_MRI) == "Ok."
     (saved,) = tmp_path.glob("*.md")
-    assert saved.read_text(encoding="utf-8") == "# tytul\n\ntresc\n"
+    assert saved.read_text(encoding="utf-8") == "# title\n\ncontent\n"
 
 
 def test_image_attachments_reach_every_persona():
     """For a persona the screenshot is often the report itself: the gate that puts
-    'Załączniki z wiadomości:' into the private notes must cover every persona."""
+    'Attachments of the message:' into the private notes must cover every persona."""
     src = inspect.getsource(cli._process_chat_messages)
     assert "if persona and _image_paths:" in src
 
@@ -2519,13 +2551,213 @@ def test_availability_block_is_headed_with_owner_alias(monkeypatch):
     import owner_schedule  # noqa: PLC0415
 
     today = owner_schedule._today()
-    monkeypatch.setattr(owner_schedule, "_load", lambda: {today.isoformat(): "praca zdalna"})
-    monkeypatch.setattr(cli, "OWNER_LABEL", "Szef")
+    monkeypatch.setattr(owner_schedule, "_load", lambda: {today.isoformat(): "working remotely"})
+    monkeypatch.setattr(cli, "OWNER_LABEL", "Boss")
     block = cli._build_schedule_context()
-    assert "[DOSTĘPNOŚĆ SZEF]" in block and "praca zdalna" in block
+    assert "[BOSS AVAILABILITY]" in block and "working remotely" in block
 
 
 def test_personal_reminder_prompt_names_the_owner_alias():
     src = Path(cli.__file__).read_text(encoding="utf-8")
-    assert "PRZYPOMNIENIE DLA {OWNER_LABEL.upper()}" in src
-    assert "przypomnienie dla {OWNER_LABEL}" in src
+    assert "REMINDER FOR {OWNER_LABEL.upper()}" in src
+    assert "reminder for {OWNER_LABEL}" in src
+
+
+# ---------------------------------------------------------------------------
+# English commands and tags are canonical; the Polish forms stay accepted
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("regex, english, polish", [
+    ("_ZAPAMIETAJ_RE", "Bob, remember: buy milk", "Bob, zapamiętaj: buy milk"),
+    ("_POKAZ_NOTATKI_RE", "Bob, show notes", "Bob, pokaż notatki"),
+    ("_BOB_OFF_RE", "Bob disable", "Bob wyłącz"),
+    ("_BOB_ON_RE", "Bob enable", "Bob włącz"),
+    ("_CHAT_DISABLE_RE", "Bob disable chat X", "Bob wyłącz chat X"),
+    ("_CHAT_ENABLE_RE", "Bob enable chat X", "Bob włącz chat X"),
+    ("_CHAT_STATUS_RE", "Bob chats", "Bob chaty"),
+    ("_BOB_HELP_RE", "Bob help", "Bob pomoc"),
+    ("_BOB_POLL_RE", "Bob poll model", "Bob ankieta model"),
+    ("_BOB_BUILD_APPROVE_RE", "Bob approve 3", "Bob zatwierdź 3"),
+    ("_BOB_BUILD_REJECT_RE", "Bob reject 3", "Bob odrzuć 3"),
+    ("_APR_DECIDE_RE", "Bob, approve apr-0123456789: ok", "Bob, zatwierdzam apr-0123456789: ok"),
+    ("_APR_DECIDE_BARE_RE", "Bob reject", "Bob odrzucam"),
+    ("_HARMONOGRAM_SET_RE", "Bob, schedule today: remote", "Bob, harmonogram dziś: zdalnie"),
+    ("_POKAZ_HARMONOGRAM_RE", "Bob, show schedule", "Bob, pokaż harmonogram"),
+    ("_HARMONOGRAM_CLEAR_RE", "Bob, schedule delete 28.05", "Bob, harmonogram usuń 28.05"),
+    ("_BROADCAST_SET_RE", "Bob, set broadcast teama send 09:00", "Bob, ustaw broadcast teama wyslij 09:00"),
+    ("_NOTIF_SET_RE", "Bob, remind tomorrow 9:30 in Notes: call", "Bob, przypomnij jutro 9:30 na Notes: call"),
+    ("_NOTIF_SHOW_RE", "Bob, show reminders", "Bob, pokaż przypomnienia"),
+    ("_NOTIF_DEL_RE", "Bob, delete reminder t1", "Bob, usuń przypomnienie t1"),
+    ("_NOTIF_DEL_OVERDUE_RE", "Bob, delete overdue", "Bob, usuń zaległe"),
+    ("_GRILL_START_RE", "grill me", "grillujemy"),
+    ("_GRILL_STOP_RE", "end grill", "zakończ grill"),
+])
+def test_owner_commands_accept_english_and_polish(regex, english, polish):
+    pat = getattr(cli, regex)
+    assert pat.search(english), f"{regex} must match the English form {english!r}"
+    assert pat.search(polish), f"{regex} must keep the Polish alias {polish!r}"
+
+
+def test_remember_captures_the_note_in_both_languages():
+    assert cli._ZAPAMIETAJ_RE.search("Bob, remember: buy milk").group(1).strip() == "buy milk"
+    assert cli._ZAPAMIETAJ_RE.search("Bob zapamietaj: kup mleko").group(1).strip() == "kup mleko"
+
+
+def test_notif_set_captures_chat_and_text_in_english():
+    m = cli._NOTIF_SET_RE.search("Bob, remind tomorrow 9:30 in AI Channel: call the vendor")
+    assert m.groups() == ("tomorrow", "9:30", "AI Channel", "call the vendor")
+
+
+def test_build_gate_catches_english_requests_but_not_ordinary_ones():
+    assert cli._BOB_BUILD_VERB_RE.search("Bob, build me a game about cats")
+    assert cli._BOB_BUILD_VERB_RE.search("Bob, zbuduj mi grę")
+    assert not cli._BOB_BUILD_VERB_RE.search("Bob, create a Jira ticket for the app")
+
+
+def test_send_file_tag_accepts_english_polish_and_mixed_forms():
+    for reply in (
+        "x\n[SEND_FILE: a.md]\nbody\n[/SEND_FILE]",
+        "x\n[WYSLIJ_PLIK: a.md]\nbody\n[/WYSLIJ_PLIK]",
+        "x\n[SEND_FILE: a.md]\nbody\n[/WYSLIJ_PLIK]",
+    ):
+        m = cli._FILE_TAG_RE.search(reply)
+        assert m and m.group(1) == "a.md" and m.group(2) == "body"
+    for tag in ("SEND_FILE_FROM_DISK", "WYSLIJ_PLIK_Z_DYSKU"):
+        assert cli._FILE_PATH_TAG_RE.search(f"[{tag}: /data/a.mp3]").group(1) == "/data/a.mp3"
+    # the inline tag must not swallow the disk tag
+    assert cli._FILE_TAG_RE.search("[SEND_FILE_FROM_DISK: /data/a.mp3]\nx\n[/SEND_FILE]") is None
+
+
+def test_send_file_polish_alias_is_uploaded_and_stripped(monkeypatch):
+    mock_upload = MagicMock(return_value="https://contoso.sharepoint.com/x/a.md")
+    monkeypatch.setattr(sharepoint_upload, "upload_file", mock_upload)
+    monkeypatch.setattr(cli.api_client, "send_message", MagicMock(return_value=True))
+    monkeypatch.setattr(cli, "_remember_bob_file", lambda *a, **kw: None)
+    cleaned = cli._extract_and_send_files("Here.\n[WYSLIJ_PLIK: a.md]\nbody\n[/WYSLIJ_PLIK]", "19:abc", "Test")
+    assert cleaned == "Here." and mock_upload.call_count == 1
+
+
+def test_forward_confirm_words_cover_both_languages():
+    assert cli._FWD_CONFIRM_WORDS == {"yes", "tak"}
+
+
+def test_grill_end_markers_cover_both_languages():
+    assert "Grill finished" in cli._GRILL_END_MARKERS and "Grill zakończony" in cli._GRILL_END_MARKERS
+
+
+def test_mcp_cold_start_detects_english_and_polish_prose():
+    assert cli._looks_like_mcp_cold_start("Sorry, the MCP servers are not connected yet.")
+    assert cli._looks_like_mcp_cold_start("Niestety serwery MCP sie nie polaczyly.")
+    assert not cli._looks_like_mcp_cold_start("Here is your Jira ticket.")
+
+
+# ---------------------------------------------------------------------------
+# chat-config.json: Polish keys from older builds are read through roles.normalize_chat
+# ---------------------------------------------------------------------------
+
+
+def test_load_chat_config_normalises_polish_keys(tmp_path):
+    p = tmp_path / "chat-config.json"
+    p.write_text(json.dumps({"chats": {"A": {"role": ["pm"], "dodatkowo": ["urlopy"], "bez": ["jira"],
+                                             "kanal_fr": True, "caller": "all"}}}), encoding="utf-8")
+    cfg = cli._load_chat_config(p)["A"]
+    assert cfg["roles"] == ["pm"] and cfg["add_groups"] == ["leave"] and cfg["remove_groups"] == ["jira"]
+    assert cfg["external_chat"] is True and cfg["caller"] == "all"
+    assert not {"role", "dodatkowo", "bez", "kanal_fr"} & set(cfg)
+
+
+def test_reload_chat_config_normalises_polish_keys(tmp_path):
+    p = tmp_path / "chat-config.json"
+    p.write_text(json.dumps({"chats": {"A": {"role": ["pm"]}}}), encoding="utf-8")
+    live: dict = {}
+    cli._reload_chat_config_if_changed(live, p, 0.0)
+    assert live == {"A": {"roles": ["pm"]}}
+
+
+def test_mcp_for_reads_polish_role_key_from_a_raw_config(monkeypatch):
+    import roles  # noqa: PLC0415
+
+    seen = []
+    monkeypatch.setattr(roles, "load", lambda: {"roles": {}})
+    monkeypatch.setattr(roles, "effective_groups", lambda cfg, doc, *a: seen.append((cfg, doc)) or ["jira"])
+    assert cli._mcp_for("A", {"A": {"role": ["pm"], "kanal_fr": True}}) == ["jira"]
+    cfg, doc = seen[0]
+    assert cfg["roles"] == ["pm"] and cfg["external_chat"] is True and doc == {"roles": {}}
+
+
+def test_control_chat_mcp_list_drops_roles_written_in_either_language(tmp_path):
+    p = tmp_path / "chat-config.json"
+    chat_config = {"A": {"role": ["pm"], "dodatkowo": ["jira"], "bez": ["todos"]}}
+    cli._apply_chat_config_change("A", "mcp", ["jira"], chat_config, path=p)
+    assert chat_config["A"] == {"mcp": ["jira"]}
+    assert json.loads(p.read_text(encoding="utf-8"))["chats"]["A"] == {"mcp": ["jira"]}
+
+
+def test_leave_poller_uses_the_english_names():
+    src = Path(cli.__file__).read_text(encoding="utf-8")
+    assert "org_config.LEAVE_SHAREPOINT_URL" in src and "knowledge/leave/leave.json" in src
+    assert "URLOPY_SHAREPOINT_URL" not in src and "urlopy.json" not in src
+
+
+def test_time_zone_comes_from_org_config():
+    assert cli._TZ_NAME == cli.org_config.TIMEZONE
+    assert '"Europe/Warsaw"' not in Path(cli.__file__).read_text(encoding="utf-8")
+
+
+def test_example_persona_adopts_older_polish_files(tmp_path, monkeypatch):
+    """pomysly.jsonl and nauka/ from an older build become ideas.jsonl and learning/ before the next write."""
+    monkeypatch.setattr(cli, "_EXAMPLE_IDEAS_FILE", tmp_path / "ideas.jsonl")
+    monkeypatch.setattr(cli, "_EXAMPLE_LEARN_DIR", tmp_path / "learning")
+    (tmp_path / "pomysly.jsonl").write_text('{"kind": "pomysl"}\n', encoding="utf-8")
+    (tmp_path / "nauka").mkdir()
+    (tmp_path / "nauka" / "old.md").write_text("# old\n", encoding="utf-8")
+    cli._handle_example_idea("[EXAMPLE-IDEA: New | body]", "Alice")
+    lines = (tmp_path / "ideas.jsonl").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == '{"kind": "pomysl"}' and len(lines) == 2
+    assert not (tmp_path / "pomysly.jsonl").exists()
+    assert (tmp_path / "learning" / "old.md").exists() and not (tmp_path / "nauka").exists()
+
+
+@pytest.mark.parametrize("text", [
+    "Bob, why does the build of the app fail on CI?",
+    "Bob, generate release notes for the app",
+    "Bob, make me a summary of the app incidents",
+])
+def test_ordinary_english_asks_do_not_hit_the_build_gate(text):
+    assert not cli._BOB_BUILD_VERB_RE.search(text)
+
+
+def test_english_build_commands_still_hit_the_build_gate():
+    for text in ("Bob, make me a snake game", "Bob, build us a simple website", "Bob, code me a prototype"):
+        assert cli._BOB_BUILD_VERB_RE.search(text), text
+
+
+def test_ordinary_english_sentences_are_not_taken_as_control_commands():
+    assert not cli._ZAPAMIETAJ_RE.search("Bob, remember the ticket we discussed on Monday? What was its key?")
+    assert cli._ZAPAMIETAJ_RE.search("Bob, remember that I am out Friday").group(1) == "I am out Friday"
+    assert not cli._HARMONOGRAM_SET_RE.search("Bob, schedule a call with Ola")
+    assert cli._HARMONOGRAM_SET_RE.search("Bob, schedule 28.05-30.05: leave").groups() == ("28.05-30.05", "leave")
+    assert not cli._BOB_FORWARD_RE.search("Bob, send it to me as a file")
+    assert not cli._BOB_ON_RE.search("Bob enable notifications for the team")
+    assert cli._BOB_ON_RE.search("Bob enable")
+    assert not cli._BOB_POLL_RE.search("Bob poll the team about lunch")
+    assert cli._BOB_POLL_RE.search("Bob poll chat AI Channel mcp").group(1) == "chat AI Channel mcp"
+
+
+@pytest.mark.parametrize("notify_chat", ["Notes", "Notatki"])
+def test_owner_reminder_for_the_default_notes_chat_goes_to_the_control_chat(monkeypatch, tmp_path, notify_chat):
+    """An older install calls its notes chat "Notatki"; a reminder for "Notes" must not be resolved by a substring
+    of chat topics (a "Release notes" chat would match) - it goes to the control chat."""
+    import argparse
+    due = [{"id": "t1", "notify_chat": notify_chat, "title": "call the vendor", "notify_at": "2026-11-08T15:00"}]
+    monkeypatch.setattr(cli.todos_store, "due_for_fire", lambda: list(due))
+    monkeypatch.setattr(cli.todos_store, "mark_notified", lambda _id: None)
+    monkeypatch.setattr(cli.ai, "freeform_reply", lambda *a, **k: "Hey, a reminder: call the vendor")
+    looked_up, sent = [], []
+    monkeypatch.setattr(cli.api_client, "find_conversation_id", lambda name: looked_up.append(name) or "19:release")
+    monkeypatch.setattr(cli.api_client, "send_message", lambda text, cid: sent.append(cid) or True)
+    cli._fire_due_notifications([("Notatki", "19:control"), ("Team", "19:team")],
+                                argparse.Namespace(model="m"), str(tmp_path / "log.jsonl"),
+                                chat_config={"Notatki": {"control_chat": True}, "Team": {}})
+    assert sent == ["19:control"] and looked_up == []

@@ -4,14 +4,14 @@ Usage:
     python scripts/broadcast/broadcast_runner.py --job <id> [--phase generate|dry-run|send|generate-send]
 
 Two generation modes:
-- brief_file (per-section): each ### Wiadomosc section = one separate Claude call
+- brief_file (per-section): each ### Message section = one separate Claude call
   with its own timeout. Sections are generated and sent one-by-one.
 - prompt (single-call, legacy): one Claude call produces all messages separated
   by ---MSG--- which are then split and sent.
 
 Phase flag:
   generate       — generate all sections, save to generated/<job_id>.json, no sending
-  dry-run        — read generated/<job_id>.json, send to control chat (Notatki) as preview
+  dry-run        — read generated/<job_id>.json, send to the control chat (the owner's notes) as preview
   send           — read generated/<job_id>.json, send to the real channel
   generate-send  — generate then immediately send to the real channel (no intermediate file)
   (omitted)      — legacy all-in-one: generate + send in one run (original behaviour)
@@ -66,7 +66,8 @@ sys.path.insert(0, str(_PROJECT_ROOT / "scripts"))
 sys.path.insert(0, str(_BROADCAST_DIR))
 
 import api_client  # noqa: E402
-import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps na stdout/stderr
+import logts  # noqa: E402, F401, I001 -- side-effect: CET timestamps on stdout/stderr
+import org_config  # noqa: E402
 import user_memory  # noqa: E402
 
 # Import _MCP_GROUPS from ai.py (single source of truth; side-effect of
@@ -79,7 +80,7 @@ from session import ensure_fresh_session  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_CHANNEL = "NOTATKI_CONV_ID_PLACEHOLDER"
-_WARSAW = ZoneInfo("Europe/Warsaw")
+_LOCAL_TZ = ZoneInfo(getattr(org_config, "TIMEZONE", "Europe/Warsaw"))
 _CHAT_CONFIG_FILE = _PROJECT_ROOT / "chat-config.json"
 _SECTION_TIMEOUT_S = 600   # timeout per individual section call
 _GENERATE_TIMEOUT_S = 600  # timeout for legacy single-call mode
@@ -88,8 +89,18 @@ _INTER_MSG_DELAY_S = 1     # pause between consecutive messages
 _GIF_PREFIX = "GIF:"
 _BOB_PREFIX = "🤖 **Bob**\n"
 
-# Header pattern that marks the start of a brief section.
-_SECTION_RE = re.compile(r"(?m)^### Wiadomość ")
+# Header pattern that marks the start of a brief section. "Message" is canonical; the
+# Polish "Wiadomość"/"Wiadomosc" of older briefs is still accepted.
+_SECTION_WORD = r"(?:Message|Wiadomo[śs][ćc])"
+_SECTION_RE = re.compile(rf"(?m)^### {_SECTION_WORD} ")
+
+# Tool group names in jobs.json: English canonical <- the older Polish name.
+_TOOL_GROUP_ALIASES = {"urlopy": "leave"}
+
+
+def _job_tools(job: dict) -> list[str]:
+    """The job's tool groups with old Polish group names mapped to the English ones."""
+    return list(dict.fromkeys(_TOOL_GROUP_ALIASES.get(g, g) for g in job.get("tools") or []))
 
 # ---------------------------------------------------------------------------
 # Progress reporting (to control chat)
@@ -102,7 +113,10 @@ def _load_control_channel() -> str | None:
     """Return conv_id of the chat with control_chat=True, or None."""
     try:
         cfg = json.loads(_CHAT_CONFIG_FILE.read_text(encoding="utf-8"))
-        for chat in cfg.get("chats", {}).values():
+        import roles  # noqa: PLC0415 -- on the path once the teams_agent imports above have run
+
+        for raw in cfg.get("chats", {}).values():
+            chat = roles.normalize_chat(raw)
             if chat.get("control_chat"):
                 return chat.get("conv_id")
     except Exception:
@@ -125,7 +139,7 @@ def _progress(msg: str, skip_channel: str = "") -> None:
 
 
 def _section_label(header: str) -> str:
-    """'### Wiadomość 3 — Nieobecności w Sprincie' → 'Nieobecności w Sprincie'."""
+    """'### Message 3 — Absences in the sprint' → 'Absences in the sprint'."""
     m = re.search(r"—\s*(.+)$", header)
     return m.group(1).strip() if m else header.lstrip("# ").strip()
 
@@ -136,8 +150,9 @@ def _section_label(header: str) -> str:
 
 
 def _team_only_on_outside_chat(job: dict) -> list[str]:
-    """The job's team-only groups, when its channel is a chat flagged kanal_fr in chat-config.json. The same rule a chat
-    reply follows; a channel that is not in chat-config.json has no flag to read (docs/snowflake-reports.md)."""
+    """The job's team-only groups, when its channel is a chat flagged external_chat in chat-config.json.
+    The same rule a chat reply follows; a channel that is not in chat-config.json has no flag to read
+    (docs/snowflake-reports.md)."""
     import roles  # noqa: PLC0415 -- on the path once the teams_agent imports above have run
 
     try:
@@ -145,8 +160,9 @@ def _team_only_on_outside_chat(job: dict) -> list[str]:
     except (OSError, ValueError, AttributeError):
         chats = {}
     channel = job.get("channel")
-    outside = any(isinstance(c, dict) and c.get("kanal_fr") and c.get("conv_id") == channel for c in chats.values())
-    return sorted(set(job.get("tools") or []) & roles.team_only(roles.load())) if outside else []
+    cfgs = [roles.normalize_chat(c) for c in chats.values() if isinstance(c, dict)]
+    outside = any(c.get("external_chat") and c.get("conv_id") == channel for c in cfgs)
+    return sorted(set(_job_tools(job)) & roles.team_only(roles.load())) if outside else []
 
 
 def load_job(job_id: str) -> dict | None:
@@ -158,14 +174,14 @@ def load_job(job_id: str) -> dict | None:
     try:
         jobs = json.loads(JOBS_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[broadcast] Blad odczytu jobs.json: {exc}", file=sys.stderr, flush=True)
+        print(f"[broadcast] ERROR reading jobs.json: {exc}", file=sys.stderr, flush=True)
         return None
 
     for job in jobs:
         if job.get("id") == job_id:
             if not job.get("enabled", True):
                 print(
-                    f"[broadcast] Job '{job_id}' jest wylaczony (enabled=false). Przerywam.",
+                    f"[broadcast] Job '{job_id}' is disabled (enabled=false). Stopping.",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -173,15 +189,15 @@ def load_job(job_id: str) -> dict | None:
             blocked = _team_only_on_outside_chat(job)
             if blocked:
                 print(
-                    f"[broadcast] Job '{job_id}' uzywa grup tylko dla zespolu {blocked} "
-                    "na czacie z osobami z zewnatrz. Przerywam.",
+                    f"[broadcast] Job '{job_id}' uses team-only groups {blocked} "
+                    "in a chat with outside people. Stopping.",
                     file=sys.stderr,
                     flush=True,
                 )
                 sys.exit(1)
             return job
 
-    print(f"[broadcast] Job '{job_id}' nie znaleziony w jobs.json.", file=sys.stderr, flush=True)
+    print(f"[broadcast] Job '{job_id}' not found in jobs.json.", file=sys.stderr, flush=True)
     return None
 
 
@@ -193,7 +209,7 @@ def _build_tools_str(tool_groups: list[str]) -> str:
             parts.append(_MCP_GROUPS[group])
         else:
             print(
-                f"[broadcast] Nieznana grupa narzedzi '{group}' — pomijam.",
+                f"[broadcast] Unknown tool group '{group}' — skipping.",
                 file=sys.stderr,
                 flush=True,
             )
@@ -228,18 +244,18 @@ def _call_claude(prompt: str, tools_str: str, timeout_s: int) -> str:
         )
     except subprocess.TimeoutExpired:
         print(
-            f"[broadcast] claude CLI przekroczyl timeout ({timeout_s}s).",
+            f"[broadcast] claude CLI timed out ({timeout_s}s).",
             file=sys.stderr,
             flush=True,
         )
         return ""
     except FileNotFoundError:
-        print("[broadcast] claude CLI nie znaleziony w PATH.", file=sys.stderr, flush=True)
+        print("[broadcast] claude CLI not found in PATH.", file=sys.stderr, flush=True)
         return ""
 
     if result.returncode != 0:
         print(
-            f"[broadcast] claude CLI zwrocil kod {result.returncode}. stderr: {result.stderr[:500]}",
+            f"[broadcast] claude CLI returned code {result.returncode}. stderr: {result.stderr[:500]}",
             file=sys.stderr,
             flush=True,
         )
@@ -248,11 +264,11 @@ def _call_claude(prompt: str, tools_str: str, timeout_s: int) -> str:
     try:
         parsed = json.loads(result.stdout)
         if parsed.get("is_error"):
-            print("[broadcast] claude CLI zwrocil is_error=true.", file=sys.stderr, flush=True)
+            print("[broadcast] claude CLI returned is_error=true.", file=sys.stderr, flush=True)
             return ""
         return parsed.get("result", "").strip()
     except (json.JSONDecodeError, AttributeError) as exc:
-        print(f"[broadcast] Blad parsowania odpowiedzi claude: {exc}", file=sys.stderr, flush=True)
+        print(f"[broadcast] ERROR parsing the claude reply: {exc}", file=sys.stderr, flush=True)
         return ""
 
 
@@ -269,8 +285,8 @@ def generate(prompt: str, tools_str: str) -> str:
 def _parse_brief_sections(text: str) -> tuple[str, list[str]]:
     """Split a brief file into (preamble, sections).
 
-    Preamble = everything before the first '### Wiadomosc' header.
-    Sections  = list of '### Wiadomosc N ...' blocks (header + body).
+    Preamble = everything before the first '### Message' header.
+    Sections  = list of '### Message N ...' blocks (header + body).
     """
     matches = list(_SECTION_RE.finditer(text))
     if not matches:
@@ -284,10 +300,11 @@ def _parse_brief_sections(text: str) -> tuple[str, list[str]]:
     return preamble, sections
 
 
-# Pattern to detect a template reference line: **Szablon:** `path`
-_TEMPLATE_REF_RE = re.compile(r"\*\*Szablon:\*\*\s*`([^`]+)`")
+# Pattern to detect a template reference line: **Template:** `path` (older briefs: **Szablon:**)
+_TEMPLATE_REF_RE = re.compile(r"\*\*(?:Template|Szablon):\*\*\s*`([^`]+)`")
 
-# Patterns that mark "thinking out loud" preamble lines to strip.
+# Patterns that mark "thinking out loud" preamble lines to strip. The Polish openers
+# stay: a brief written in Polish still gets Polish narration back from the model.
 _PREAMBLE_LINE_RE = re.compile(
     r"^(Mam |Teraz |Pobieram |Obliczam |Generam |Generuję |Piszę |OK,|Sprawdzam |"
     r"Zbiera|Znalaz|Analizuj|Wylicz|Obliczenia:|TeamB members|Suma: |"
@@ -302,7 +319,7 @@ def _load_template(brief_dir: Path, template_ref: str) -> str:
     """Load a template file relative to the brief directory."""
     path = brief_dir / template_ref
     if not path.exists():
-        print(f"[broadcast] Template nie znaleziony: {path}", file=sys.stderr, flush=True)
+        print(f"[broadcast] Template not found: {path}", file=sys.stderr, flush=True)
         return ""
     return path.read_text(encoding="utf-8").strip()
 
@@ -360,14 +377,14 @@ def _strip_preamble(text: str) -> str:
         bullet_lines = [ln for ln in earlier.splitlines() if ln.strip().startswith("- ")]
         if (
             re.search(r"(?m)^\s*\|", earlier)  # markdown table
-            or re.search(r"Obliczenia|cross-referenced|Suma:|Łącznie:", earlier, re.IGNORECASE)
+            or re.search(r"Obliczenia|cross-referenced|Suma:|Łącznie:|Calculations|Total:", earlier, re.IGNORECASE)
             or re.search(r"`[^`\n]+`\s*=\s*\S", earlier)   # backtick math: `expr` = value
             or len(bullet_lines) >= 3                        # 3+ bullet reasoning lines
         ):
             result = parts[-1].strip()
 
-    # Strip leaked brief section content (### Wiadomość ... header and below).
-    result = re.split(r"(?m)^### Wiadomość", result)[0].rstrip()
+    # Strip leaked brief section content (### Message ... header and below).
+    result = re.split(rf"(?m)^### {_SECTION_WORD}", result)[0].rstrip()
 
     return result
 
@@ -376,21 +393,22 @@ _MAX_SECTION_RETRIES = 4  # max re-tries per section when validation fails
 
 _TEMPLATE_INJECT = (
     "\n\n---\n\n"
-    "Twoje zadanie: pobierz dane zgodnie z powyższymi instrukcjami, "
-    "a następnie wypełnij poniższy szablon.\n"
-    "ZWRÓĆ WYŁĄCZNIE wypełniony szablon — zero słów poza nim.\n"
-    "ZAKAZ: obliczeń pośrednich, notatek roboczych, tabel pomocniczych, nagłówków sekcji.\n"
-    "ZAKAZ tabel markdown (| kolumna |) — tylko listy punktowe (-).\n"
-    "Zastąp TYLKO {{PLACEHOLDERS}} prawdziwymi danymi. Nie zmieniaj żadnego innego tekstu.\n\n"
-    "SZABLON:\n"
+    "Your task: fetch the data as the instructions above say, "
+    "then fill in the template below.\n"
+    "RETURN ONLY the filled template — not a word outside it.\n"
+    "NO intermediate calculations, working notes, helper tables or section headers.\n"
+    "NO markdown tables (| column |) — bullet lists (-) only.\n"
+    "Replace ONLY the {{PLACEHOLDERS}} with real data. Do not change any other text.\n"
+    "Write in the language the template is written in.\n\n"
+    "TEMPLATE:\n"
 )
 
 _NO_TEMPLATE_INJECT = (
     "\n\n---\n\n"
-    "Twoje zadanie teraz: wygeneruj TYLKO tę jedną wiadomość opisaną poniżej.\n"
-    "Zwróć WYŁĄCZNIE treść wiadomości — bez nagłówka sekcji, bez separatora, bez komentarza.\n"
-    "Dla wiadomości GIF: zwróć WYŁĄCZNIE jedną linię 'GIF: <query>'.\n"
-    "KRYTYCZNE: pierwsza linia odpowiedzi MUSI być pierwszym zdaniem posta — zero wstępów.\n\n"
+    "Your task now: generate ONLY the one message described below.\n"
+    "Return ONLY the message text — no section header, no separator, no comment.\n"
+    "For a GIF message: return ONLY one line 'GIF: <query>'.\n"
+    "CRITICAL: the first line of the reply MUST be the first sentence of the post — no intro.\n\n"
 )
 
 
@@ -406,19 +424,19 @@ def _validate_section(text: str, is_gif: bool = False) -> list[str]:
     """Return list of requirement violations. Empty = OK to send."""
     issues = []
     if "{{" in text:
-        issues.append("nieuzupełnione placeholdery {{...}}")
-    if re.search(r"(?m)^### Wiadomość", text):
-        issues.append("wyciek instrukcji sekcji (### Wiadomość)")
-    if re.search(r"(?m)^\*\*Szablon:\*\*", text):
-        issues.append("wyciek nazwy szablonu (**Szablon:**)")
+        issues.append("unfilled placeholders {{...}}")
+    if re.search(rf"(?m)^### {_SECTION_WORD}", text):
+        issues.append("leaked section instructions (### Message)")
+    if re.search(r"(?m)^\*\*(?:Template|Szablon):\*\*", text):
+        issues.append("leaked template name (**Template:**)")
     if re.search(r"(?m)^\s*\|.+\|", text):
-        issues.append("tabela markdown — użyj listy punktowej (-)")
+        issues.append("markdown table — use a bullet list (-)")
     if _PREAMBLE_LINE_RE.match(text.lstrip()):
-        issues.append("wiadomość zaczyna się od linii technicznej/narracyjnej — usuń ją")
+        issues.append("message starts with a technical/narration line — remove it")
     if is_gif and not text.upper().startswith("GIF:"):
-        issues.append("sekcja GIF musi zaczynać się od 'GIF: <query>'")
+        issues.append("GIF section must start with 'GIF: <query>'")
     if re.search(r"(?m)^---$", text):
-        issues.append("separator --- w treści — prawdopodobnie niezestripowana preambuła")
+        issues.append("--- separator in the text — probably an unstripped preamble")
     return issues
 
 
@@ -463,7 +481,7 @@ def _generate_section(preamble: str, section: str, tools_str: str,
 
         issues_str = "\n".join(f"- {i}" for i in issues)
         print(
-            f"[broadcast] Walidacja nieudana (próba {attempt + 1}): {', '.join(issues)}",
+            f"[broadcast] Validation failed (attempt {attempt + 1}): {', '.join(issues)}",
             file=sys.stderr,
             flush=True,
         )
@@ -476,14 +494,14 @@ def _generate_section(preamble: str, section: str, tools_str: str,
         if attempt < _MAX_SECTION_RETRIES:
             prompt = (
                 base_prompt
-                + f"\n\n---\n\nPOPRZEDNIA PRÓBA ZAWIERAŁA BŁĘDY:\n{issues_str}\n\n"
-                "Wygeneruj POPRAWNĄ wersję eliminując wszystkie powyższe błędy. "
-                "Zwróć WYŁĄCZNIE wypełniony szablon."
+                + f"\n\n---\n\nTHE PREVIOUS ATTEMPT HAD ERRORS:\n{issues_str}\n\n"
+                "Generate a CORRECT version that fixes all of the errors above. "
+                "Return ONLY the filled template."
             )
         else:
             print(
-                f"[broadcast] Sekcja nie spełniła wymagań po {_MAX_SECTION_RETRIES + 1} próbach — "
-                "wysyłam ostatni wynik.",
+                f"[broadcast] Section did not meet the requirements after {_MAX_SECTION_RETRIES + 1} attempts — "
+                "sending the last result.",
                 file=sys.stderr,
                 flush=True,
             )
@@ -517,7 +535,7 @@ def _gif_query(msg: str) -> str:
 # ---------------------------------------------------------------------------
 
 # Matches a **bolded** span (brief templates always wrap person names in
-# **...**, e.g. "👤 **Imię Nazwisko:**", "- **Imię Nazwisko** → ...").
+# **...**, e.g. "👤 **First Last:**", "- **First Last** → ...").
 _BOLD_SPAN_RE = re.compile(r"\*\*([^*\n]+?)\*\*")
 _NAME_CHARS_RE = re.compile(r"^[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-]+$")
 
@@ -531,9 +549,9 @@ def _looks_like_full_name(candidate: str) -> bool:
 
 
 def _split_name_candidates(text: str) -> list[str]:
-    """Split a bold span's content on ", " / " i " / " oraz " (a name list,
+    """Split a bold span's content on ", " / " and " (Polish: " i " / " oraz ") (a name list,
     e.g. the {{CONTRIBUTORS}} placeholder: "Ewa Nowak, Ala Kowalska")."""
-    parts = re.split(r"\s*,\s*|\s+i\s+|\s+oraz\s+", text.strip())
+    parts = re.split(r"\s*,\s*|\s+(?:and|i|oraz)\s+", text.strip())
     return [p.strip() for p in parts if p.strip()]
 
 
@@ -609,13 +627,13 @@ def _send_one(msg: str, channel: str, idx: int, total: int) -> bool:
     else:
         html_body, mentions = _inject_name_mentions(msg)
         html = f"<p>🧑‍💻<strong>[Bob]</strong>: {html_body}</p>"
-        print(f"[broadcast] [{idx}/{total}] Tekst {len(msg)} znakow ...", flush=True)
+        print(f"[broadcast] [{idx}/{total}] Text {len(msg)} chars ...", flush=True)
         ok = api_client.send_html_message(html, channel, mentions) is not None
 
     if not ok:
         token_info = api_client._token_debug_info()
         print(
-            f"[broadcast] [{idx}/{total}] Wysylka nieudana. Token: {token_info}",
+            f"[broadcast] [{idx}/{total}] ERROR: send failed. Token: {token_info}",
             file=sys.stderr,
             flush=True,
         )
@@ -645,12 +663,12 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
     """
     brief_file = job.get("brief_file")
     channel = job.get("channel", "")
-    tools_str = _build_tools_str(job.get("tools", []))
+    tools_str = _build_tools_str(_job_tools(job))
 
     if brief_file:
         brief_path = _BROADCAST_DIR / brief_file
         if not brief_path.exists():
-            print(f"[broadcast] brief_file nie istnieje: {brief_path}", file=sys.stderr, flush=True)
+            print(f"[broadcast] ERROR: brief_file does not exist: {brief_path}", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "phase": "generate",
                          "success": False, "chars_sent": 0, "error": "brief_not_found"})
@@ -658,7 +676,7 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
 
         preamble, sections = _parse_brief_sections(brief_path.read_text(encoding="utf-8"))
         if not sections:
-            print("[broadcast] Brief nie zawiera sekcji '### Wiadomosc'.", file=sys.stderr, flush=True)
+            print("[broadcast] ERROR: the brief has no '### Message' sections.", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "phase": "generate",
                          "success": False, "chars_sent": 0, "error": "no_sections"})
@@ -667,16 +685,16 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
         n = len(sections)
         job_name = job.get("name") or job.get("team", job_id)
         print(
-            f"[broadcast] [generate] Tryb per-sekcja: {n} sekcji, timeout {_SECTION_TIMEOUT_S}s/sekcja.",
+            f"[broadcast] [generate] Per-section mode: {n} sections, timeout {_SECTION_TIMEOUT_S}s/section.",
             flush=True,
         )
-        _progress(f"[generate] Broadcast *{job_name}* — generuje {n} sekcji...", skip_channel=channel)
+        _progress(f"[generate] Broadcast *{job_name}* — generating {n} sections...", skip_channel=channel)
 
         results: list[dict] = []
         for i, section in enumerate(sections, 1):
-            header = section.splitlines()[0] if section else f"sekcja {i}"
+            header = section.splitlines()[0] if section else f"section {i}"
             label = _section_label(header)
-            print(f"[broadcast] Generowanie sekcji {i}/{n}: {header} ...", flush=True)
+            print(f"[broadcast] Generating section {i}/{n}: {header} ...", flush=True)
 
             t0 = time.monotonic()
             msg = _generate_section(preamble, section, tools_str,
@@ -686,11 +704,11 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
 
             if not msg:
                 print(
-                    f"[broadcast] Sekcja {i} — generowanie nieudane, pomijam.",
+                    f"[broadcast] Section {i} — generation failed, skipping.",
                     file=sys.stderr,
                     flush=True,
                 )
-                _progress(f"[generate] [{i}/{n}] {label} — blad ({elapsed}s)", skip_channel=channel)
+                _progress(f"[generate] [{i}/{n}] {label} — error ({elapsed}s)", skip_channel=channel)
             else:
                 _progress(f"[generate] [{i}/{n}] {label} ({elapsed}s)", skip_channel=channel)
                 results.append({"section_idx": i, "content": msg})
@@ -701,7 +719,7 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
         out_path.write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[broadcast] [generate] Zapisano {len(results)}/{n} sekcji -> {out_path}", flush=True)
+        print(f"[broadcast] [generate] Saved {len(results)}/{n} sections -> {out_path}", flush=True)
 
         success = len(results) == n
         _append_log({
@@ -720,13 +738,13 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
         # Legacy single-call mode — generate and write to generated/<job_id>.json.
         prompt = job.get("prompt", "")
         if not prompt:
-            print(f"[broadcast] Brak promptu dla joba '{job_id}'.", file=sys.stderr, flush=True)
+            print(f"[broadcast] ERROR: no prompt for job '{job_id}'.", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "phase": "generate",
                          "success": False, "chars_sent": 0, "error": "no_prompt"})
             return False
 
-        print(f"[broadcast] [generate] Tryb single-call dla joba '{job_id}' ...", flush=True)
+        print(f"[broadcast] [generate] Single-call mode for job '{job_id}' ...", flush=True)
         text = generate(prompt, tools_str)
         if not text:
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
@@ -742,7 +760,7 @@ def _run_phase_generate(job_id: str, job: dict) -> bool:
         out_path.write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"[broadcast] [generate] Zapisano {len(results)} wiadomosci -> {out_path}", flush=True)
+        print(f"[broadcast] [generate] Saved {len(results)} messages -> {out_path}", flush=True)
 
         _append_log({
             "ts": datetime.now(UTC).isoformat(),
@@ -790,8 +808,8 @@ def _render_worklog_post(post) -> tuple[str, list[dict], list[str]]:
 def _run_worklog_daily(job_id: str, job: dict, phase: str) -> bool:
     """Daily worklog post (worklog_daily.py): Jira/Tempo fetched directly, per person.
 
-    dry-run -> post + coverage report to Notatki; send / generate-send -> team channel,
-    unless any member's data failed to load (then Notatki only). 'generate' is a no-op
+    dry-run -> post + coverage report to the control chat; send / generate-send -> team channel,
+    unless any member's data failed to load (then the control chat only). 'generate' is a no-op
     preview on stdout (nothing to persist -- data is fetched fresh at send time)."""
     import jira_client  # noqa: PLC0415 -- scripts/jira is on sys.path (top of module)
     import worklog_daily as wd  # noqa: PLC0415
@@ -803,22 +821,22 @@ def _run_worklog_daily(job_id: str, job: dict, phase: str) -> bool:
 
     today = date.today()
     if not wd.is_workday(today):
-        print(f"[worklog-daily] {today} to nie dzien roboczy -- pomijam.", flush=True)
+        print(f"[worklog-daily] {today} is not a working day -- skipping.", flush=True)
         _log(True, "", "not_workday")
         return True
     # "worklog-missing" = midday recap over several teams (job["teams"]), no AI.
     recap = job.get("generator") == "worklog-missing"
     teams = job.get("teams", []) if recap else [job.get("team", "")]
     day = wd.prev_workday(today)
-    vacations, urlopy_at = wd.load_vacations(day)
+    vacations, leave_at = wd.load_vacations(day)
     if not recap and job.get("channel"):
         # @tags: learn MRIs of people who ever wrote in the team chat (best-effort).
         try:
             added = wd.harvest_mris(api_client.get_messages(job["channel"], n=200))
             if added:
-                print(f"[worklog-daily] nowe MRI z historii czatu: {', '.join(added)}", flush=True)
+                print(f"[worklog-daily] new MRIs from chat history: {', '.join(added)}", flush=True)
         except Exception as exc:  # noqa: BLE001 -- tagging is optional, the post is not
-            print(f"[worklog-daily] zbieranie MRI nieudane: {exc}", file=sys.stderr, flush=True)
+            print(f"[worklog-daily] collecting MRIs failed: {exc}", file=sys.stderr, flush=True)
     by_team: dict[str, list] = {}
     for team in teams:
         try:
@@ -844,7 +862,7 @@ def _run_worklog_daily(job_id: str, job: dict, phase: str) -> bool:
         return True
 
     if not ensure_fresh_session():
-        print("[worklog-daily] Sesja Teams wygasla.", file=sys.stderr, flush=True)
+        print("[worklog-daily] ERROR: the Teams session has expired.", file=sys.stderr, flush=True)
         _log(False, "", "no_session")
         return False
 
@@ -858,7 +876,7 @@ def _run_worklog_daily(job_id: str, job: dict, phase: str) -> bool:
     html_body, mentions, untagged = _render_worklog_post(post)
     html = f"<p>🧑‍💻<strong>[Bob]</strong>: {html_body}</p>"
     ok = api_client.send_html_message(html, channel, mentions) is not None
-    report = wd.control_report(team, day, members, urlopy_at, untagged)
+    report = wd.control_report(team, day, members, leave_at, untagged)
     print(report, flush=True)
     if phase == "dry-run" or has_errors or untagged or "⚠️" in report:
         api_client.send_message(report, control)
@@ -874,7 +892,7 @@ def _load_generated(job_id: str) -> list[dict] | None:
     path = _generated_path(job_id)
     if not path.exists():
         print(
-            f"[broadcast] Brak pliku generated: {path}. Najpierw uruchom --phase generate.",
+            f"[broadcast] ERROR: no generated file: {path}. Run --phase generate first.",
             file=sys.stderr,
             flush=True,
         )
@@ -882,7 +900,7 @@ def _load_generated(job_id: str) -> list[dict] | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[broadcast] Blad odczytu {path}: {exc}", file=sys.stderr, flush=True)
+        print(f"[broadcast] ERROR reading {path}: {exc}", file=sys.stderr, flush=True)
         return None
 
 
@@ -912,16 +930,16 @@ def _sent_before(job_id: str, channel: str, since: datetime | None = None) -> bo
 def _skip_generate_send(job_id: str, job: dict, now: datetime | None = None) -> str:
     """Why a scheduled generate-send must not run now ("" = go ahead).
 
-    * a "weekly" job only fires on its own weekday (Warsaw time; 0 = Monday) - a run started on another day
+    * a "weekly" job only fires on its own weekday (org_config.TIMEZONE; 0 = Monday) - a run started on another day
       (a manual call, a watch loop that restarted) does nothing;
     * the same job already sent to its channel today - a watch-loop restart inside the firing window
       must not post the report twice."""
-    now = now or datetime.now(_WARSAW)
+    now = now or datetime.now(_LOCAL_TZ)
     if job.get("schedule_type") == "weekly" and now.weekday() != int(job.get("weekday", 0)):
-        return f"dzis nie dzien zadania (weekday={job.get('weekday', 0)})"
+        return f"today is not the job's day (weekday={job.get('weekday', 0)})"
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if _sent_before(job_id, job.get("channel", ""), since=midnight):
-        return "dzisiaj juz wyslane"
+        return "already sent today"
     return ""
 
 
@@ -932,7 +950,7 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
     """
     if not ensure_fresh_session():
         print(
-            "[broadcast] Sesja Teams wygasla lub nie istnieje.",
+            "[broadcast] ERROR: the Teams session has expired or does not exist.",
             file=sys.stderr, flush=True,
         )
         _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
@@ -947,9 +965,9 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
                      "success": False, "chars_sent": 0, "error": "no_generated_file"})
         return False
 
-    notatki_conv = _load_control_channel()
-    if not notatki_conv:
-        print("[broadcast] Brak kanalu kontrolnego (control_chat) w chat-config.json.",
+    control_conv = _load_control_channel()
+    if not control_conv:
+        print("[broadcast] ERROR: no control chat (control_chat) in chat-config.json.",
               file=sys.stderr, flush=True)
         _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                      "channel": "", "phase": "dry-run",
@@ -958,8 +976,8 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
 
     team = job.get("team", job_id)
     n = len(messages)
-    print(f"[broadcast] [dry-run] Wysylanie {n} wiadomosci na kanal kontrolny ...", flush=True)
-    _progress(f"[dry-run] Broadcast *{team}* — {n} wiadomosci podglad na Notatki...")
+    print(f"[broadcast] [dry-run] Sending {n} messages to the control chat ...", flush=True)
+    _progress(f"[dry-run] Broadcast *{team}* — previewing {n} messages in the control chat...")
 
     sent_count = 0
     total_chars = 0
@@ -968,7 +986,7 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
         section_idx = item.get("section_idx", idx + 1)
         if not msg:
             continue
-        ok = _send_one(msg, notatki_conv, section_idx, n)
+        ok = _send_one(msg, control_conv, section_idx, n)
         if ok:
             sent_count += 1
             total_chars += len(msg)
@@ -979,7 +997,7 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
     _append_log({
         "ts": datetime.now(UTC).isoformat(),
         "job_id": job_id,
-        "channel": notatki_conv,
+        "channel": control_conv,
         "phase": "dry-run",
         "success": success,
         "messages_total": n,
@@ -987,9 +1005,9 @@ def _run_phase_dry_run(job_id: str, job: dict) -> bool:
         "chars_sent": total_chars,
     })
     if success:
-        _progress(f"[dry-run] Broadcast *{team}* gotowy — {sent_count}/{n} wyslanych na Notatki")
+        _progress(f"[dry-run] Broadcast *{team}* done — {sent_count}/{n} sent to the control chat")
     else:
-        _progress(f"[dry-run] Broadcast *{team}* — {sent_count}/{n} wyslanych na Notatki")
+        _progress(f"[dry-run] Broadcast *{team}* — {sent_count}/{n} sent to the control chat")
     return success
 
 
@@ -1000,7 +1018,7 @@ def _run_phase_send(job_id: str, job: dict) -> bool:
     """
     if not ensure_fresh_session():
         print(
-            "[broadcast] Sesja Teams wygasla lub nie istnieje.",
+            "[broadcast] ERROR: the Teams session has expired or does not exist.",
             file=sys.stderr, flush=True,
         )
         _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
@@ -1011,7 +1029,7 @@ def _run_phase_send(job_id: str, job: dict) -> bool:
     channel = job.get("channel", "")
     if channel == _PLACEHOLDER_CHANNEL:
         print(
-            "[broadcast] Kanal docelowy to placeholder. Uzupelnij 'channel' w jobs.json.",
+            "[broadcast] ERROR: the target channel is a placeholder. Fill in 'channel' in jobs.json.",
             file=sys.stderr, flush=True,
         )
         _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
@@ -1028,8 +1046,8 @@ def _run_phase_send(job_id: str, job: dict) -> bool:
 
     team = job.get("team", job_id)
     n = len(messages)
-    print(f"[broadcast] [send] Wysylanie {n} wiadomosci na kanal {channel} ...", flush=True)
-    _progress(f"[send] Broadcast *{team}* — wysylam {n} wiadomosci...", skip_channel=channel)
+    print(f"[broadcast] [send] Sending {n} messages to channel {channel} ...", flush=True)
+    _progress(f"[send] Broadcast *{team}* — sending {n} messages...", skip_channel=channel)
 
     sent_count = 0
     total_chars = 0
@@ -1057,9 +1075,9 @@ def _run_phase_send(job_id: str, job: dict) -> bool:
         "chars_sent": total_chars,
     })
     if success:
-        _progress(f"[send] Broadcast *{team}* gotowy — {sent_count}/{n} wyslanych", skip_channel=channel)
+        _progress(f"[send] Broadcast *{team}* done — {sent_count}/{n} sent", skip_channel=channel)
     else:
-        _progress(f"[send] Broadcast *{team}* — {sent_count}/{n} wyslanych", skip_channel=channel)
+        _progress(f"[send] Broadcast *{team}* — {sent_count}/{n} sent", skip_channel=channel)
     return success
 
 
@@ -1116,7 +1134,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
             return _run_worklog_daily(job_id, job, "generate-send")
         skip = _skip_generate_send(job_id, job)
         if skip:
-            print(f"[broadcast] generate-send {job_id}: {skip} -- pomijam.", flush=True)
+            print(f"[broadcast] generate-send {job_id}: {skip} -- skipping.", flush=True)
             return True
         ok = _run_phase_generate(job_id, job)
         if not ok:
@@ -1128,7 +1146,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
     # -------------------------------------------------------------------
     if not ensure_fresh_session():
         print(
-            "[broadcast] Sesja Teams wygasla lub nie istnieje. Uruchom Boba zeby odswiezyl sesje.",
+            "[broadcast] ERROR: the Teams session has expired or does not exist. Start Bob to refresh it.",
             file=sys.stderr,
             flush=True,
         )
@@ -1146,7 +1164,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
 
     if channel == _PLACEHOLDER_CHANNEL:
         print(
-            "[broadcast] Kanal docelowy to placeholder. Uzupelnij 'channel' w jobs.json.",
+            "[broadcast] ERROR: the target channel is a placeholder. Fill in 'channel' in jobs.json.",
             file=sys.stderr,
             flush=True,
         )
@@ -1155,7 +1173,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
                      "error": "placeholder_channel"})
         return False
 
-    tools_str = _build_tools_str(job.get("tools", []))
+    tools_str = _build_tools_str(_job_tools(job))
 
     # ------------------------------------------------------------------
     # Per-section mode (brief_file) vs. single-call mode (prompt)
@@ -1165,7 +1183,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
     if brief_file:
         brief_path = _BROADCAST_DIR / brief_file
         if not brief_path.exists():
-            print(f"[broadcast] brief_file nie istnieje: {brief_path}", file=sys.stderr, flush=True)
+            print(f"[broadcast] ERROR: brief_file does not exist: {brief_path}", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "success": False, "chars_sent": 0,
                          "error": "brief_not_found"})
@@ -1173,7 +1191,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
 
         preamble, sections = _parse_brief_sections(brief_path.read_text(encoding="utf-8"))
         if not sections:
-            print("[broadcast] Brief nie zawiera sekcji '### Wiadomosc'.", file=sys.stderr, flush=True)
+            print("[broadcast] ERROR: the brief has no '### Message' sections.", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "success": False, "chars_sent": 0,
                          "error": "no_sections"})
@@ -1182,17 +1200,17 @@ def run_job(job_id: str, phase: str = "all") -> bool:
         n = len(sections)
         team = job.get("team", job_id)
         print(
-            f"[broadcast] Tryb per-sekcja: {n} sekcji, timeout {_SECTION_TIMEOUT_S}s/sekcja.",
+            f"[broadcast] Per-section mode: {n} sections, timeout {_SECTION_TIMEOUT_S}s/section.",
             flush=True,
         )
-        _progress(f"[all] Broadcast *{team}* — generuje {n} sekcji...", skip_channel=channel)
+        _progress(f"[all] Broadcast *{team}* — generating {n} sections...", skip_channel=channel)
 
         # Phase 1: generate all sections before sending anything.
         generated: list[tuple[int, str]] = []
         for i, section in enumerate(sections, 1):
-            header = section.splitlines()[0] if section else f"sekcja {i}"
+            header = section.splitlines()[0] if section else f"section {i}"
             label = _section_label(header)
-            print(f"[broadcast] Generowanie sekcji {i}/{n}: {header} ...", flush=True)
+            print(f"[broadcast] Generating section {i}/{n}: {header} ...", flush=True)
 
             t0 = time.monotonic()
             msg = _generate_section(preamble, section, tools_str,
@@ -1202,19 +1220,19 @@ def run_job(job_id: str, phase: str = "all") -> bool:
 
             if not msg:
                 print(
-                    f"[broadcast] Sekcja {i} — generowanie nieudane, pomijam wysylke.",
+                    f"[broadcast] Section {i} — generation failed, not sending it.",
                     file=sys.stderr,
                     flush=True,
                 )
-                _progress(f"[all] [{i}/{n}] {label} — blad ({elapsed}s)", skip_channel=channel)
+                _progress(f"[all] [{i}/{n}] {label} — error ({elapsed}s)", skip_channel=channel)
             else:
                 _progress(f"[all] [{i}/{n}] {label} ({elapsed}s)", skip_channel=channel)
             generated.append((i, msg))
 
         # Phase 2: send all generated messages in sequence.
         ready = sum(1 for _, m in generated if m)
-        print(f"[broadcast] Wysylanie {ready}/{n} wiadomosci ...", flush=True)
-        _progress(f"[all] Wysylam {ready}/{n} wiadomosci -> *{team}*...", skip_channel=channel)
+        print(f"[broadcast] Sending {ready}/{n} messages ...", flush=True)
+        _progress(f"[all] Sending {ready}/{n} messages -> *{team}*...", skip_channel=channel)
 
         sent_count = 0
         total_chars = 0
@@ -1230,9 +1248,9 @@ def run_job(job_id: str, phase: str = "all") -> bool:
                 time.sleep(_INTER_MSG_DELAY_S)
 
         if sent_count == n:
-            _progress(f"[all] Broadcast *{team}* gotowy — {sent_count}/{n} wyslanych", skip_channel=channel)
+            _progress(f"[all] Broadcast *{team}* done — {sent_count}/{n} sent", skip_channel=channel)
         else:
-            _progress(f"[all] Broadcast *{team}* — {sent_count}/{n} wyslanych", skip_channel=channel)
+            _progress(f"[all] Broadcast *{team}* — {sent_count}/{n} sent", skip_channel=channel)
 
         success = sent_count == n
 
@@ -1240,13 +1258,13 @@ def run_job(job_id: str, phase: str = "all") -> bool:
         # Legacy single-call mode.
         prompt = job.get("prompt", "")
         if not prompt:
-            print(f"[broadcast] Brak promptu dla joba '{job_id}'.", file=sys.stderr, flush=True)
+            print(f"[broadcast] ERROR: no prompt for job '{job_id}'.", file=sys.stderr, flush=True)
             _append_log({"ts": datetime.now(UTC).isoformat(), "job_id": job_id,
                          "channel": channel, "success": False, "chars_sent": 0,
                          "error": "no_prompt"})
             return False
 
-        print(f"[broadcast] Tryb single-call dla joba '{job_id}' ...", flush=True)
+        print(f"[broadcast] Single-call mode for job '{job_id}' ...", flush=True)
         text = generate(prompt, tools_str)
 
         if not text:
@@ -1256,7 +1274,7 @@ def run_job(job_id: str, phase: str = "all") -> bool:
             return False
 
         messages = _split_messages(text)
-        print(f"[broadcast] Wygenerowano {len(messages)} wiadomosc(i).", flush=True)
+        print(f"[broadcast] Generated {len(messages)} message(s).", flush=True)
 
         sent_count = 0
         total_chars = 0
@@ -1290,13 +1308,13 @@ def run_job(job_id: str, phase: str = "all") -> bool:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Bob broadcast runner — wysyla zaplanowane wiadomosci na kanalach Teams."
+        description="Bob broadcast runner — sends scheduled messages to Teams channels."
     )
     parser.add_argument(
         "--job",
         required=True,
         metavar="ID",
-        help="ID joba do uruchomienia (musi istniec w jobs.json i miec enabled=true).",
+        help="ID of the job to run (must exist in jobs.json and have enabled=true).",
     )
     parser.add_argument(
         "--phase",
@@ -1304,10 +1322,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="PHASE",
         help=(
-            "Faza do wykonania: generate (generuj i zapisz), "
-            "dry-run (wyslij podglad na Notatki), send (wyslij na kanal docelowy), "
-            "generate-send (generuj i wyslij bez posrednika), "
-            "Bez flagi: tryb all-in-one (legacy)."
+            "Phase to run: generate (generate and save), "
+            "dry-run (send a preview to the control chat), send (send to the target channel), "
+            "generate-send (generate and send with no intermediate file). "
+            "No flag: all-in-one mode (legacy)."
         ),
     )
     return parser.parse_args(argv)

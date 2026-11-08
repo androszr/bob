@@ -356,9 +356,9 @@ def test_md_to_html_code_fence_ascii_art():
 
 
 def test_md_to_html_no_fence_unchanged():
-    result = api_client._md_to_html("zwykły tekst bez fence")
+    result = api_client._md_to_html("plain text without a fence")
     assert "pre" not in result
-    assert result == "zwykły tekst bez fence"
+    assert result == "plain text without a fence"
 
 
 # ---------------------------------------------------------------------------
@@ -371,9 +371,9 @@ def test_reply_to_message_default_uses_bob_prefix(monkeypatch):
         api_client, "_post",
         lambda conv_id, content, mentions=None: captured.setdefault("content", content) or True,
     )
-    api_client.reply_to_message("odpowiedz", "msg1", "Ktos", "pytanie", "conv1")
+    api_client.reply_to_message("answer", "msg1", "Someone", "question", "conv1")
     assert "[Bob]" in captured["content"]
-    assert "[Asystent]" not in captured["content"]
+    assert "[Assistant]" not in captured["content"]
 
 
 def test_reply_to_message_example_persona_uses_its_prefix(monkeypatch):
@@ -383,9 +383,9 @@ def test_reply_to_message_example_persona_uses_its_prefix(monkeypatch):
         lambda conv_id, content, mentions=None: captured.setdefault("content", content) or True,
     )
     api_client.reply_to_message(
-        "odpowiedz", "msg1", "Ktos", "pytanie", "conv1", persona="example",
+        "answer", "msg1", "Someone", "question", "conv1", persona="example",
     )
-    assert "[Asystent]" in captured["content"]
+    assert "[Assistant]" in captured["content"]
     assert "[Bob]" not in captured["content"]
 
 
@@ -782,7 +782,7 @@ def test_token_cache_is_never_written_by_the_suite():
 
 def test_agent_html_prefix_per_persona():
     assert "[Bob]" in api_client.agent_html_prefix(None)
-    assert "[Asystent]" in api_client.agent_html_prefix("example")
+    assert "[Assistant]" in api_client.agent_html_prefix("example")
 
 
 def test_example_persona_has_its_own_emoji():
@@ -793,7 +793,7 @@ def test_example_persona_has_its_own_emoji():
 
 
 def test_agent_html_prefix_unknown_persona_falls_back_to_bob():
-    assert "[Bob]" in api_client.agent_html_prefix("nie-ma-takiej-persony")
+    assert "[Bob]" in api_client.agent_html_prefix("no-such-persona")
 
 
 def test_bot_html_prefixes_cover_every_persona():
@@ -803,20 +803,20 @@ def test_bot_html_prefixes_cover_every_persona():
     _legacy = len(api_client._legacy_prefix_pairs())
     assert len(api_client.BOT_HTML_PREFIXES) == 1 + len(api_client.AGENT_LABELS) + _legacy
     assert len(set(api_client.BOT_HTML_PREFIXES)) == len(api_client.BOT_HTML_PREFIXES)
-    for label in ("[Bob]", "[Asystent]"):
+    for label in ("[Bob]", "[Assistant]"):
         assert any(label in p for p in api_client.BOT_HTML_PREFIXES)
     assert all(p.startswith("<p>") for p in api_client.BOT_HTML_PREFIXES)
 
 
 def test_agent_text_labels_match_prefixes():
-    assert api_client.AGENT_TEXT_LABELS == ("[Bob]", "[Asystent]")
+    assert api_client.AGENT_TEXT_LABELS == ("[Bob]", "[Assistant]", "[Asystent]")
 
 
 def test_agent_label_from_html_identifies_each_persona():
     for persona, expected in (
-        (None, "Bob"), ("example", "Asystent"),
+        (None, "Bob"), ("example", "Assistant"),
     ):
-        raw = f"<p>{api_client.agent_html_prefix(persona)}: tresc</p>"
+        raw = f"<p>{api_client.agent_html_prefix(persona)}: body</p>"
         assert api_client.agent_label_from_html(raw) == expected
 
 
@@ -829,6 +829,13 @@ def test_legacy_prefix_pairs_keep_the_stored_and_the_current_emoji(monkeypatch):
         ("example", "<p>\U0001f4dd<strong>[Pomocnik]</strong>"),
         ("example", "<p>\U0001f4a1<strong>[Pomocnik]</strong>"),
     )
+
+
+def test_old_polish_persona_label_still_reads_as_own_message():
+    """Messages posted as "[Asystent]" before the English rename are still the persona's own."""
+    raw = "<p>\U0001f4a1<strong>[Asystent]</strong>: old reply</p>"
+    assert api_client.agent_label_from_html(raw) == "Assistant"
+    assert any(raw.startswith(p) for p in api_client.BOT_HTML_PREFIXES)
 
 
 def test_legacy_prefix_uses_stored_emoji_not_current_one():
@@ -848,7 +855,7 @@ def test_sending_never_uses_a_retired_label():
 
 
 def test_agent_label_from_html_returns_none_for_human_message():
-    assert api_client.agent_label_from_html("<p>zwykła wiadomość</p>") is None
+    assert api_client.agent_label_from_html("<p>an ordinary message</p>") is None
 
 
 def test_send_gif_example_persona_uses_its_prefix(monkeypatch):
@@ -988,7 +995,7 @@ def test_receive_only_conv_refuses_every_write(monkeypatch, tmp_path):
     img.write_bytes(b"x")
     assert api_client.send_message("hej", _LISTEN) is False
     assert api_client.send_html_message("<p>x</p>", _LISTEN) is None
-    assert api_client.reply_to_message("t", "1", "A", "tekst", _LISTEN) in (False, None)
+    assert api_client.reply_to_message("t", "1", "A", "text", _LISTEN) in (False, None)
     assert api_client.edit_message("1", "<p>x</p>", _LISTEN) is False
     assert api_client.delete_message("1", _LISTEN) is False
     assert api_client.post_card({"type": "AdaptiveCard"}, _LISTEN) is None

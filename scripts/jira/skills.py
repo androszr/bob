@@ -22,41 +22,41 @@ import jira_client as _jira  # noqa: E402,I001
 # ---------------------------------------------------------------------------
 
 SKILLS_PROMPT = """
-Masz dostęp do następujących skilli. Wywołaj je gdy potrzebujesz danych na żywo.
+You have the following skills. Call them when you need live data.
 
-Aby wywołać skille, odpowiedz TYLKO tym blokiem (bez żadnego innego tekstu):
-<skills>[{"name": "nazwa", "params": {...}}, ...]</skills>
+To call skills, reply with ONLY this block (no other text):
+<skills>[{"name": "name", "params": {...}}, ...]</skills>
 
-Możesz wywołać wiele skilli naraz w jednej tablicy.
-Jeśli nie potrzebujesz danych — odpowiedz normalnie bez bloku <skills>.
+You can call several skills at once in one array.
+If you need no data, reply normally without a <skills> block.
 
-DOSTĘPNE SKILLE:
+AVAILABLE SKILLS:
 
 sprint(team: str)
-  Aktywny sprint dla teamu. team: "TeamA" | "TeamD" | "TeamB" | "all"
-  Zwraca: committed/done/wip SP, listę tasków z assignee i statusem.
-  Przykład: {"name": "sprint", "params": {"team": "TeamA"}}
+  The team's active sprint. team: "TeamA" | "TeamD" | "TeamB" | "all"
+  Returns: committed/done/wip SP, the list of tasks with assignee and status.
+  Example: {"name": "sprint", "params": {"team": "TeamA"}}
 
 tempo(date_from: str, date_to: str, person?: str)
-  Worklogi z Tempo za podany okres. Daty w formacie YYYY-MM-DD.
-  person: opcjonalnie filtruj po fragmencie nazwiska (np. "Nowak").
-  Przykład: {"name": "tempo", "params": {"date_from": "2026-05-01", "date_to": "2026-05-31", "person": "Nowak"}}
+  Tempo worklogs for the given period. Dates as YYYY-MM-DD.
+  person: optionally filter by part of a surname (e.g. "Nowak").
+  Example: {"name": "tempo", "params": {"date_from": "2026-05-01", "date_to": "2026-05-31", "person": "Nowak"}}
 
 issue(key: str)
-  Szczegóły konkretnego ticketu: status, assignee, SP, opis, ostatnie komentarze.
-  Przykład: {"name": "issue", "params": {"key": "PRJ1-123"}}
+  Details of one ticket: status, assignee, SP, description, latest comments.
+  Example: {"name": "issue", "params": {"key": "PRJ1-123"}}
 
 search(jql: str, max_results?: int)
-  Wyszukiwanie JQL. max_results domyślnie 15.
-  Przykład: {"name": "search", "params": {"jql": "assignee = currentUser() AND status != Done"}}
+  JQL search. max_results defaults to 15.
+  Example: {"name": "search", "params": {"jql": "assignee = currentUser() AND status != Done"}}
 
 find(query: str)
-  Szukaj po tekście w summary/description.
-  Przykład: {"name": "find", "params": {"query": "migracja FieldOps"}}
+  Text search in summary/description.
+  Example: {"name": "find", "params": {"query": "FieldOps migration"}}
 
 my_issues()
-  Moje otwarte taski (przypisane do currentUser, nie Done).
-  Przykład: {"name": "my_issues", "params": {}}
+  My open tasks (assigned to currentUser, not Done).
+  Example: {"name": "my_issues", "params": {}}
 """.strip()
 
 
@@ -73,7 +73,7 @@ def _skill_sprint(team: str = "all") -> str:
         results = [r] if r else []
 
     if not results:
-        return f"Nie znaleziono aktywnego sprintu dla teamu: {team}"
+        return f"No active sprint found for team: {team}"
 
     parts = []
     for s in results:
@@ -82,16 +82,17 @@ def _skill_sprint(team: str = "all") -> str:
             f"  Committed: {s['committed_sp']} SP | Done: {s['done_sp']} SP ({s['completion_pct']}%) "
             f"| WIP: {s['wip_sp']} SP | Todo: {s['todo_sp']} SP",
         ]
+        # Polish status names are matched too.
         wip = [i for i in s["issues"] if "progress" in i["status"].lower() or
                "realizacj" in i["status"].lower() or "trakcie" in i["status"].lower()]
         done = [i for i in s["issues"] if i["status"].lower() in
                 ("done", "gotowe", "closed", "resolved", "ukończone")]
         if wip:
-            lines.append(f"  W trakcie ({len(wip)}):")
+            lines.append(f"  In progress ({len(wip)}):")
             for i in wip[:8]:
                 lines.append(f"    {i['key']} ({i['sp']} SP) [{i['assignee']}] {i['summary']}")
         if done:
-            lines.append(f"  Ukończone ({len(done)}):")
+            lines.append(f"  Done ({len(done)}):")
             for i in done[:8]:
                 lines.append(f"    {i['key']} ({i['sp']} SP) [{i['assignee']}] {i['summary']}")
         parts.append("\n".join(lines))
@@ -101,33 +102,33 @@ def _skill_sprint(team: str = "all") -> str:
 def _skill_tempo(date_from: str, date_to: str, person: str = "") -> str:
     summary = _jira.get_tempo_summary(date_from, date_to)
     if not summary.get("total_hours"):
-        return f"Brak worklogów w Tempo za okres {date_from} → {date_to}."
+        return f"No Tempo worklogs for {date_from} → {date_to}."
 
-    lines = [f"Tempo {date_from} → {date_to} | łącznie: {summary['total_hours']}h"]
+    lines = [f"Tempo {date_from} → {date_to} | total: {summary['total_hours']}h"]
     for name, hours in summary["by_person"].items():
         if person and person.lower() not in name.lower():
             continue
         lines.append(f"  {name}: {hours}h")
 
     if person and len(lines) == 1:
-        return f"Nie znaleziono worklogów dla '{person}' w okresie {date_from} → {date_to}."
+        return f"No worklogs found for '{person}' in {date_from} → {date_to}."
     return "\n".join(lines)
 
 
 def _skill_issue(key: str) -> str:
     issue = _jira.get_issue(key)
     if not issue:
-        return f"Nie znaleziono ticketu: {key}"
+        return f"Ticket not found: {key}"
     lines = [
         f"{issue['key']}: {issue['summary']}",
-        f"  Status: {issue['status']} | SP: {issue['sp']} | Typ: {issue['type']}",
+        f"  Status: {issue['status']} | SP: {issue['sp']} | Type: {issue['type']}",
         f"  Assignee: {issue['assignee'] or '—'}",
         f"  URL: {issue['url']}",
     ]
     if issue.get("description"):
-        lines.append(f"  Opis: {issue['description'][:400]}")
+        lines.append(f"  Description: {issue['description'][:400]}")
     if issue.get("comments"):
-        lines.append("  Ostatnie komentarze:")
+        lines.append("  Latest comments:")
         for c in issue["comments"]:
             lines.append(f"    [{c['author']}]: {c['body'][:300]}")
     return "\n".join(lines)
@@ -136,8 +137,8 @@ def _skill_issue(key: str) -> str:
 def _skill_search(jql: str, max_results: int = 15) -> str:
     issues = _jira.search(jql, max_results=max_results)
     if not issues:
-        return f"Brak wyników dla JQL: {jql}"
-    lines = [f"Wyniki ({len(issues)}):"]
+        return f"No results for JQL: {jql}"
+    lines = [f"Results ({len(issues)}):"]
     for i in issues:
         lines.append(f"  {i['key']} [{i['status']}] {i['sp'] or '?'} SP "
                      f"[{i['assignee'] or '—'}] {i['summary']}")
@@ -147,8 +148,8 @@ def _skill_search(jql: str, max_results: int = 15) -> str:
 def _skill_find(query: str) -> str:
     issues = _jira.find_issue(query, max_results=10)
     if not issues:
-        return f"Brak wyników dla: {query}"
-    lines = [f"Znalezione ({len(issues)}):"]
+        return f"No results for: {query}"
+    lines = [f"Found ({len(issues)}):"]
     for i in issues:
         lines.append(f"  {i['key']} [{i['status']}] {i['summary']}")
     return "\n".join(lines)
@@ -157,8 +158,8 @@ def _skill_find(query: str) -> str:
 def _skill_my_issues() -> str:
     issues = _jira.get_my_issues(max_results=15)
     if not issues:
-        return "Brak otwartych tasków przypisanych do Ciebie."
-    lines = [f"Twoje otwarte taski ({len(issues)}):"]
+        return "No open tasks assigned to you."
+    lines = [f"Your open tasks ({len(issues)}):"]
     for i in issues:
         lines.append(f"  {i['key']} [{i['status']}] {i['sp'] or '?'} SP {i['summary']}")
     return "\n".join(lines)
@@ -182,8 +183,8 @@ def execute(name: str, params: dict) -> str:
     """Run a skill by name with given params. Returns result string."""
     fn = _REGISTRY.get(name)
     if not fn:
-        return f"[skill '{name}' nie istnieje]"
+        return f"[skill '{name}' does not exist]"
     try:
         return fn(**params)
     except Exception as exc:
-        return f"[skill '{name}' błąd: {exc}]"
+        return f"[skill '{name}' error: {exc}]"

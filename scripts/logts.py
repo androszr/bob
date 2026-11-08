@@ -11,7 +11,12 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-_CET = ZoneInfo("Europe/Warsaw")
+try:
+    import org_config as _org_config
+except Exception:  # noqa: BLE001 — logts must never break the process that imports it
+    _org_config = None
+
+_CET = ZoneInfo(getattr(_org_config, "TIMEZONE", "Europe/Warsaw"))
 
 
 class _Timestamped:

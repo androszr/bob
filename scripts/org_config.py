@@ -29,6 +29,7 @@ DEFAULT_JIRA_URL = "https://jira.example.com"
 DEFAULT_JIRA_PROJECT = "PROJ"
 DEFAULT_OWNER_DISPLAY_NAME = "Owner"
 DEFAULT_OWNER_ALIAS = "Owner"
+DEFAULT_TIMEZONE = "Europe/Warsaw"
 
 
 def load_dotenv(path: Path = ENV_FILE) -> None:
@@ -66,9 +67,15 @@ class OrgConfig:
     jira_project: str = DEFAULT_JIRA_PROJECT
     jira_teams: tuple[str, ...] = ()
     sharepoint_tenant: str = ""
-    urlopy_sharepoint_url: str = ""
+    leave_sharepoint_url: str = ""
     sharepoint_upload_folder_url: str = ""
     name_noise_prefixes: tuple[str, ...] = ()
+    timezone: str = DEFAULT_TIMEZONE
+
+    @property
+    def urlopy_sharepoint_url(self) -> str:
+        """Old name of `leave_sharepoint_url`, kept so older callers keep working."""
+        return self.leave_sharepoint_url
 
     @property
     def owner_mri(self) -> str:
@@ -103,9 +110,11 @@ def from_env(env: Mapping[str, str] | None = None) -> OrgConfig:
         jira_project=_get(env, "JIRA_PROJECT", DEFAULT_JIRA_PROJECT),
         jira_teams=teams,
         sharepoint_tenant=_get(env, "SHAREPOINT_TENANT").lower(),
-        urlopy_sharepoint_url=_get(env, "URLOPY_SHAREPOINT_URL"),
+        # LEAVE_SHAREPOINT_URL is canonical; URLOPY_SHAREPOINT_URL is the old name, still read.
+        leave_sharepoint_url=_get(env, "LEAVE_SHAREPOINT_URL") or _get(env, "URLOPY_SHAREPOINT_URL"),
         sharepoint_upload_folder_url=_get(env, "SHAREPOINT_UPLOAD_FOLDER_URL"),
         name_noise_prefixes=tuple(p.strip().lower() for p in _get(env, "NAME_NOISE_PREFIXES").split(",") if p.strip()),
+        timezone=_get(env, "BOB_TIMEZONE", DEFAULT_TIMEZONE),
     )
 
 
@@ -139,6 +148,8 @@ JIRA_PROJECT = CONFIG.jira_project
 JIRA_TEAMS = CONFIG.jira_teams
 SHAREPOINT_TENANT = CONFIG.sharepoint_tenant
 SHAREPOINT_HOSTS = CONFIG.sharepoint_hosts
-URLOPY_SHAREPOINT_URL = CONFIG.urlopy_sharepoint_url
+LEAVE_SHAREPOINT_URL = CONFIG.leave_sharepoint_url
+URLOPY_SHAREPOINT_URL = LEAVE_SHAREPOINT_URL  # old name, kept as an alias
 SHAREPOINT_UPLOAD_FOLDER_URL = CONFIG.sharepoint_upload_folder_url
 NAME_NOISE_PREFIXES = CONFIG.name_noise_prefixes
+TIMEZONE = CONFIG.timezone

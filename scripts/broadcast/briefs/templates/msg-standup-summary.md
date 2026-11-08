@@ -1,4 +1,4 @@
-**{{PREV_DATE}} — co się działo w {{TEAM}} 📋**
+**{{PREV_DATE}} — what happened in {{TEAM}} 📋**
 
 {{NO_LOG_SECTION}}
 

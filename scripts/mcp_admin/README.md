@@ -19,7 +19,7 @@ Active servers:
 | jira-bob       | 7101 |
 | todos-bob      | 7103 |
 | md-to-mp3-bob  | 7110 |
-| urlopy-bob     | 7112 |
+| leave-bob      | 7112 |
 | datetime-bob   | 7113 |
 | jira-read-bob  | 7126 |
 
@@ -52,32 +52,32 @@ When `BOB_MCP_TRANSPORT` is unset (or != `http`), `ai.py` falls back to the
 old stdio mode — launchd daemons are ignored, fully backwards compatible
 (except the Jira read daemon, see below).
 
-## Demon jira (tryb stdio)
+## Jira daemon in stdio mode
 
-W domyślnym trybie stdio jeden serwer i tak chodzi jako demon HTTP: serwer
-odczytu Jiry (lista w `ai._DAEMON_SERVERS`). Nie wymaga launchd ani
+Even in the default stdio mode one server runs as an HTTP daemon: the Jira
+read server (listed in `ai._DAEMON_SERVERS`). It needs neither launchd nor
 `BOB_MCP_TRANSPORT`:
 
-- **Start** — `cli watch` przy każdym starcie wywołuje
-  `_ensure_daemon_servers(restart=True)`, które przez
-  `scripts/mcp_admin/daemon.py` (`restart_daemon`) zatrzymuje poprzednią
-  instancję i stawia nową, więc demon zawsze serwuje aktualny kod.
-  Pidfile i log jak w skryptach shellowych: `~/.bob/mcp/<name>.pid`,
-  `~/Library/Logs/bob/mcp-<name>.log` — `status.sh` / `stop_all.sh` widzą ten
-  sam proces.
-- **Watchdog** — pętla watch co `_DAEMON_WATCHDOG_INTERVAL_S` (60 s) sprawdza
-  port i podnosi demona, jeśli przestał słuchać; potem regeneruje
-  `mcp-config.json`.
-- **Config** — `ai._refresh_mcp_config()` wpisuje dla tego serwera wpis HTTP
-  tylko gdy port słucha **i** proces jest naszym demonem
-  (`daemon.owned_and_listening`: pidfile + cmdline). W przeciwnym razie
-  (demon padł, obcy proces na porcie) serwer wraca na stdio.
-- **Obcy proces na porcie** — `restart_daemon` niczego nie zabija ani nie
-  startuje, zwraca False; serwer zostaje na stdio. Sprawdź
+- **Start** — on every start `cli watch` calls
+  `_ensure_daemon_servers(restart=True)`, which, through
+  `scripts/mcp_admin/daemon.py` (`restart_daemon`), stops the previous
+  instance and starts a new one, so the daemon always serves the current code.
+  Pidfile and log as in the shell scripts: `~/.bob/mcp/<name>.pid`,
+  `~/Library/Logs/bob/mcp-<name>.log` — `status.sh` / `stop_all.sh` see the
+  same process.
+- **Watchdog** — every `_DAEMON_WATCHDOG_INTERVAL_S` (60 s) the watch loop checks
+  the port and brings the daemon back up if it stopped listening; then it
+  regenerates `mcp-config.json`.
+- **Config** — `ai._refresh_mcp_config()` writes an HTTP entry for this server
+  only when the port is listening **and** the process is our daemon
+  (`daemon.owned_and_listening`: pidfile + cmdline). Otherwise
+  (the daemon died, a foreign process holds the port) the server goes back to stdio.
+- **Foreign process on the port** — `restart_daemon` kills and starts
+  nothing and returns False; the server stays on stdio. Check
   `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
-- Demon ma środowisko zamrożone przy starcie, więc nie widzi zmiennych
-  per wiadomość (np. nadawcy) — dlatego jako demon chodzi tylko odczyt;
-  zapisy do Jiry idą przez stdio.
+- The daemon's environment is frozen at start, so it does not see the
+  per-message variables (such as the sender) — that is why only reads run as a
+  daemon; Jira writes go through stdio.
 
 ## Rollback
 

@@ -3,7 +3,7 @@ name: commit-message
 description: Analyze the current git diff and propose Conventional-Commits-style
   commit message(s). Assesses whether the diff is cohesive (one commit) or
   spans multiple concerns (split proposal) and lets the user choose. Use when
-  the user says "suggest a commit message", "zaproponuj commit", "jak nazwac commit",
+  the user says "suggest a commit message", "name this commit",
   "draft commit msg", or invokes /commit-message. Runs on Haiku via a subagent —
   cheap and fast. Proposes only; does not commit unless the user confirms.
 ---

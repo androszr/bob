@@ -3,7 +3,9 @@
 All public functions accept an optional `ref: date | None = None` parameter
 so tests can inject a fixed reference date (deterministic, no real clock).
 
-When ref is None, the real today (Europe/Warsaw) is used.
+When ref is None, the real today in org_config.TIMEZONE is used.
+
+Expressions are understood in English and in Polish (older chats, Polish users).
 """
 
 import re
@@ -17,11 +19,19 @@ import owner_schedule  # noqa: E402
 
 # Single source of truth for timezone and weekday labels — reuse from owner_schedule.
 _CET = owner_schedule._CET
-_DAY_LABELS_PL = owner_schedule._DAY_LABELS_PL  # {0: "Poniedzialek", ..., 6: "Niedziela"}
+_DAY_LABELS = owner_schedule._DAY_LABELS  # {0: "Monday", ..., 6: "Sunday"}
+_DAY_LABELS_PL = owner_schedule._DAY_LABELS_PL  # {0: "Poniedziałek", ..., 6: "Niedziela"}
 
-# Reverse map: lowercase Polish weekday name -> weekday int (Monday=0 ... Sunday=6),
-# including diacritics variants.
+# Reverse map: lowercase weekday name -> weekday int (Monday=0 ... Sunday=6).
+# English names and short forms, plus Polish names with and without diacritics.
 _WEEKDAY_NORM: dict[str, int] = {
+    "monday": 0, "mon": 0,
+    "tuesday": 1, "tue": 1, "tues": 1,
+    "wednesday": 2, "wed": 2,
+    "thursday": 3, "thu": 3, "thur": 3, "thurs": 3,
+    "friday": 4, "fri": 4,
+    "saturday": 5, "sat": 5,
+    "sunday": 6, "sun": 6,
     "poniedzialek": 0,
     "poniedziałek": 0,
     "wtorek": 1,
@@ -36,7 +46,7 @@ _WEEKDAY_NORM: dict[str, int] = {
 
 
 def today(ref: date | None = None) -> date:
-    """Return today's date in Europe/Warsaw. If ref is given, return ref."""
+    """Return today's date in the configured time zone. If ref is given, return ref."""
     if ref is not None:
         return ref
     from datetime import datetime
@@ -44,41 +54,54 @@ def today(ref: date | None = None) -> date:
 
 
 def weekday(iso: str, ref: date | None = None) -> str:
-    """Return Polish weekday name for an ISO date string (YYYY-MM-DD).
+    """Return the English weekday name for an ISO date string (YYYY-MM-DD).
 
     ref is unused but accepted for API symmetry.
     """
     try:
         d = date.fromisoformat(iso)
     except ValueError:
-        return "BLAD: nieprawidlowy format daty ISO"
+        return "ERROR: invalid ISO date format"
+    return _DAY_LABELS[d.weekday()]
+
+
+def weekday_pl(iso: str) -> str:
+    """Return the Polish weekday name for an ISO date string (YYYY-MM-DD)."""
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        return "ERROR: invalid ISO date format"
     return _DAY_LABELS_PL[d.weekday()]
 
 
 def build_today_anchor(ref: date | None = None) -> str:
     """Return always-present date anchor string for Bob's prompt context.
 
-    Format: "[DZIS] YYYY-MM-DD (Dzien tygodnia), tydzien ISO N, strefa Europe/Warsaw"
+    Format: "[TODAY] YYYY-MM-DD (Weekday), ISO week N, time zone <TZ>"
 
     Never returns None.
     """
     d = today(ref)
     iso = d.isoformat()
-    day_name = _DAY_LABELS_PL[d.weekday()]
+    day_name = _DAY_LABELS[d.weekday()]
     iso_week = d.isocalendar().week
-    return f"[DZIS] {iso} ({day_name}), tydzien ISO {iso_week}, strefa Europe/Warsaw"
+    return f"[TODAY] {iso} ({day_name}), ISO week {iso_week}, time zone {_CET.key}"
 
 
 def resolve_date(expr: str, ref: date | None = None) -> dict:
-    """Resolve a Polish relative date expression to a concrete date.
+    """Resolve a relative date expression (English or Polish) to a concrete date.
 
     Returns dict with keys:
       iso        str  -- YYYY-MM-DD
+      weekday    str  -- English weekday name
       weekday_pl str  -- Polish weekday name
       is_past    bool
       is_future  bool
 
-    On unrecognised input returns {"error": "BLAD: ..."}.
+    A bare weekday name, "this <weekday>" and English "next <weekday>" are the nearest
+    upcoming one (from tomorrow); the Polish "przyszły <dzień>" is the one AFTER that.
+
+    On unrecognised input returns {"error": "ERROR: ..."}.
     """
     base = today(ref)
     expr_stripped = expr.strip()
@@ -89,35 +112,36 @@ def resolve_date(expr: str, ref: date | None = None) -> dict:
         return _make_result(base, base)
     if t in ("jutro", "tomorrow"):
         return _make_result(base + timedelta(days=1), base)
-    if t in ("pojutrze",):
+    if t in ("pojutrze", "day after tomorrow", "the day after tomorrow"):
         return _make_result(base + timedelta(days=2), base)
     if t in ("wczoraj", "yesterday"):
         return _make_result(base - timedelta(days=1), base)
-    if t in ("przedwczoraj",):
+    if t in ("przedwczoraj", "day before yesterday", "the day before yesterday"):
         return _make_result(base - timedelta(days=2), base)
 
-    # --- "poprzedni dzień roboczy" / "poprzedni dzien roboczy" ---
-    if re.match(r'^(?:poprzedni|ubiegly|ubiegły|zeszly|zeszły|ostatni)\s+dzie[nń]\s+roboczy$', t):
+    # --- "previous business day" / "poprzedni dzień roboczy" ---
+    if re.match(r'^(?:poprzedni|ubiegly|ubiegły|zeszly|zeszły|ostatni)\s+dzie[nń]\s+roboczy$', t) \
+            or re.match(_EN_PREV + r'\s+(?:business|working|work)\s?day$', t):
         return _make_result(_prev_workday(base), base)
 
-    # --- "następny dzień roboczy" / "nastepny dzien roboczy" ---
-    if re.match(r'^(?:nastepny|następny|przyszly|przyszły)\s+dzie[nń]\s+roboczy$', t):
+    # --- "next business day" / "następny dzień roboczy" ---
+    if re.match(r'^(?:nastepny|następny|przyszly|przyszły)\s+dzie[nń]\s+roboczy$', t) \
+            or re.match(_EN_NEXT + r'\s+(?:business|working|work)\s?day$', t):
         return _make_result(_next_workday(base), base)
 
-    # --- "za N dni" ---
-    m = re.match(r'^za\s+(\d+)\s+dni(?:a|u)?$', t)
-    if m:
-        n = int(m.group(1))
+    # --- "in N days" / "za N dni" ---
+    n = _days_ahead(t)
+    if n is not None:
         return _make_result(base + timedelta(days=n), base)
 
-    # --- "N dni temu" ---
-    m = re.match(r'^(\d+)\s+dni(?:a|u)?\s+temu$', t)
-    if m:
-        n = int(m.group(1))
+    # --- "N days ago" / "N dni temu" ---
+    n = _days_ago(t)
+    if n is not None:
         return _make_result(base - timedelta(days=n), base)
 
-    # --- "ubiegly/zeszly <dzien>" => last past occurrence of weekday ---
-    m = re.match(r'^(?:ubiegly|ubiegły|zeszly|zeszły|ostatni|ostatniego)\s+(.+)$', t)
+    # --- "last <weekday>" / "ubiegły <dzień>" => last past occurrence of weekday ---
+    m = re.match(r'^(?:ubiegly|ubiegły|ubiegla|ubiegła|zeszly|zeszły|zeszla|zeszła|ostatni|ostatnia'
+                 r'|ostatniego|last|previous|past)\s+(.+)$', t)
     if m:
         day_name = m.group(1).strip()
         wd = _WEEKDAY_NORM.get(day_name)
@@ -125,8 +149,13 @@ def resolve_date(expr: str, ref: date | None = None) -> dict:
             target = _last_weekday(base, wd)
             return _make_result(target, base)
 
-    # --- "przyszly/nastepny <dzien>" => the one AFTER the nearest upcoming ---
-    m = re.match(r'^(?:przyszly|przyszły|nastepny|następny)\s+(.+)$', t)
+    # --- English "next <weekday>" => the nearest upcoming one, as most English speakers mean it ---
+    m = re.match(r'^next\s+(.+)$', t)
+    if m and m.group(1).strip() in _WEEKDAY_NORM:
+        return _make_result(_next_weekday(base, _WEEKDAY_NORM[m.group(1).strip()]), base)
+
+    # --- Polish "przyszły <dzień>" => the one AFTER the nearest upcoming ---
+    m = re.match(r'^(?:przyszly|przyszły|przyszla|przyszła|nastepny|następny|nastepna|następna)\s+(.+)$', t)
     if m:
         day_name = m.group(1).strip()
         wd = _WEEKDAY_NORM.get(day_name)
@@ -136,9 +165,10 @@ def resolve_date(expr: str, ref: date | None = None) -> dict:
             target = first_upcoming + timedelta(weeks=1)
             return _make_result(target, base)
 
-    # --- Bare weekday name => nearest UPCOMING (from tomorrow) ---
-    if t in _WEEKDAY_NORM:
-        wd = _WEEKDAY_NORM[t]
+    # --- Bare weekday name (or "this <weekday>") => nearest UPCOMING (from tomorrow) ---
+    bare = re.sub(r'^(?:this|coming|on)\s+', '', t)
+    if bare in _WEEKDAY_NORM:
+        wd = _WEEKDAY_NORM[bare]
         target = _next_weekday(base, wd)
         return _make_result(target, base)
 
@@ -147,24 +177,34 @@ def resolve_date(expr: str, ref: date | None = None) -> dict:
     if delegated is not None:
         return _make_result(delegated, base)
 
-    return {"error": f"BLAD: nierozpoznane wyrazenie daty: {expr_stripped!r}"}
+    return {"error": f"ERROR: date expression not recognised: {expr_stripped!r}"}
 
 
 def resolve_range(expr: str, ref: date | None = None) -> dict:
-    """Resolve a Polish week/month/day range expression.
+    """Resolve a week/month/day range expression (English or Polish).
 
     Returns dict with keys:
       from_iso  str  -- YYYY-MM-DD (inclusive)
       to_iso    str  -- YYYY-MM-DD (inclusive)
       month     str  -- "YYYY-MM" (only for month expressions)
 
-    On unrecognised input returns {"error": "BLAD: ..."}.
+    On unrecognised input returns {"error": "ERROR: ..."}.
     """
     base = today(ref)
     t = expr.strip().lower()
 
     # --- Week expressions ---
-    # Ten tydzien
+    # This week
+    if re.match(_EN_THIS + r'\s+week$', t):
+        mon, sun = _week_bounds(base, 0)
+        return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
+    if re.match(_EN_PREV + r'\s+week$', t):
+        mon, sun = _week_bounds(base, -1)
+        return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
+    if re.match(_EN_NEXT + r'\s+week$', t):
+        mon, sun = _week_bounds(base, +1)
+        return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
+
     if re.match(r'^(?:ten|tego|biezacy|bieżący)\s+tydzien(?:ia|owi)?$', t) or t == "ten tydzien" or t == "ten tydzień":
         mon, sun = _week_bounds(base, 0)
         return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
@@ -178,17 +218,24 @@ def resolve_range(expr: str, ref: date | None = None) -> dict:
         mon, sun = _week_bounds(base, 0)
         return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
 
-    # Ubiegly / zeszly tydzien
+    # Last week (Polish)
     if re.match(r'^(?:ubiegly|ubiegły|zeszly|zeszły|ostatni|poprzedni)\s+tydzie[nń]', t):
         mon, sun = _week_bounds(base, -1)
         return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
 
-    # Przyszly / nastepny tydzien
+    # Next week (Polish)
     if re.match(r'^(?:przyszly|przyszły|nastepny|następny)\s+tydzie[nń]', t):
         mon, sun = _week_bounds(base, +1)
         return {"from_iso": mon.isoformat(), "to_iso": sun.isoformat()}
 
     # --- Month expressions ---
+    if re.match(_EN_THIS + r'\s+month$', t):
+        return _month_bounds(base.year, base.month)
+    if re.match(_EN_PREV + r'\s+month$', t):
+        return _month_bounds(*_prev_month(base.year, base.month))
+    if re.match(_EN_NEXT + r'\s+month$', t):
+        return _month_bounds(*_next_month(base.year, base.month))
+
     if re.match(r'^(?:ten|tego|biezacy|bieżący|obecny)\s+miesiac(?:a|owi)?', t) or t in (
         "ten miesiac", "ten miesiąc", "tego miesiaca", "tego miesiąca",
         "w tym miesiacu", "w tym miesiącu", "biezacy miesiac", "bieżący miesiąc"
@@ -203,25 +250,41 @@ def resolve_range(expr: str, ref: date | None = None) -> dict:
         year, month = _next_month(base.year, base.month)
         return _month_bounds(year, month)
 
-    # --- "za N dni" / "N dni temu" — point range (from==to) ---
-    m = re.match(r'^za\s+(\d+)\s+dni(?:a|u)?$', t)
-    if m:
-        n = int(m.group(1))
+    # --- "in N days" / "N days ago" (and the Polish forms) — point range (from==to) ---
+    n = _days_ahead(t)
+    if n is not None:
         d = base + timedelta(days=n)
         return {"from_iso": d.isoformat(), "to_iso": d.isoformat()}
 
-    m = re.match(r'^(\d+)\s+dni(?:a|u)?\s+temu$', t)
-    if m:
-        n = int(m.group(1))
+    n = _days_ago(t)
+    if n is not None:
         d = base - timedelta(days=n)
         return {"from_iso": d.isoformat(), "to_iso": d.isoformat()}
 
-    return {"error": f"BLAD: nierozpoznane wyrazenie zakresu: {expr!r}"}
+    return {"error": f"ERROR: range expression not recognised: {expr!r}"}
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+# English "this / last / next" prefixes (anchored at the start of the expression).
+_EN_THIS = r'^(?:this|current|the\s+current)'
+_EN_PREV = r'^(?:last|previous|past|the\s+last|the\s+previous)'
+_EN_NEXT = r'^(?:next|coming|the\s+next|the\s+coming)'
+
+
+def _days_ahead(t: str) -> int | None:
+    """N for "in N days" / "za N dni", else None."""
+    m = re.match(r'^(?:za\s+(\d+)\s+dni(?:a|u)?|in\s+(\d+)\s+days?)$', t)
+    return int(m.group(1) or m.group(2)) if m else None
+
+
+def _days_ago(t: str) -> int | None:
+    """N for "N days ago" / "N dni temu", else None."""
+    m = re.match(r'^(\d+)\s+(?:dni(?:a|u)?\s+temu|days?\s+ago)$', t)
+    return int(m.group(1)) if m else None
+
 
 def _prev_workday(ref: date) -> date:
     """Return the most recent business day strictly before ref."""
@@ -252,6 +315,7 @@ def _next_workday(ref: date) -> date:
 def _make_result(d: date, base: date) -> dict:
     return {
         "iso": d.isoformat(),
+        "weekday": _DAY_LABELS[d.weekday()],
         "weekday_pl": _DAY_LABELS_PL[d.weekday()],
         "is_past": d < base,
         "is_future": d > base,

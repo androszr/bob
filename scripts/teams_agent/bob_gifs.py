@@ -30,19 +30,19 @@ REACTION_MOODS: dict[str, str] = {
     "waiting": "bob-fishing.gif",
 }
 
-# 2-3 short casual Polish reaction phrases per mood (caption next to the gif).
+# 2-3 short casual reaction phrases per mood (caption next to the gif).
 _REACTION_PHRASES: dict[str, list[str]] = {
-    "happy": ["no i git", "spoko, załatwione", "no i pięknie"],
-    "eureka": ["o właśnie o to chodzi", "o, mam to", "widzisz, o to chodziło"],
-    "grooving": ["idzie jak z płatka", "leci gładko", "no i płynie samo"],
-    "confused": ["sam nie wiem", "hmm, ciężko powiedzieć", "no nie jestem pewien"],
-    "oops": ["ups, moja wina", "ojej, wpadka", "no coś mi się pomieszało"],
-    "dizzy": ["ale mętlik", "trochę mi się kręci od tego", "ale zamieszanie"],
-    "bye": ["to ja lecę", "spadam, do zobaczenia", "no to na razie"],
-    "wizard": ["trochę czarów i gotowe", "magia, nie inaczej", "i po problemie, jak czary"],
-    "overheated": ["uf, ledwo zipię", "no i padłem", "trochę mnie to wykończyło"],
-    "juggling": ["mam tego kupę naraz", "żonglerka, ale ogarniam", "sporo tego naraz"],
-    "waiting": ["no i dalej łowię, cierpliwości", "siedzę nad wodą i czekam", "ryba jeszcze nie brała"],
+    "happy": ["nice", "sorted, done", "lovely"],
+    "eureka": ["that's exactly it", "oh, got it", "see, that was the point"],
+    "grooving": ["smooth sailing", "rolling along nicely", "it just flows"],
+    "confused": ["no idea, honestly", "hmm, hard to say", "not really sure"],
+    "oops": ["oops, my bad", "whoops, slip-up", "got something mixed up"],
+    "dizzy": ["what a muddle", "my head's spinning a bit", "what a mess"],
+    "bye": ["I'm off", "heading out, see you", "bye for now"],
+    "wizard": ["a little magic and done", "magic, what else", "problem gone, like magic"],
+    "overheated": ["phew, barely breathing", "I'm wiped out", "that wore me out a bit"],
+    "juggling": ["a lot going on at once", "juggling, but handling it", "plenty at once"],
+    "waiting": ["still fishing, patience", "sitting by the water, waiting", "no bites yet"],
 }
 
 

@@ -38,7 +38,7 @@ def test_ports_are_unique_and_in_range():
 
 def test_http_url_format():
     assert ports.http_url("jira-bob") == "http://127.0.0.1:7101/mcp"
-    assert ports.http_url("urlopy-bob") == "http://127.0.0.1:7112/mcp"
+    assert ports.http_url("leave-bob") == "http://127.0.0.1:7112/mcp"
 
 
 # ---------------------------------------------------------------------------
@@ -404,3 +404,37 @@ def test_run_mcp_http_serves_behind_bearer_auth(monkeypatch):
         assert client.post("/mcp", json=body, headers=accept).status_code == 401
         ok = client.post("/mcp", json=body, headers={**accept, **auth.auth_headers()})
         assert ok.status_code != 401
+
+
+def test_retire_legacy_servers_stops_old_daemon_and_launchagent(tmp_path):
+    """An upgrade from the urlopy-bob name: its daemon and LaunchAgent are retired, nothing else touched."""
+    import os
+    import subprocess
+    import sys
+    rundir, home, fakebin = tmp_path / "run", tmp_path / "home", tmp_path / "bin"
+    agents = home / "Library" / "LaunchAgents"
+    for d in (rundir, agents, fakebin):
+        d.mkdir(parents=True)
+    calls = tmp_path / "launchctl.calls"
+    (fakebin / "launchctl").write_text(f'#!/bin/sh\necho "$@" >> {calls}\n')
+    (fakebin / "launchctl").chmod(0o755)
+    old = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        (rundir / "urlopy-bob.pid").write_text(str(old.pid))
+        (rundir / "leave-bob.pid").write_text("999999")
+        (agents / "bob.mcp.urlopy-bob.plist").write_text("<plist/>")
+        (agents / "bob.mcp.leave-bob.plist").write_text("<plist/>")
+        env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}",
+               "BOB_MCP_RUNDIR": str(rundir), "BOB_MCP_LOGDIR": str(tmp_path / "logs")}
+        script = _REPO_ROOT / "scripts" / "mcp_admin" / "_servers.sh"
+        out = subprocess.run(["bash", "-c", f'source "{script}"; retire_legacy_servers'],
+                             env=env, capture_output=True, text=True, timeout=30)
+        assert out.returncode == 0, out.stderr
+        assert old.wait(timeout=10) is not None                       # the old daemon is gone
+        assert not (rundir / "urlopy-bob.pid").exists()
+        assert not (agents / "bob.mcp.urlopy-bob.plist").exists()
+        assert (rundir / "leave-bob.pid").exists() and (agents / "bob.mcp.leave-bob.plist").exists()
+        assert "bootout" in calls.read_text() and "bob.mcp.urlopy-bob" in calls.read_text()
+    finally:
+        if old.poll() is None:
+            old.kill()

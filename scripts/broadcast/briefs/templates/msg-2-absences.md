@@ -1,5 +1,5 @@
-Nieobecności w Sprincie {{SPRINT_NR}} ({{SPRINT_DATES}}):
+Absences in Sprint {{SPRINT_NR}} ({{SPRINT_DATES}}):
 
 {{ABSENT_PEOPLE_LIST}}
 
-Łącznie: **{{TOTAL_ABSENCE_DAYS}} osobodni** nieobecności w sprincie.
+Total: **{{TOTAL_ABSENCE_DAYS}} person-days** of absence in the sprint.

@@ -1,159 +1,159 @@
 ---
-title: "Spotkanie decyzyjne: {Temat}"
+title: "Decision meeting: {Topic}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Spotkanie decyzyjne (Meeting Notes)
+# Template: Decision meeting (Meeting Notes)
 
-> **Przeznaczenie tego template'u (czytaj uważnie zanim wybierzesz):**
-> - Spotkanie, którego celem była **podjęcie konkretnej decyzji** — wybór opcji, zatwierdzenie kierunku, rozstrzygnięcie dylematu, akceptacja proponowanego rozwiązania.
-> - Charakterystyczne sygnały: padło sformułowanie typu „musimy zdecydować…", „wybieramy A czy B", „potrzebujemy zatwierdzenia", „uzgadniamy podejście".
-> - Główny output dokumentu: **jednoznaczny zapis decyzji** + jej uzasadnienie + co się dalej dzieje. Dokument służy też jako ADR (architectural decision record) lub PDR (product decision record) dla potomności.
+> **What this template is for (read carefully before you choose it):**
+> - A meeting whose goal was **to make a specific decision** — choosing an option, approving a direction, resolving a dilemma, accepting a proposed solution.
+> - Telltale signs: someone said things like "we need to decide…", "are we going with A or B", "we need sign-off", "let's agree on the approach".
+> - The document's main output: **an unambiguous record of the decision** + its rationale + what happens next. The document also serves as an ADR (architectural decision record) or PDR (product decision record) for posterity.
 >
-> **Kiedy NIE używać:**
-> - jeśli spotkanie tylko raportowało postęp → użyj `meeting-notes-status-update.template.md`
-> - jeśli to był warsztat odkrywczy / mapowanie procesu → użyj `meeting-notes-as-is-to-be.template.md`
-> - jeśli rozmowa dotyczyła jednego rozmówcy / wywiadu jakościowego → użyj `meeting-notes-discovery-interview.template.md`
-> - jeśli to była obserwacja w miejscu pracy / shadowing → użyj `meeting-notes-contextual-inquiry.template.md`
-> - jeśli to był wywiad ewaluacyjny istniejącego produktu → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli to był review zakończonego etapu → użyj `meeting-notes-retrospective.template.md`
-> - jeśli to był start nowej inicjatywy → użyj `meeting-notes-kickoff.template.md`
+> **When NOT to use:**
+> - if the meeting only reported progress → use `meeting-notes-status-update.template.md`
+> - if it was a discovery workshop / process mapping → use `meeting-notes-as-is-to-be.template.md`
+> - if the conversation was with a single interviewee / a qualitative interview → use `meeting-notes-discovery-interview.template.md`
+> - if it was an observation at the workplace / shadowing → use `meeting-notes-contextual-inquiry.template.md`
+> - if it was an evaluation interview about an existing product → use `meeting-notes-product-feedback-interview.template.md`
+> - if it was a review of a completed stage → use `meeting-notes-retrospective.template.md`
+> - if it was the start of a new initiative → use `meeting-notes-kickoff.template.md`
 >
-> **Jak używać:**
-> - **Decyzja musi być sformułowana JEDNOZNACZNIE** — bez „chyba", „raczej", „w sumie tak".
-> - Zapisz wszystkie rozważone opcje, nawet odrzucone — to chroni przed kwestionowaniem w przyszłości („czemu nie rozważyliście X?").
-> - Przy każdej opcji: argumenty za/przeciw + kto je wnosił (cytat-klucz, jeśli była dyskusja).
-> - Zaznacz **kto był decydentem** (RACI: A — Accountable) — nie zawsze to konsensus.
-> - **Konwertuj relatywne daty na bezwzględne**.
-> - Plik nazywaj: `decyzja-{temat-kebab}-{YYYY-MM-DD}.md` lub `adr-{NN}-{temat-kebab}.md`.
+> **How to use:**
+> - **The decision must be stated UNAMBIGUOUSLY** — no "probably", "more or less", "I guess so".
+> - Record every option considered, even the rejected ones — it protects against being second-guessed later ("why didn't you consider X?").
+> - For each option: arguments for/against + who raised them (key quote, if there was a discussion).
+> - Mark **who the decision-maker was** (RACI: A — Accountable) — it is not always a consensus.
+> - **Convert relative dates to absolute ones**.
+> - Name the file: `decision-{topic-kebab}-{YYYY-MM-DD}.md` or `adr-{NN}-{topic-kebab}.md`.
 
 ---
 
-# Decyzja: {Tytuł decyzji — jednym zdaniem, jednoznacznie}
+# Decision: {Decision title — one sentence, unambiguous}
 
-**Plik źródłowy:** [{nazwa pliku transkrypcji / notatek}]({link})
-**Data spotkania:** {YYYY-MM-DD}
-**Czas trwania:** ~{NN} min
-**Inicjatywa / Epic:** {nazwa, kontekst}
-**Status decyzji:** {podjęta / warunkowa — wymaga X / odroczona / propozycja do zatwierdzenia}
+**Source file:** [{transcript / notes file name}]({link})
+**Meeting date:** {YYYY-MM-DD}
+**Duration:** ~{NN} min
+**Initiative / Epic:** {name, context}
+**Decision status:** {made / conditional — requires X / deferred / proposal awaiting approval}
 
-## Uczestnicy (i ich rola w decyzji wg RACI)
+## Participants (and their role in the decision per RACI)
 
-- **Decydent (A — Accountable):** {Imię (rola)} — osoba, która formalnie zatwierdziła
-- **Współ-decydenci (C — Consulted):** {Imię (rola)}, {Imię (rola)}
-- **Wykonawcy decyzji (R — Responsible):** {Imię (rola)}, {Imię (rola)}
-- **Poinformowani (I — Informed):** {Imię / zespół — komu należy zakomunikować}
-
----
-
-## TL;DR (jednym akapitem)
-
-_{Maks. 4–6 zdań. Co było do zdecydowania → jakie opcje → co wybrano → dlaczego → co się teraz zmienia. Ktoś, kto nie był na spotkaniu, ma rozumieć decyzję bez czytania reszty.}_
+- **Decision-maker (A — Accountable):** {Name (role)} — the person who formally approved it
+- **Consulted (C — Consulted):** {Name (role)}, {Name (role)}
+- **Carrying out the decision (R — Responsible):** {Name (role)}, {Name (role)}
+- **Informed (I — Informed):** {Name / team — who needs to be told}
 
 ---
 
-## Decyzja
+## TL;DR (in one paragraph)
 
-> **{Pełne sformułowanie decyzji — najlepiej w czasie teraźniejszym, jako stwierdzenie faktu, nie zalecenia. Np. „Migrujemy raportowanie z systemu X do Y do końca Q3 2026."}**
-
-**Data wejścia w życie:** {YYYY-MM-DD lub „natychmiast"}
-**Horyzont obowiązywania:** {kiedy decyzja podlega review — np. „po pierwszym wdrożeniu" / „za 6 miesięcy" / „bezterminowo"}
+_{Max. 4–6 sentences. What had to be decided → what options → what was chosen → why → what changes now. Someone who was not in the meeting should understand the decision without reading the rest.}_
 
 ---
 
-## Kontekst — czemu w ogóle podejmowaliśmy tę decyzję
+## Decision
 
-_{2–5 zdań. Co zmieniło się w otoczeniu, że trzeba było decydować? Jaki problem rozwiązujemy? Co się stanie, jeśli nie podejmiemy decyzji?}_
+> **{Full statement of the decision — ideally in the present tense, as a statement of fact, not a recommendation. E.g. "We are migrating reporting from system X to Y by the end of Q3 2026."}**
 
-- **Problem / motywacja:** {…}
-- **Trigger (co wywołało potrzebę decyzji):** {…}
-- **Koszt zaniechania:** {co konkretnie ucierpi, jeśli zostaniemy przy status quo}
-
----
-
-## Rozważone opcje
-
-### Opcja A: {nazwa} — **{WYBRANA / odrzucona / odłożona}**
-
-- **Opis:** {co konkretnie ta opcja oznacza}
-- **Za:** {argumenty + ewentualnie cytat: „{dosłowny cytat}" — {Imię}}
-- **Przeciw:** {argumenty + cytat}
-- **Koszt / wysiłek:** {orientacyjnie}
-- **Ryzyka:** {główne}
-
-### Opcja B: {nazwa} — **{WYBRANA / odrzucona / odłożona}**
-
-- **Opis:** {…}
-- **Za:** {…}
-- **Przeciw:** {…}
-- **Koszt / wysiłek:** {…}
-- **Ryzyka:** {…}
-
-### Opcja C: {nazwa} — **{WYBRANA / odrzucona / odłożona}**
-
-_{Dodaj kolejne opcje wedle potrzeby. Jeśli była tylko jedna realna opcja — zostaw jedną i wpisz to wprost: „pozostałe opcje wykluczone w fazie wstępnej, bo X".}_
+**Effective date:** {YYYY-MM-DD or "immediately"}
+**Validity horizon:** {when the decision is up for review — e.g. "after the first rollout" / "in 6 months" / "indefinitely"}
 
 ---
 
-## Uzasadnienie wybranej opcji
+## Context — why we were making this decision at all
 
-_{Dlaczego wygrała ta, a nie inna. Konkretnie — który argument przeważył. Jeśli był kontrowersyjny — zaznacz, kto się sprzeciwiał i czemu (to ważne dla wracających do dokumentu po roku).}_
+_{2–5 sentences. What changed in the environment that a decision was needed? What problem are we solving? What happens if we don't make the decision?}_
 
-- **Główny argument:** {…}
-- **Czego się świadomie wyrzekamy, wybierając tę opcję:** {trade-off, który zaakceptowaliśmy}
-- **Głosy odrębne (jeśli były):** {Imię — „{cytat}"} → {jak zostały zaadresowane / dlaczego pominięte}
-
----
-
-## Założenia, na których oparta jest decyzja
-
-_{Jeśli któreś z tych założeń przestanie być prawdą — decyzję trzeba re-review. To kluczowa sekcja dla przyszłej analizy.}_
-
-1. {Założenie 1 — np. „budżet kwartalny pozostaje na poziomie X"}
-2. {Założenie 2}
-3. {Założenie N}
+- **Problem / motivation:** {…}
+- **Trigger (what prompted the need for a decision):** {…}
+- **Cost of inaction:** {what exactly will suffer if we stay with the status quo}
 
 ---
 
-## Konsekwencje — co się zmienia
+## Options considered
 
-- **Co zaczynamy robić:** {…}
-- **Co przestajemy robić:** {…}
-- **Kogo trzeba poinformować:** {konkretnie — komunikacja do zespołu X, mail do Y}
-- **Co trzeba zaktualizować w dokumentacji:** {linki / nazwy dokumentów}
-- **Wpływ na inne inicjatywy / zespoły:** {…}
+### Option A: {name} — **{CHOSEN / rejected / deferred}**
+
+- **Description:** {what exactly this option means}
+- **For:** {arguments + optionally a quote: "{verbatim quote}" — {Name}}
+- **Against:** {arguments + quote}
+- **Cost / effort:** {rough estimate}
+- **Risks:** {main ones}
+
+### Option B: {name} — **{CHOSEN / rejected / deferred}**
+
+- **Description:** {…}
+- **For:** {…}
+- **Against:** {…}
+- **Cost / effort:** {…}
+- **Risks:** {…}
+
+### Option C: {name} — **{CHOSEN / rejected / deferred}**
+
+_{Add more options as needed. If there was only one realistic option — keep one and say so plainly: "the other options were ruled out early on because of X".}_
 
 ---
 
-## Otwarte pytania (rzeczy, których nie rozstrzygnęliśmy)
+## Rationale for the chosen option
 
-_{Czego nie domknęliśmy — z właścicielem odpowiedzi i terminem. Nie wpisuj tu pytań retorycznych — tylko realne kwestie do zaadresowania.}_
+_{Why this one won and not another. Concretely — which argument tipped the balance. If it was controversial — note who objected and why (this matters for people coming back to the document a year later).}_
 
-1. {Pytanie 1} — odpowiedź: {Imię}, termin: {YYYY-MM-DD}
-2. {Pytanie 2} — odpowiedź: {Imię}, termin: {YYYY-MM-DD}
+- **Main argument:** {…}
+- **What we are knowingly giving up by choosing this option:** {the trade-off we accepted}
+- **Dissenting voices (if any):** {Name — "{quote}"} → {how they were addressed / why they were set aside}
+
+---
+
+## Assumptions the decision rests on
+
+_{If any of these assumptions stops being true — the decision needs to be re-reviewed. This is a key section for future analysis.}_
+
+1. {Assumption 1 — e.g. "the quarterly budget stays at X"}
+2. {Assumption 2}
+3. {Assumption N}
+
+---
+
+## Consequences — what changes
+
+- **What we start doing:** {…}
+- **What we stop doing:** {…}
+- **Who needs to be informed:** {concretely — a message to team X, an email to Y}
+- **What needs updating in the documentation:** {links / document names}
+- **Impact on other initiatives / teams:** {…}
+
+---
+
+## Open questions (things we did not settle)
+
+_{What we did not close — with an owner for the answer and a due date. Don't put rhetorical questions here — only real issues to address.}_
+
+1. {Question 1} — answer: {Name}, due: {YYYY-MM-DD}
+2. {Question 2} — answer: {Name}, due: {YYYY-MM-DD}
 
 ---
 
 ## Action items
 
-| # | Co | Kto | Termin |
+| # | What | Who | Due |
 |---|----|-----|--------|
-| 1 | Zakomunikować decyzję {do kogo, jakim kanałem} | {Imię} | {YYYY-MM-DD} |
-| 2 | {wdrożeniowy krok 1} | {Imię} | {YYYY-MM-DD} |
-| 3 | {wdrożeniowy krok 2} | {Imię} | {YYYY-MM-DD} |
+| 1 | Communicate the decision {to whom, through which channel} | {Name} | {YYYY-MM-DD} |
+| 2 | {implementation step 1} | {Name} | {YYYY-MM-DD} |
+| 3 | {implementation step 2} | {Name} | {YYYY-MM-DD} |
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- Transkrypcja: [{nazwa pliku}]({link})
-- Kluczowe momenty w nagraniu:
-  - {MM:SS} — {przedstawienie problemu}
-  - {MM:SS} — {moment podjęcia decyzji}
-  - {MM:SS} — {głos odrębny / kontrargument}
-- Powiązane dokumenty:
-  - [{poprzednie decyzje, które tę unieważniają / dopełniają}]({link})
-  - [{analiza, brief, RFC}]({link})
+- Transcript: [{file name}]({link})
+- Key moments in the recording:
+  - {MM:SS} — {presentation of the problem}
+  - {MM:SS} — {the moment the decision was made}
+  - {MM:SS} — {dissenting voice / counter-argument}
+- Related documents:
+  - [{earlier decisions that this one overrides / complements}]({link})
+  - [{analysis, brief, RFC}]({link})

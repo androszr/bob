@@ -42,10 +42,10 @@ def _isolate_storage(tmp_path, monkeypatch):
 def test_add_reminder_todo_uses_explicit_chat():
     """Regex path always honours the chat the user typed — no owner-routing fallback."""
     tid = todos_store.add_reminder_todo(
-        title="ping Magdę o roadmapie",
+        title="ping Sam about the roadmap",
         notify_at_iso="2026-05-31T09:00:00",
         notify_chat="Person 44",
-        source_chat="Notatki",
+        source_chat="Notes",
         sender="Kowalski Jan",
         sender_mri=_OWNER_MRI,
     )
@@ -54,7 +54,7 @@ def test_add_reminder_todo_uses_explicit_chat():
     assert task["notify_chat"] == "Person 44"
     assert task["notify_at"] == "2026-05-31T09:00:00"
     assert task["notified_at"] is None
-    assert task["title"] == "ping Magdę o roadmapie"
+    assert task["title"] == "ping Sam about the roadmap"
     # Date portion of notify_at is mirrored to due_date so the todo shows up
     # in due-date views alongside passive tasks.
     assert task["due_date"] == "2026-05-31"
@@ -65,19 +65,19 @@ def test_add_reminder_todo_uses_explicit_chat():
 # ---------------------------------------------------------------------------
 
 
-def test_add_todo_owner_default_routes_to_notatki(monkeypatch):
-    """Owner-created todo without explicit notify_chat → Jan's control chat."""
+def test_add_todo_owner_default_routes_to_notes_chat(monkeypatch):
+    """Owner-created todo without explicit notify_chat → the owner's control chat."""
     monkeypatch.setenv("BOB_SENDER_MRI", _OWNER_MRI)
     monkeypatch.setenv("BOB_SENDER", "Kowalski Jan")
     monkeypatch.setenv("BOB_CURRENT_CHAT", "Person 11")
 
     todos_store.add_todo(
-        title="zadzwoń do Ani",
+        title="call Alex",
         assigned_to="Jan",
         notify_at="2026-05-31T09:00:00",
     )
     [task] = todos_store._load()
-    # Source chat is preserved as `chat`, but the reminder fires on Notatki.
+    # Source chat is preserved as `chat`, but the reminder fires on the owner's notes chat.
     assert task["chat"] == "Person 11"
     assert task["notify_chat"] == _OWNER_CHAT
     assert task["notify_at"] == "2026-05-31T09:00:00"
@@ -90,7 +90,7 @@ def test_add_todo_non_owner_default_routes_to_source_chat(monkeypatch):
     monkeypatch.setenv("BOB_CURRENT_CHAT", "Person 16")
 
     todos_store.add_todo(
-        title="kalkulator KAWA — manual",
+        title="coffee calculator — manual",
         assigned_to="Jan",
         notify_at="2026-06-27T09:00:00",
     )
@@ -103,10 +103,10 @@ def test_add_todo_explicit_notify_chat_wins(monkeypatch):
     """Explicit notify_chat overrides both owner and non-owner default routing."""
     monkeypatch.setenv("BOB_SENDER_MRI", _OWNER_MRI)
     monkeypatch.setenv("BOB_SENDER", "Kowalski Jan")
-    monkeypatch.setenv("BOB_CURRENT_CHAT", "Notatki")
+    monkeypatch.setenv("BOB_CURRENT_CHAT", "Notes")
 
     todos_store.add_todo(
-        title="pogadać z Anią",
+        title="talk to Alex",
         assigned_to="Jan",
         notify_at="2026-05-30T10:00:00",
         notify_chat="Person 11",
@@ -121,7 +121,7 @@ def test_add_todo_without_notify_at_has_no_reminder(monkeypatch):
     monkeypatch.setenv("BOB_SENDER", "Kowalski Jan")
     monkeypatch.setenv("BOB_CURRENT_CHAT", "Person 11")
 
-    todos_store.add_todo(title="kupić Bobowi colę", assigned_to="Marek")
+    todos_store.add_todo(title="buy Bob a cola", assigned_to="Marek")
     [task] = todos_store._load()
     assert task["notify_at"] is None
     assert task["notify_chat"] is None
@@ -139,11 +139,11 @@ def test_due_for_fire_picks_past_only():
     future = (_store_now() + timedelta(hours=1)).isoformat(timespec="seconds")
     past_id = todos_store.add_reminder_todo(
         title="past", notify_at_iso=past, notify_chat="X",
-        source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
+        source_chat="Notes", sender="R", sender_mri=_OWNER_MRI,
     )
     todos_store.add_reminder_todo(
         title="future", notify_at_iso=future, notify_chat="X",
-        source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
+        source_chat="Notes", sender="R", sender_mri=_OWNER_MRI,
     )
     due = todos_store.due_for_fire()
     assert [t["id"] for t in due] == [past_id]
@@ -154,7 +154,7 @@ def test_due_for_fire_skips_already_notified():
     past = (_store_now() - timedelta(hours=1)).isoformat(timespec="seconds")
     tid = todos_store.add_reminder_todo(
         title="x", notify_at_iso=past, notify_chat="Y",
-        source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
+        source_chat="Notes", sender="R", sender_mri=_OWNER_MRI,
     )
     assert todos_store.due_for_fire()  # first call: 1 due
     todos_store.mark_notified(tid)
@@ -168,7 +168,7 @@ def test_due_for_fire_skips_done_tasks():
     past = (_store_now() - timedelta(hours=1)).isoformat(timespec="seconds")
     tid = todos_store.add_reminder_todo(
         title="x", notify_at_iso=past, notify_chat="Y",
-        source_chat="Notatki", sender="R", sender_mri=_OWNER_MRI,
+        source_chat="Notes", sender="R", sender_mri=_OWNER_MRI,
     )
     todos = todos_store._load()
     for t in todos:
@@ -201,7 +201,7 @@ def test_list_and_format_pending_sorted_by_notify_at():
 
 
 def test_format_pending_empty():
-    assert todos_store.format_pending_reminders() == "Brak zaplanowanych przypomnień."
+    assert todos_store.format_pending_reminders() == "No reminders scheduled."
 
 
 def test_clear_notify_keeps_todo_but_disarms_reminder():
@@ -223,7 +223,7 @@ def test_clear_notify_returns_false_for_unknown_id():
 
 
 # ---------------------------------------------------------------------------
-# format_todos_for_chat — Notatki shows everything, specific chat filters
+# format_todos_for_chat — the notes chat shows everything, specific chat filters
 # ---------------------------------------------------------------------------
 
 
@@ -245,29 +245,29 @@ def _seed_todo(chat: str, title: str, due_date: str | None = None) -> str:
 
 def test_format_todos_for_chat_show_all_lists_every_chat():
     """show_all=True (used on the control chat) returns todos from every chat."""
-    a_id = _seed_todo("Person 11", "ping Anię")
-    b_id = _seed_todo("Person 16", "kalkulator KAWA")
-    c_id = _seed_todo("Notatki", "własna notka")
-    out = todos_store.format_todos_for_chat(current_chat="Notatki", show_all=True)
-    assert "wszystkie chaty" in out
+    a_id = _seed_todo("Person 11", "ping Alex")
+    b_id = _seed_todo("Person 16", "coffee calculator")
+    c_id = _seed_todo("Notes", "own note")
+    out = todos_store.format_todos_for_chat(current_chat="Notes", show_all=True)
+    assert "all chats" in out
     for tid in (a_id, b_id, c_id):
         assert tid in out
 
 
 def test_format_todos_for_chat_specific_chat_filters_to_chat():
     """show_all=False filters by `chat` field — other chats' todos must not leak."""
-    a_id = _seed_todo("Person 11", "ping Anię")
-    b_id = _seed_todo("Person 16", "kalkulator KAWA")
+    a_id = _seed_todo("Person 11", "ping Alex")
+    b_id = _seed_todo("Person 16", "coffee calculator")
     out = todos_store.format_todos_for_chat(current_chat="Person 11", show_all=False)
     assert a_id in out
     assert b_id not in out
     assert "Person 11" in out
 
 
-def test_format_todos_for_chat_empty_specific_chat_returns_brak():
+def test_format_todos_for_chat_empty_specific_chat_returns_no_tasks():
     """No todos for a specific chat → friendly empty message."""
     out = todos_store.format_todos_for_chat(current_chat="Marek Sowa", show_all=False)
-    assert "Brak zadań" in out and "Marek Sowa" in out
+    assert "No tasks" in out and "Marek Sowa" in out
 
 
 def test_format_todos_for_chat_groups_by_due_date():
@@ -275,20 +275,20 @@ def test_format_todos_for_chat_groups_by_due_date():
     today = _store_now().date().isoformat()
     yesterday = (_store_now().date() - timedelta(days=1)).isoformat()
     tomorrow = (_store_now().date() + timedelta(days=1)).isoformat()
-    _seed_todo("Notatki", "stare zaległe", due_date=yesterday)
-    _seed_todo("Notatki", "dzisiejsze", due_date=today)
-    _seed_todo("Notatki", "jutrzejsze", due_date=tomorrow)
-    _seed_todo("Notatki", "bez daty")
-    out = todos_store.format_todos_for_chat(current_chat="Notatki", show_all=True)
-    assert "ZALEGŁE" in out and "stare zaległe" in out
-    assert "DZIŚ" in out and "dzisiejsze" in out
-    assert "NADCHODZĄCE" in out and "jutrzejsze" in out
-    assert "BEZ TERMINU" in out and "bez daty" in out
+    _seed_todo("Notes", "old overdue", due_date=yesterday)
+    _seed_todo("Notes", "due today", due_date=today)
+    _seed_todo("Notes", "due tomorrow", due_date=tomorrow)
+    _seed_todo("Notes", "no date")
+    out = todos_store.format_todos_for_chat(current_chat="Notes", show_all=True)
+    assert "OVERDUE" in out and "old overdue" in out
+    assert "TODAY" in out and "due today" in out
+    assert "UPCOMING" in out and "due tomorrow" in out
+    assert "NO DUE DATE" in out and "no date" in out
 
 
 def test_format_todos_for_chat_skips_done():
     """Completed todos must not appear in the list."""
-    tid = _seed_todo("Person 11", "skończone")
+    tid = _seed_todo("Person 11", "finished")
     todos = todos_store._load()
     for t in todos:
         if t["id"] == tid:
@@ -299,12 +299,12 @@ def test_format_todos_for_chat_skips_done():
 
 
 # ---------------------------------------------------------------------------
-# delete_todo_by_id (no-auth helper used by cli.py for 'usuń przypomnienie')
+# delete_todo_by_id (no-auth helper used by cli.py for 'delete reminder')
 # ---------------------------------------------------------------------------
 
 
 def test_delete_todo_by_id_removes_entry():
-    tid = _seed_todo("Notatki", "do usunięcia")
+    tid = _seed_todo("Notes", "to delete")
     assert todos_store.delete_todo_by_id(tid) is True
     assert all(t["id"] != tid for t in todos_store._load())
 

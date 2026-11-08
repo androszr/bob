@@ -8,6 +8,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "datetime_bob"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "teams_agent"))
 
@@ -34,8 +36,7 @@ def test_build_today_anchor_contains_iso():
 
 def test_build_today_anchor_contains_weekday():
     result = resolver.build_today_anchor(ref=REF)
-    # Saturday in Polish
-    assert "Sobota" in result
+    assert "Saturday" in result
 
 
 def test_build_today_anchor_contains_iso_week():
@@ -52,7 +53,7 @@ def test_build_today_anchor_contains_timezone():
 
 def test_build_today_anchor_format_prefix():
     result = resolver.build_today_anchor(ref=REF)
-    assert result.startswith("[DZIS]")
+    assert result.startswith("[TODAY]")
 
 
 # ---------------------------------------------------------------------------
@@ -60,16 +61,16 @@ def test_build_today_anchor_format_prefix():
 # ---------------------------------------------------------------------------
 
 def test_weekday_saturday():
-    assert resolver.weekday("2026-06-13") == "Sobota"
+    assert resolver.weekday("2026-06-13") == "Saturday"
 
 
 def test_weekday_monday():
-    assert resolver.weekday("2026-06-15") == "Poniedziałek"
+    assert resolver.weekday("2026-06-15") == "Monday"
 
 
 def test_weekday_invalid():
     result = resolver.weekday("not-a-date")
-    assert "BLAD" in result
+    assert result.startswith("ERROR:")
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +285,7 @@ def test_resolve_date_iso():
 def test_resolve_date_unknown_returns_error():
     r = resolver.resolve_date("kiedys tam moze", ref=REF)
     assert "error" in r
-    assert "BLAD" in r["error"]
+    assert r["error"].startswith("ERROR:")
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +380,7 @@ def test_resolve_range_3_dni_temu():
 def test_resolve_range_unknown_returns_error():
     r = resolver.resolve_range("nie wiem kiedy", ref=REF)
     assert "error" in r
-    assert "BLAD" in r["error"]
+    assert r["error"].startswith("ERROR:")
 
 
 # ---------------------------------------------------------------------------
@@ -438,3 +439,85 @@ def test_neither_past_nor_future_for_today():
     r = resolver.resolve_date("dzis", ref=REF)
     assert r["is_past"] is False
     assert r["is_future"] is False
+
+
+# ---------------------------------------------------------------------------
+# English expressions (REF = Saturday 2026-06-13)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("expr,iso", [
+    ("today", "2026-06-13"),
+    ("Tomorrow", "2026-06-14"),
+    ("yesterday", "2026-06-12"),
+    ("day after tomorrow", "2026-06-15"),
+    ("the day before yesterday", "2026-06-11"),
+    ("monday", "2026-06-15"),
+    ("Sunday", "2026-06-14"),
+    ("saturday", "2026-06-20"),
+    ("this friday", "2026-06-19"),
+    ("last monday", "2026-06-08"),
+    ("last saturday", "2026-06-06"),
+    ("previous wednesday", "2026-06-10"),
+    ("next monday", "2026-06-15"),
+    ("next tuesday", "2026-06-16"),
+    ("in 5 days", "2026-06-18"),
+    ("in 1 day", "2026-06-14"),
+    ("3 days ago", "2026-06-10"),
+    ("1 day ago", "2026-06-12"),
+    ("previous business day", "2026-06-12"),
+    ("last working day", "2026-06-12"),
+    ("previous working day", "2026-06-12"),
+    ("Previous Working Day", "2026-06-12"),
+    ("next business day", "2026-06-15"),
+])
+def test_resolve_date_english(expr, iso):
+    assert resolver.resolve_date(expr, ref=REF)["iso"] == iso
+
+
+def test_resolve_date_english_and_polish_agree():
+    for en, pl in [("last tuesday", "zeszly wtorek"), ("in 5 days", "za 5 dni"), ("3 days ago", "3 dni temu"),
+                   ("friday", "piątek")]:
+        assert resolver.resolve_date(en, ref=REF) == resolver.resolve_date(pl, ref=REF), en
+
+
+def test_english_next_weekday_is_the_coming_one_and_polish_przyszly_the_one_after():
+    assert resolver.resolve_date("next monday", ref=REF)["iso"] == resolver.resolve_date("monday", ref=REF)["iso"]
+    assert resolver.resolve_date("przyszly poniedzialek", ref=REF)["iso"] == "2026-06-22"
+
+
+def test_resolve_date_result_has_both_weekday_names():
+    r = resolver.resolve_date("monday", ref=REF)
+    assert r["weekday"] == "Monday"
+    assert r["weekday_pl"] == "Poniedziałek"
+
+
+def test_weekday_pl_kept_for_polish_name():
+    assert resolver.weekday_pl("2026-06-13") == "Sobota"
+    assert resolver.weekday_pl("nope").startswith("ERROR:")
+
+
+@pytest.mark.parametrize("expr,frm,to", [
+    ("this week", "2026-06-08", "2026-06-14"),
+    ("current week", "2026-06-08", "2026-06-14"),
+    ("last week", "2026-06-01", "2026-06-07"),
+    ("previous week", "2026-06-01", "2026-06-07"),
+    ("next week", "2026-06-15", "2026-06-21"),
+    ("this month", "2026-06-01", "2026-06-30"),
+    ("last month", "2026-05-01", "2026-05-31"),
+    ("next month", "2026-07-01", "2026-07-31"),
+    ("in 5 days", "2026-06-18", "2026-06-18"),
+    ("3 days ago", "2026-06-10", "2026-06-10"),
+])
+def test_resolve_range_english(expr, frm, to):
+    r = resolver.resolve_range(expr, ref=REF)
+    assert (r["from_iso"], r["to_iso"]) == (frm, to)
+
+
+def test_resolve_range_english_month_has_month_key():
+    assert resolver.resolve_range("next month", ref=REF)["month"] == "2026-07"
+
+
+def test_english_error_texts():
+    assert resolver.resolve_date("whenever", ref=REF)["error"].startswith("ERROR: date expression")
+    assert resolver.resolve_range("whenever", ref=REF)["error"].startswith("ERROR: range expression")

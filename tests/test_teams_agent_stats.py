@@ -379,13 +379,13 @@ def test_render_html_perf_none_does_not_raise():
     """render_html with perf=None must not raise."""
     html = stats.render_html(_minimal_stats(), [], perf=None)
     assert isinstance(html, str)
-    assert "brak danych" in html
+    assert "no cost or timing data" in html
 
 
 def test_render_html_perf_not_available_shows_no_data():
-    """render_html with perf={'available': False} shows brak danych message."""
+    """render_html with perf={'available': False} shows the no-data message."""
     html = stats.render_html(_minimal_stats(), [], perf={"available": False})
-    assert "brak danych" in html
+    assert "no cost or timing data" in html
     assert "perf-metrics.jsonl" in html
 
 
@@ -400,8 +400,8 @@ def _perf_two_chats(tmp_path):
     rec = {"input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 900,
            "cache_creation_input_tokens": 0, "duration_ms": 3000, "ttft_ms": 900}
     _write_perf(p, [
-        {**rec, "ts": _ts_today(), "model": "claude-sonnet-5-5", "total_cost_usd": 3.0, "ctx": {"chat": "Projekt"}},
-        {**rec, "ts": _ts_today(), "model": "claude-haiku-4-5", "total_cost_usd": 0.5, "ctx": {"chat": "Notatki"}},
+        {**rec, "ts": _ts_today(), "model": "claude-sonnet-5-5", "total_cost_usd": 3.0, "ctx": {"chat": "Project"}},
+        {**rec, "ts": _ts_today(), "model": "claude-haiku-4-5", "total_cost_usd": 0.5, "ctx": {"chat": "Notes"}},
         {**rec, "ts": _ts_yesterday(hour=1), "model": "claude-sonnet-5-5", "total_cost_usd": 7.0, "ctx": {}},
     ])
     return p
@@ -410,15 +410,15 @@ def _perf_two_chats(tmp_path):
 def test_render_html_headline_channels_and_notes(tmp_path):
     p = _perf_two_chats(tmp_path)
     perf = stats.aggregate_perf(p, _midnight_cet())
-    activity = {"Projekt": {"wiadomosci": 10, "odpowiedz": 2, "milczenie": 8, "juz_odpowiedziane": 0, "last_ts": None}}
+    activity = {"Project": {"messages": 10, "replied": 2, "silent": 8, "already_answered": 0, "last_ts": None}}
     html = stats.render_html(_minimal_stats(), [], perf=perf, activity=activity, costs=stats.daily_costs(p))
-    assert "<strong>10</strong> wiadomości do Boba" in html and "<strong>2</strong> odpowiedzi" in html
-    assert "<strong>8</strong> bez odpowiedzi" in html and "3,50 $" in html
-    assert "<strong>Projekt</strong> to 86% dzisiejszego kosztu, 8 z 10 wiadomości bez odpowiedzi" in html
-    assert html.index(">Projekt<") < html.index(">Notatki<")                 # most expensive channel first
-    assert "Modele:" in html and "sonnet-5-5" in html                          # >1 model -> one line
-    assert "Koszt - ostatnie 7 dni" in html and "dziś 4 $" in html
-    assert "3,0 s" in html and "Latencja" not in html                          # plain words, no ms tables
+    assert "<strong>10</strong> messages to Bob" in html and "<strong>2</strong> replied" in html
+    assert "<strong>8</strong> unanswered" in html and "$3.50" in html
+    assert "<strong>Project</strong> is 86% of today's cost, 8 of 10 messages unanswered" in html
+    assert html.index(">Project<") < html.index(">Notes<")                 # most expensive channel first
+    assert "Models:" in html and "sonnet-5-5" in html                          # >1 model -> one line
+    assert "Cost - last 7 days" in html and "today $4" in html
+    assert "3.0 s" in html and "Latency" not in html                          # plain words, no ms tables
 
 
 def test_cost_compared_with_yesterday_at_the_same_time(tmp_path):
@@ -427,7 +427,7 @@ def test_cost_compared_with_yesterday_at_the_same_time(tmp_path):
     costs = stats.daily_costs(p)
     assert costs["yday_so_far"] == 7.0
     html = stats.render_html(_minimal_stats(), [], perf=perf, costs=costs)
-    assert "wobec wczoraj o tej porze: 7,00 $" in html
+    assert "vs yesterday at this time: $7.00" in html
 
 
 def test_channel_activity_counts_bobs_decisions(tmp_path):
@@ -441,16 +441,16 @@ def test_channel_activity_counts_bobs_decisions(tmp_path):
     log.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     a = stats.channel_activity(log, _midnight_cet())
     assert list(a) == ["A"]
-    assert (a["A"]["wiadomosci"], a["A"]["odpowiedz"], a["A"]["milczenie"], a["A"]["juz_odpowiedziane"]) == (3, 1, 1, 1)
+    assert (a["A"]["messages"], a["A"]["replied"], a["A"]["silent"], a["A"]["already_answered"]) == (3, 1, 1, 1)
 
 
 def test_unchanged_message_is_not_edited_again(monkeypatch):
     state = {"message_id": "today-1", "conv_id": "48:notes", "posted_at": _ts_today()}
     fake, saved = _patch_post(monkeypatch, state)
-    stats.post_or_edit("<p>stan na 10:00</p><p>body</p>")
+    stats.post_or_edit("<p>as of 10:00</p><p>body</p>")
     assert len(fake.edit_calls) == 1 and saved["body"] == "<p>body</p>"
     fake2, _ = _patch_post(monkeypatch, {**state, "body": "<p>body</p>"})
-    stats.post_or_edit("<p>stan na 10:10</p><p>body</p>")
+    stats.post_or_edit("<p>as of 10:10</p><p>body</p>")
     assert not fake2.edit_calls and not fake2.send_calls
 
 
@@ -702,7 +702,7 @@ def test_render_html_leaves_otel_tables_to_the_panel(tmp_path):
     assert otel.get("available")
     for o in (otel, {"available": False}):
         html = stats.render_html(_minimal_stats(), [], otel=o)
-        assert "OTEL" not in html and "brak danych OTEL" not in html
+        assert "OTEL" not in html and "no OTEL data" not in html
 
 
 def test_daily_costs_sum_money_as_decimals(tmp_path):
@@ -714,9 +714,9 @@ def test_daily_costs_sum_money_as_decimals(tmp_path):
     today = list(costs["days"].values())[-1]
     # as floats 0.1 + 0.1 + 0.1 would be 0.30000000000000004
     assert today == Decimal("0.3") and isinstance(today, Decimal)
-    assert "0,30 $" in stats._usd(today)
+    assert "$0.30" in stats._usd(today)
 
 
 def test_daily_costs_without_a_file_has_no_yesterday_figure(tmp_path):
-    costs = stats.daily_costs(tmp_path / "nie-ma.jsonl")
+    costs = stats.daily_costs(tmp_path / "missing.jsonl")
     assert costs["yday_so_far"] is None and len(costs["days"]) == 7

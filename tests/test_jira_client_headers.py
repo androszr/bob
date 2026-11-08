@@ -94,9 +94,9 @@ def test_get_issue_brief_returns_what_a_reply_to_the_reporter_needs():
     with patch.object(_mod, "_get", return_value=raw) as get:
         brief = _mod.get_issue_brief("PRJ1-7", max_desc=100)
     assert get.call_args.args[1] == {"fields": "summary,description,reporter,created"}
-    assert brief == {"key": "PRJ1-7", "summary": "Login fails", "opis": "x" * 100, "zglaszajacy": "Ewa Nowak",
-                     "utworzono": created}
+    assert brief == {"key": "PRJ1-7", "summary": "Login fails", "description": "x" * 100, "reporter": "Ewa Nowak",
+                     "created": created}
     with patch.object(_mod, "_get", return_value=None):
         assert _mod.get_issue_brief("PRJ1-8") is None
     with patch.object(_mod, "_get", return_value={"key": "PRJ1-9", "fields": {}}):
-        assert _mod.get_issue_brief("PRJ1-9")["zglaszajacy"] == ""
+        assert _mod.get_issue_brief("PRJ1-9")["reporter"] == ""

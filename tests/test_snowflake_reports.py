@@ -455,17 +455,17 @@ def test_the_example_role_is_team_only_and_never_reaches_a_chat_with_outsiders()
     doc = json.loads((ROOT / "roles.example.json").read_text(encoding="utf-8"))
     assert "snowflake" in roles.team_only(doc)
     known, default = list(ai._MCP_GROUPS), list(ai._ALL_GROUPS)
-    team = roles.effective_groups({"role": ["data_analyst"]}, doc, default, known)
+    team = roles.effective_groups({"roles": ["data_analyst"]}, doc, default, known)
     assert team == ["jira", "datetime", "snowflake"]
-    outside = roles.effective_groups({"role": ["data_analyst"], "kanal_fr": True, "dodatkowo": ["snowflake"]}, doc, default, known)
+    outside = roles.effective_groups({"roles": ["data_analyst"], "external_chat": True, "add_groups": ["snowflake"]}, doc, default, known)
     assert "snowflake" not in outside
-    everyone = roles.effective_groups({"role": ["asystent"]}, doc, default, known)
+    everyone = roles.effective_groups({"roles": ["assistant"]}, doc, default, known)
     assert "snowflake" not in (everyone or default)
 
 
 def test_the_prompt_forbids_writing_sql_and_posting_to_tickets():
     text = (ROOT / "scripts" / "teams_agent" / "prompts" / "bob_tools_snowflake.md").read_text(encoding="utf-8")
-    for needle in ("DEMO:", "Nie piszesz SQL", "Sam niczego w zgłoszeniu nie komentujesz"):
+    for needle in ("DEMO:", "You do not write SQL", "You never comment on the ticket yourself"):
         assert needle in text
 
 
@@ -814,6 +814,7 @@ def test_the_answer_names_the_file_but_not_the_folder(tmp_path):
 
 
 def test_snowflake_is_team_only_with_a_roles_file_that_predates_it():
+    # Written with the older Polish keys on purpose: they must keep loading.
     old = {"role": {"asystent": {}}, "groups": {}}
     known = ["jira", "snowflake"]
     # None means "the default groups", which here do not include it

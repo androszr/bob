@@ -271,10 +271,10 @@ def test_append_spans_write_error_does_not_raise(tmp_path):
 
 
 def test_append_spans_ensure_ascii_false(tmp_path):
-    """Polish characters are stored unescaped (ensure_ascii=False)."""
+    """Non-ASCII characters are stored unescaped (ensure_ascii=False)."""
     out = tmp_path / "spans.jsonl"
-    records = [{"ts": "2026-01-01T00:00:00Z", "note": "zrodlo: narzedzia"}]
+    records = [{"ts": "2026-01-01T00:00:00Z", "note": "source: tools, Kraków"}]
     otlp_receiver.append_spans(records, out)
     raw = out.read_bytes()
-    # 'z' + 'r' + 0xC3 0xB3 ('o' with acute) present as UTF-8, not escaped as ó
+    # 0xC3 0xB3 ('o' with acute) present as UTF-8, not escaped as \\u00f3
     assert b"\\u" not in raw

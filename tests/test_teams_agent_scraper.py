@@ -202,7 +202,7 @@ class TestListChats:
         page.frames = []
 
         # Time marker (12:34) makes this look like a real chat row to the filter.
-        nbsp_text = "Chat\xa0Alice 12:34 ostatnia wiadomosc"
+        nbsp_text = "Chat\xa0Alice 12:34 last message"
         visible_loc = _make_visible_locator(nbsp_text)
         visible_loc.get_attribute.return_value = ""
 
@@ -407,3 +407,16 @@ class TestSwitchToChat:
                 result = scraper.switch_to_chat(page, "0")
 
         assert result is False
+
+
+class TestChatSectionLabels:
+    def test_english_section_labels_are_not_chats(self):
+        for label in ("Quick view", "Drafts", "Unread", "Mentions", "Favorites", "Chats"):
+            assert scraper._is_chat_item_text(label) is False
+
+    def test_polish_locale_section_labels_stay_accepted_as_aliases(self):
+        for label in ("Szybki podglad", "Wersje robocze", "Ulubione", "Czaty"):
+            assert scraper._is_chat_item_text(label) is False
+
+    def test_a_row_with_one_time_marker_is_a_chat(self):
+        assert scraper._is_chat_item_text("Alice 12:34 last message") is True

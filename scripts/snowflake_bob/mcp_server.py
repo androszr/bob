@@ -3,7 +3,7 @@
 Start: python scripts/snowflake_bob/mcp_server.py [--stdio|--http]
 
 Opt-in group "snowflake": a chat gets it only through a role or its own list, and it never reaches a chat flagged
-kanal_fr (roles.ALWAYS_TEAM_ONLY). Runs on the demo database until Snowflake is configured
+external_chat (roles.ALWAYS_TEAM_ONLY). Runs on the demo database until Snowflake is configured
 (docs/snowflake-reports.md).
 """
 

@@ -56,7 +56,7 @@ def _make_jira_stubs() -> dict[str, ModuleType]:
     # requests
     requests_stub = ModuleType("requests")
     requests_stub.RequestException = Exception  # type: ignore[attr-defined]
-    requests_stub.Response = object  # type: ignore[attr-defined]  # adnotacja w _request_with_retry
+    requests_stub.Response = object  # type: ignore[attr-defined]  # annotation in _request_with_retry
 
     # jira_client stub
     jira_client_stub = ModuleType("jira_client")
@@ -65,7 +65,7 @@ def _make_jira_stubs() -> dict[str, ModuleType]:
     jira_client_stub.VERIFY_SSL = False  # type: ignore[attr-defined]
     jira_client_stub.find_issue = MagicMock(return_value=[])  # type: ignore[attr-defined]
     jira_client_stub.get_extra_fields = MagicMock(return_value={})  # type: ignore[attr-defined]
-    jira_client_stub.EXTRA_CUSTOM_FIELDS = {"customfield_10100": "typ_pracy"}  # type: ignore[attr-defined]
+    jira_client_stub.EXTRA_CUSTOM_FIELDS = {"customfield_10100": "work_type"}  # type: ignore[attr-defined]
     jira_client_stub._extract_field_value = (  # type: ignore[attr-defined]
         lambda raw: raw.get("value") if isinstance(raw, dict) else raw
     )
@@ -162,7 +162,7 @@ def test_jira_create_with_sprint_id_sets_customfield(jira_mcp):
         sprint_id="9002",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     assert "PRJ2-999" in result
     assert "data" in captured
     payload = json.loads(captured["data"])
@@ -180,7 +180,7 @@ def test_jira_create_without_sprint_id_no_customfield(jira_mcp):
         issue_type="task",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     assert "data" in captured
     payload = json.loads(captured["data"])
     assert "customfield_10020" not in payload["fields"]
@@ -198,7 +198,7 @@ def test_jira_create_without_reporter_falls_back_to_default(jira_mcp):
         issue_type="task",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": jira_mcp._DEFAULT_REPORTER}
 
@@ -210,9 +210,9 @@ def test_jira_create_without_owner_login_omits_reporter(jira_mcp, monkeypatch):
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-999"})
     jira_mcp.requests.post = mock_post
 
-    result = jira_mcp.jira_create(project="PRJ1", summary="Bez reportera", issue_type="task")
+    result = jira_mcp.jira_create(project="PRJ1", summary="No reporter", issue_type="task")
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     assert "reporter" not in json.loads(captured["data"])["fields"]
 
 
@@ -224,13 +224,13 @@ def test_jira_create_without_issue_type_config_reports_not_configured(jira_mcp, 
 
     result = jira_mcp.jira_create(project="PRJ1", summary="x", issue_type="task")
 
-    assert result.startswith("BLAD") and "nie jest skonfigurowane" in result
+    assert result.startswith("ERROR") and "is not configured" in result
     assert captured == {}
 
 
 def test_jira_create_project_list_comes_from_issue_type_config(jira_mcp):
     result = jira_mcp.jira_create(project="NOPE", summary="x", issue_type="task")
-    assert result.startswith("BLAD: project musi byc jednym z PRJ1, PRJ2, PRJ3, PRJ4, PRJ5")
+    assert result.startswith("ERROR: project must be one of PRJ1, PRJ2, PRJ3, PRJ4, PRJ5")
 
 
 def test_jira_create_with_reporter_uses_given_value(jira_mcp):
@@ -245,7 +245,7 @@ def test_jira_create_with_reporter_uses_given_value(jira_mcp):
         reporter="user44@example.com",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": "user44@example.com"}
 
@@ -255,8 +255,8 @@ def test_jira_create_with_reporter_uses_given_value(jira_mcp):
 #
 # _resolve_priority_id/_set_priority read /issue/{key}/editmeta for allowedValues, then PUT
 # {"priority": {"id": ...}} -- NOT {"name": ...} directly. This sidesteps a real instance
-# quirk: setting priority by name returns HTTP 400 "Nazwa priorytetu
-# jest niepoprawna" for at least "Sredni" even with the exact server-provided name string;
+# quirk: setting priority by name returns HTTP 400 "Priority name is
+# invalid" for at least one value even with the exact server-provided name string;
 # by id works reliably.
 # ---------------------------------------------------------------------------
 
@@ -278,10 +278,10 @@ _EDITMETA_ALLOWED = {
     "fields": {
         "priority": {
             "allowedValues": [
-                {"id": "10601", "name": "Wysoki"},
-                {"id": "10301", "name": "Sredni"},
-                {"id": "10603", "name": "Niski"},
-                {"id": "2", "name": "Krytyczny"},
+                {"id": "10601", "name": "High"},
+                {"id": "10301", "name": "Medium"},
+                {"id": "10603", "name": "Low"},
+                {"id": "2", "name": "Critical"},
             ]
         }
     }
@@ -289,7 +289,7 @@ _EDITMETA_ALLOWED = {
 
 
 def test_jira_create_with_priority_sets_it_via_followup_put(jira_mcp):
-    """jira_create(priority='Wysoki') must NOT put priority in the create payload -- it
+    """jira_create(priority='High') must NOT put priority in the create payload -- it
     resolves the id via editmeta and PUTs it as a separate follow-up call."""
     mock_post, post_captured = _make_post_mock(201, {"key": "PRJ1-1"})
     mock_get, _ = _make_get_mock(200, _EDITMETA_ALLOWED)
@@ -302,11 +302,11 @@ def test_jira_create_with_priority_sets_it_via_followup_put(jira_mcp):
         project="PRJ1",
         summary="Test priority field",
         issue_type="task",
-        priority="Wysoki",
+        priority="High",
     )
 
-    assert "BLAD" not in result
-    assert "priorytet: Wysoki" in result
+    assert "ERROR" not in result
+    assert "priority: High" in result
     create_payload = json.loads(post_captured["data"])
     assert "priority" not in create_payload["fields"]
     put_payload = json.loads(put_captured["data"])
@@ -326,7 +326,7 @@ def test_jira_create_without_priority_no_followup_call(jira_mcp):
         issue_type="task",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert "priority" not in payload["fields"]
     assert "url" not in get_captured  # editmeta never called
@@ -343,12 +343,12 @@ def test_jira_create_with_unknown_priority_still_creates_ticket_with_warning(jir
         project="PRJ1",
         summary="Test bad priority",
         issue_type="task",
-        priority="Nieistniejacy",
+        priority="Nonexistent",
     )
 
     assert result.startswith("PRJ1-3")
-    assert "OSTRZEZENIE" in result
-    assert "priorytet nie ustawiony" in result
+    assert "WARNING" in result
+    assert "priority not set" in result
 
 
 def test_jira_update_priority_success(jira_mcp):
@@ -358,7 +358,7 @@ def test_jira_update_priority_success(jira_mcp):
     jira_mcp.requests.get = mock_get
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_priority("PRJ1-5394", "Wysoki")
+    result = jira_mcp.jira_update_priority("PRJ1-5394", "High")
 
     assert result == "OK"
     assert put_captured["url"].endswith("/issue/PRJ1-5394")
@@ -366,30 +366,30 @@ def test_jira_update_priority_success(jira_mcp):
     assert payload["fields"]["priority"] == {"id": "10601"}
 
 
-def test_jira_update_priority_unknown_name_returns_blad_with_options(jira_mcp):
-    """An unresolvable priority name must return BLAD listing the allowed names, no PUT sent."""
+def test_jira_update_priority_unknown_name_returns_error_with_options(jira_mcp):
+    """An unresolvable priority name must return ERROR listing the allowed names, no PUT sent."""
     mock_get, _ = _make_get_mock(200, _EDITMETA_ALLOWED)
     mock_put = MagicMock(side_effect=AssertionError("PUT must not be called"))
     jira_mcp.requests.get = mock_get
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_priority("PRJ1-5394", "Nieistniejacy")
+    result = jira_mcp.jira_update_priority("PRJ1-5394", "Nonexistent")
 
-    assert result.startswith("BLAD: ")
-    assert "Nieistniejacy" in result
-    assert "Wysoki" in result  # lists available options
+    assert result.startswith("ERROR: ")
+    assert "Nonexistent" in result
+    assert "High" in result  # lists available options
 
 
-def test_jira_update_priority_put_http_error_returns_blad(jira_mcp):
-    """A resolved priority id whose PUT fails must return a BLAD: message."""
+def test_jira_update_priority_put_http_error_returns_error(jira_mcp):
+    """A resolved priority id whose PUT fails must return a ERROR: message."""
     mock_get, _ = _make_get_mock(200, _EDITMETA_ALLOWED)
     mock_put, _ = _make_put_mock(400, {"errorMessages": ["some other validation error"]})
     jira_mcp.requests.get = mock_get
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_priority("PRJ1-5394", "Wysoki")
+    result = jira_mcp.jira_update_priority("PRJ1-5394", "High")
 
-    assert result.startswith("BLAD: ")
+    assert result.startswith("ERROR: ")
     assert "some other validation error" in result
 
 
@@ -460,7 +460,7 @@ def test_jira_update_fix_version_default_action_is_add(jira_mcp):
     assert "add" in payload["update"]["fixVersions"][0]
 
 
-def test_jira_update_fix_version_invalid_action_returns_blad_no_http_calls(jira_mcp):
+def test_jira_update_fix_version_invalid_action_returns_error_no_http_calls(jira_mcp):
     mock_get = MagicMock(side_effect=AssertionError("editmeta must not be called"))
     mock_put = MagicMock(side_effect=AssertionError("PUT must not be called"))
     jira_mcp.requests.get = mock_get
@@ -468,23 +468,23 @@ def test_jira_update_fix_version_invalid_action_returns_blad_no_http_calls(jira_
 
     result = jira_mcp.jira_update_fix_version("PRJ1-3020", "v 2.16n", action="delete_everything")
 
-    assert result.startswith("BLAD: ")
+    assert result.startswith("ERROR: ")
     assert "action" in result
 
 
-def test_jira_update_fix_version_unknown_name_returns_blad_with_options(jira_mcp):
+def test_jira_update_fix_version_unknown_name_returns_error_with_options(jira_mcp):
     mock_get, _ = _make_get_mock(200, _EDITMETA_FIXVERSIONS)
     mock_put = MagicMock(side_effect=AssertionError("PUT must not be called"))
     jira_mcp.requests.get = mock_get
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_fix_version("PRJ1-3020", "v 9.9.9nieistniejaca", action="add")
+    result = jira_mcp.jira_update_fix_version("PRJ1-3020", "v 9.9.9missing", action="add")
 
-    assert result.startswith("BLAD: ")
+    assert result.startswith("ERROR: ")
     assert "v 2.16n" in result  # lists available options
 
 
-def test_jira_update_fix_version_http_error_returns_blad(jira_mcp):
+def test_jira_update_fix_version_http_error_returns_error(jira_mcp):
     mock_get, _ = _make_get_mock(200, _EDITMETA_FIXVERSIONS)
     mock_put, _ = _make_put_mock(400, {"errorMessages": ["fixVersions: invalid transition"]})
     jira_mcp.requests.get = mock_get
@@ -492,15 +492,15 @@ def test_jira_update_fix_version_http_error_returns_blad(jira_mcp):
 
     result = jira_mcp.jira_update_fix_version("PRJ1-3020", "v 2.16n", action="add")
 
-    assert result.startswith("BLAD: ")
+    assert result.startswith("ERROR: ")
     assert "invalid transition" in result
 
 
 # ---------------------------------------------------------------------------
-# jira_issue — merges Typ Pracy / Dotyczy / Rodzaj Zmiany missing from the base issue
+# jira_issue — merges Work type / Affects / Change type missing from the base issue
 # ---------------------------------------------------------------------------
 
-class _FakeCockpitClient:
+class _FakeJiraClient:
     """Stand-in client returning a minimal issue."""
 
     def get_issue(self, key):
@@ -508,7 +508,7 @@ class _FakeCockpitClient:
 
 
 # ---------------------------------------------------------------------------
-# jira_update_ticket — numer_projektu / numer_zamowienia (plain string fields)
+# jira_update_ticket — project_number / order_number (plain string fields)
 # ---------------------------------------------------------------------------
 
 def _make_put_mock(status_code: int = 204, response_json: dict | None = None):
@@ -527,12 +527,12 @@ def _make_put_mock(status_code: int = 204, response_json: dict | None = None):
     return _put, captured
 
 
-def test_jira_update_ticket_numer_projektu_plain_string(jira_mcp):
-    """numer_projektu must be written as a plain string, not {'id': ...} or a list."""
+def test_jira_update_ticket_project_number_plain_string(jira_mcp):
+    """project_number must be written as a plain string, not {'id': ...} or a list."""
     mock_put, captured = _make_put_mock()
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-4828", numer_projektu="PRJ-123")
+    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-4828", project_number="PRJ-123")
 
     assert result == "OK"
     payload = json.loads(captured["data"])
@@ -541,42 +541,42 @@ def test_jira_update_ticket_numer_projektu_plain_string(jira_mcp):
     assert isinstance(value, str)
 
 
-def test_jira_update_ticket_numer_zamowienia_plain_string(jira_mcp):
-    """numer_zamowienia must be written as a plain string, not {'id': ...} or a list."""
+def test_jira_update_ticket_order_number_plain_string(jira_mcp):
+    """order_number must be written as a plain string, not {'id': ...} or a list."""
     mock_put, captured = _make_put_mock()
     jira_mcp.requests.put = mock_put
 
-    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-4828", numer_zamowienia="ZAM-456")
+    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-4828", order_number="PO-456")
 
     assert result == "OK"
     payload = json.loads(captured["data"])
     value = payload["fields"]["customfield_10103"]
-    assert value == "ZAM-456"
+    assert value == "PO-456"
     assert isinstance(value, str)
 
 
-def test_jira_update_ticket_both_numer_fields_at_once(jira_mcp):
-    """Both numer_projektu and numer_zamowienia can be set in a single call."""
+def test_jira_update_ticket_both_number_fields_at_once(jira_mcp):
+    """Both project_number and order_number can be set in a single call."""
     mock_put, captured = _make_put_mock()
     jira_mcp.requests.put = mock_put
 
     result = jira_mcp.jira_update_ticket(
         issue_key="PRJ1-4828",
-        numer_projektu="PRJ-123",
-        numer_zamowienia="ZAM-456",
+        project_number="PRJ-123",
+        order_number="PO-456",
     )
 
     assert result == "OK"
     payload = json.loads(captured["data"])
     assert payload["fields"]["customfield_10104"] == "PRJ-123"
-    assert payload["fields"]["customfield_10103"] == "ZAM-456"
+    assert payload["fields"]["customfield_10103"] == "PO-456"
 
 
 def test_jira_update_ticket_no_fields_returns_error(jira_mcp):
-    """Calling jira_update_ticket without any field must return the BLAD message."""
+    """Calling jira_update_ticket without any field must return the ERROR message."""
     result = jira_mcp.jira_update_ticket(issue_key="PRJ1-4828")
 
-    assert result.startswith("BLAD: podaj co najmniej jedno pole")
+    assert result.startswith("ERROR: give at least one field")
 
 
 # ---------------------------------------------------------------------------
@@ -712,7 +712,7 @@ def test_jira_link_gives_up_after_retry_exhausted(jira_mcp, monkeypatch):
 
     result = jira_mcp.jira_link("PRJ1-1", "PRJ1-2")
 
-    assert result.startswith("BLAD: Jira HTTP 503")
+    assert result.startswith("ERROR: Jira HTTP 503")
     assert mock_post.call_count == 2
 
 
@@ -730,7 +730,7 @@ def test_jira_attach_success_no_retry(jira_mcp, monkeypatch, tmp_path):
 
     result = jira_mcp.jira_attach("PRJ1-1", str(f))
 
-    assert result == "OK: bob_attach_screenshot.png dodany do PRJ1-1"
+    assert result == "OK: bob_attach_screenshot.png added to PRJ1-1"
     assert mock_post.call_count == 1
 
 
@@ -754,7 +754,7 @@ def test_jira_attach_retries_on_500_and_resends_full_file(jira_mcp, monkeypatch,
 
     result = jira_mcp.jira_attach("PRJ1-1", str(f))
 
-    assert result == "OK: bob_attach_screenshot.png dodany do PRJ1-1"
+    assert result == "OK: bob_attach_screenshot.png added to PRJ1-1"
     assert reads == [b"fake-png-bytes", b"fake-png-bytes"]
     assert slept == [1.0]
 
@@ -770,11 +770,11 @@ def _write_schedule(tmp_path, data: dict):
 
 
 # ---------------------------------------------------------------------------
-# H: jira_create — reporter podstawiany z osoby proszacej na czacie
+# H: jira_create — reporter filled in from the person asking in the chat
 # ---------------------------------------------------------------------------
 
 def _make_user_search_mock(users_by_query: dict | None = None, default: list | None = None):
-    """Mock requests.get dla /user/search. users_by_query: {fragment_zapytania: [userzy]}."""
+    """Mock requests.get for /user/search. users_by_query: {query_fragment: [users]}."""
     from unittest.mock import MagicMock
 
     calls: list = []
@@ -800,7 +800,7 @@ def _make_user_search_mock(users_by_query: dict | None = None, default: list | N
 
 
 def _make_issue_get_mock(reporter_name: str):
-    """Mock requests.get dla GET /issue/<key>?fields=reporter — zwraca danego reportera."""
+    """Mock requests.get for GET /issue/<key>?fields=reporter — returns the given reporter."""
     from unittest.mock import MagicMock
 
     def _get(url, headers=None, params=None, timeout=None, **kwargs):
@@ -813,7 +813,7 @@ def _make_issue_get_mock(reporter_name: str):
 
 
 def test_jira_create_resolves_display_name_to_jira_login(jira_mcp):
-    """reporter='Tomasz Wiatr' (imie i nazwisko z czatu) musi trafic do payloadu jako login."""
+    """reporter='Tomasz Wiatr' (a full name from the chat) must reach the payload as a login."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1001"})
     jira_mcp.requests.post = mock_post
     search_get, _calls = _make_user_search_mock(
@@ -821,7 +821,7 @@ def test_jira_create_resolves_display_name_to_jira_login(jira_mcp):
                         "displayName": "Tomasz Wiatr",
                         "emailAddress": "user60@example.com"}]},
     )
-    # _resolve_reporter idzie przez /user/search, _verify_reporter przez /issue/<key>
+    # _resolve_reporter goes through /user/search, _verify_reporter through /issue/<key>
     def _routed_get(url, **kwargs):
         if "/user/search" in url:
             return search_get(url, **kwargs)
@@ -830,19 +830,19 @@ def test_jira_create_resolves_display_name_to_jira_login(jira_mcp):
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Ticket zalozony na prosbe Tomasza",
+        summary="Ticket created at Tomasz's request",
         issue_type="task",
         reporter="Tomasz Wiatr",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": "user60@example.com"}
-    assert "OSTRZEZENIE" not in result
+    assert "WARNING" not in result
 
 
 def test_jira_create_login_reporter_skips_user_search(jira_mcp):
-    """Gotowy login (np. user15@example.com) nie moze isc przez wyszukiwanie."""
+    """A ready login (e.g. user15@example.com) must not go through the search."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1002"})
     jira_mcp.requests.post = mock_post
     search_get, calls = _make_user_search_mock(default=[])
@@ -855,19 +855,19 @@ def test_jira_create_login_reporter_skips_user_search(jira_mcp):
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Pomysl technika",
+        summary="A technician's idea",
         issue_type="task",
         reporter="user15@example.com",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": "user15@example.com"}
-    assert calls == [], "login nie powinien uruchamiac /user/search"
+    assert calls == [], "a login must not trigger /user/search"
 
 
 def test_jira_create_unknown_person_falls_back_and_warns(jira_mcp):
-    """Brak konta w Jirze: fallback na domyslnego reportera + JAWNE ostrzezenie w zwrotce."""
+    """No Jira account: fall back to the default reporter + an EXPLICIT warning in the result."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1003"})
     jira_mcp.requests.post = mock_post
     search_get, _calls = _make_user_search_mock(default=[])
@@ -880,20 +880,20 @@ def test_jira_create_unknown_person_falls_back_and_warns(jira_mcp):
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Zgloszenie od osoby bez konta",
+        summary="Report from a person without an account",
         issue_type="task",
-        reporter="Jan Bez Konta",
+        reporter="Sam No Account",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": jira_mcp._DEFAULT_REPORTER}
-    assert "OSTRZEZENIE" in result
-    assert "Jan Bez Konta" in result
+    assert "WARNING" in result
+    assert "Sam No Account" in result
 
 
 def test_jira_create_fixes_reporter_when_jira_ignores_it(jira_mcp):
-    """Gdy Jira utworzy ticket z innym reporterem, kod musi poprawic go PUT-em i to zaraportowac."""
+    """When Jira creates the ticket with another reporter, the code must fix it with a PUT and report it."""
     from unittest.mock import MagicMock
 
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1004"})
@@ -907,7 +907,7 @@ def test_jira_create_fixes_reporter_when_jira_ignores_it(jira_mcp):
     def _routed_get(url, **kwargs):
         if "/user/search" in url:
             return search_get(url, **kwargs)
-        # Jira zignorowala reportera z payloadu — zwraca wlasciciela tokenu
+        # Jira ignored the reporter in the payload — returns the token owner
         return _make_issue_get_mock("jan.kowalski@example.com")(url, **kwargs)
     jira_mcp.requests.get = _routed_get
 
@@ -922,20 +922,20 @@ def test_jira_create_fixes_reporter_when_jira_ignores_it(jira_mcp):
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Reporter ignorowany przy tworzeniu",
+        summary="Reporter ignored on create",
         issue_type="task",
         reporter="Tomasz Wiatr",
     )
 
-    assert "BLAD" not in result
-    assert len(put_calls) == 1, "brak poprawki PUT gdy Jira zignorowala reportera"
+    assert "ERROR" not in result
+    assert len(put_calls) == 1, "no fixing PUT when Jira ignored the reporter"
     put_payload = json.loads(put_calls[0]["data"])
     assert put_payload["fields"]["reporter"] == {"name": "user60@example.com"}
-    assert "poprawiony" in result
+    assert "corrected" in result
 
 
 def test_jira_create_empty_reporter_does_not_verify(jira_mcp):
-    """Puste reporter = domyslny wlasciciel: zadnego /user/search ani weryfikacji po fakcie."""
+    """Empty reporter = the default owner: no /user/search and no check afterwards."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1005"})
     jira_mcp.requests.post = mock_post
     get_calls: list = []
@@ -947,148 +947,148 @@ def test_jira_create_empty_reporter_does_not_verify(jira_mcp):
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Bez reportera",
+        summary="No reporter",
         issue_type="task",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["reporter"] == {"name": jira_mcp._DEFAULT_REPORTER}
-    assert get_calls == [], "pusty reporter nie powinien wolac Jiry po nic"
-    assert "OSTRZEZENIE" not in result
+    assert get_calls == [], "an empty reporter must not call Jira for anything"
+    assert "WARNING" not in result
 
 
 # ---------------------------------------------------------------------------
-# I: jira_create — epiki (id 10000 w fixture)
+# I: jira_create — epics (id 10000 in the fixture)
 #
-# Wartosci sprawdzone empirycznie przez /rest/api/2/issue/createmeta/{proj}/issuetypes[/10000]:
-# Epik jest na ekranie tworzenia w PRJ1/PRJ2/PRJ5/PRJ4 (nie w PRJ3 -- fixture), wymaga
-# customfield_10004 (Epic Name) i nie ma pola sprintu (customfield_10020).
+# Values checked empirically through /rest/api/2/issue/createmeta/{proj}/issuetypes[/10000]:
+# Epic is on the create screen in PRJ1/PRJ2/PRJ5/PRJ4 (not in PRJ3 -- fixture), requires
+# customfield_10004 (Epic Name) and has no sprint field (customfield_10020).
 # ---------------------------------------------------------------------------
 
-def test_jira_create_epic_uses_zlecenie_type_and_epic_name(jira_mcp):
+def test_jira_create_epic_uses_epic_type_and_epic_name(jira_mcp):
     """issue_type='epic' -> issuetype 10000 + Epic Name = summary."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ2-1000"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ2",
-        summary="Stabilizacja FieldOps",
+        summary="FieldOps stabilisation",
         issue_type="epic",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     assert "PRJ2-1000" in result
     payload = json.loads(captured["data"])
     assert payload["fields"]["issuetype"] == {"id": "10000"}
-    assert payload["fields"]["customfield_10004"] == "Stabilizacja FieldOps"
+    assert payload["fields"]["customfield_10004"] == "FieldOps stabilisation"
 
 
 def test_jira_create_epic_name_overrides_summary(jira_mcp):
-    """epic_name= ma pierwszenstwo nad summary w customfield_10004."""
+    """epic_name= takes precedence over summary in customfield_10004."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1001"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="[Q3] Bardzo dlugi tytul epika",
+        summary="[Q3] A very long epic title",
         issue_type="epic",
-        epic_name="Q3 Serwis",
+        epic_name="Q3 Service",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
-    assert payload["fields"]["customfield_10004"] == "Q3 Serwis"
+    assert payload["fields"]["customfield_10004"] == "Q3 Service"
 
 
 def test_jira_create_non_epic_has_no_epic_name(jira_mcp):
-    """Zwykly task nie dostaje customfield_10004 — nie ma tego pola na swoim ekranie."""
+    """A plain task does not get customfield_10004 — its screen has no such field."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1002"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Zwykle zadanie",
+        summary="Plain task",
         issue_type="task",
-        epic_name="ignorowane",
+        epic_name="ignored",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     payload = json.loads(captured["data"])
     assert "customfield_10004" not in payload["fields"]
 
 
 def test_jira_create_epic_drops_sprint_id_with_warning(jira_mcp):
-    """Epik + sprint_id: customfield_10020 pominiete (400 z Jiry), ticket powstaje z ostrzezeniem."""
+    """Epic + sprint_id: customfield_10020 skipped (400 from Jira), the ticket is created with a warning."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ2-1003"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ2",
-        summary="Epik ze sprintem",
+        summary="Epic with a sprint",
         issue_type="epic",
         sprint_id="9002",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     assert "PRJ2-1003" in result
-    assert "OSTRZEZENIE" in result and "9002" in result
+    assert "WARNING" in result and "9002" in result
     payload = json.loads(captured["data"])
     assert "customfield_10020" not in payload["fields"]
 
 
 def test_jira_create_epic_drops_epic_key_with_warning(jira_mcp):
-    """Epik nie podpina sie pod inny epik — customfield_10001 pominiete, ostrzezenie w zwrocie."""
+    """An epic does not link under another epic — customfield_10001 skipped, a warning in the result."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1004"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Epik pod epikiem",
+        summary="Epic under an epic",
         issue_type="epic",
         epic_key="PRJ1-4823",
     )
 
-    assert "BLAD" not in result
-    assert "OSTRZEZENIE" in result
+    assert "ERROR" not in result
+    assert "WARNING" in result
     payload = json.loads(captured["data"])
     assert "customfield_10001" not in payload["fields"]
 
 
 def test_jira_create_epic_in_project_without_epic_is_rejected_without_post(jira_mcp):
-    """PRJ3 nie ma epika w konfiguracji — BLAD z podpowiedzia, bez wolania Jiry."""
+    """PRJ3 has no epic in the config — ERROR with a hint, without calling Jira."""
     posted: list = []
 
     def _post(url, **kwargs):
         posted.append(url)
-        raise AssertionError("nie powinno dojsc do POST-a")
+        raise AssertionError("must not reach the POST")
     jira_mcp.requests.post = _post
 
     result = jira_mcp.jira_create(
         project="PRJ3",
-        summary="Epik w PRJ3",
+        summary="Epic in PRJ3",
         issue_type="epic",
     )
 
-    assert result.startswith("BLAD")
+    assert result.startswith("ERROR")
     assert "PRJ1" in result and "PRJ2" in result
     assert posted == []
 
 
 def test_jira_create_epic_keeps_project_custom_fields(jira_mcp):
-    """Epik w PRJ1 nadal dostaje Rodzaj Zmiany / Typ Pracy / Dotyczy — sa na ekranie epika."""
+    """An epic in PRJ1 still gets Change type / Work type / Affects — they are on the epic screen."""
     mock_post, captured = _make_post_mock(201, {"key": "PRJ1-1006"})
     jira_mcp.requests.post = mock_post
 
     result = jira_mcp.jira_create(
         project="PRJ1",
-        summary="Epik z polami projektowymi",
+        summary="Epic with project fields",
         issue_type="epic",
-        typ_pracy="Prace programistyczne",
-        dotyczy="FieldOps",
+        work_type="Development",
+        affects="FieldOps",
     )
 
-    assert "BLAD" not in result
+    assert "ERROR" not in result
     fields = json.loads(captured["data"])["fields"]
     assert fields["customfield_10102"] == {"id": "90010"}
     assert fields["customfield_10100"] == {"id": "90003"}
@@ -1096,7 +1096,7 @@ def test_jira_create_epic_keeps_project_custom_fields(jira_mcp):
 
 
 # ---------------------------------------------------------------------------
-# Odczyt i komentarze bezposrednio do Jiry
+# Reads and comments straight to Jira
 # ---------------------------------------------------------------------------
 
 def _json_resp(status: int, body) -> MagicMock:
@@ -1110,17 +1110,17 @@ _RAW_ISSUE = {
     "id": "10001",
     "key": "PRJ1-1",
     "fields": {
-        "summary": "Tytul",
-        "status": {"name": "W toku", "statusCategory": {"name": "In Progress"}},
+        "summary": "Title",
+        "status": {"name": "In Progress", "statusCategory": {"name": "In Progress"}},
         "assignee": {"displayName": "Ewa Nowak", "emailAddress": "user04@example.com", "name": "a.nowak"},
         "issuetype": {"name": "Story"},
         "components": [{"id": 7, "name": "Checkout"}],
         "issuelinks": [{"type": {"name": "Blocks"}, "outwardIssue": {"key": "PRJ1-2",
-                                                                       "fields": {"summary": "Inny"}}}],
-        "subtasks": [{"key": "PRJ1-3", "fields": {"summary": "Pod", "status": {"name": "Do zrobienia"}}}],
+                                                                       "fields": {"summary": "Other"}}}],
+        "subtasks": [{"key": "PRJ1-3", "fields": {"summary": "Sub", "status": {"name": "To Do"}}}],
         "customfield_10016": 5,
-        "customfield_10100": {"value": "Rozwoj"},
-        "comment": {"comments": [{"id": "1", "author": {"displayName": "X"}, "body": "hej"}]},
+        "customfield_10100": {"value": "Build"},
+        "comment": {"comments": [{"id": "1", "author": {"displayName": "X"}, "body": "hi"}]},
     },
     "changelog": {"histories": [{"id": "a", "items": []}, {"id": "b", "items": []}]},
 }
@@ -1136,9 +1136,9 @@ def test_jira_issue_shapes_response_in_the_stable_format(jira_mcp):
     assert data["key"] == "PRJ1-1"
     assert f["assignee"] == {"name": "Ewa Nowak", "email": "user04@example.com"}
     assert f["components"] == [{"id": "7", "name": "Checkout"}]
-    assert f["issue_links"] == [{"type": "Blocks", "direction": "outward", "key": "PRJ1-2", "summary": "Inny"}]
-    assert f["subtasks"][0]["status"] == "Do zrobienia"
-    assert f["story_points"] == 5 and f["typ_pracy"] == "Rozwoj"
+    assert f["issue_links"] == [{"type": "Blocks", "direction": "outward", "key": "PRJ1-2", "summary": "Other"}]
+    assert f["subtasks"][0]["status"] == "To Do"
+    assert f["story_points"] == 5 and f["work_type"] == "Build"
     assert data["worklogs"]["total_time_spent_s"] == 3600
     assert [h["id"] for h in data["changelog"]] == ["b", "a"]  # newest first
     assert data["test_steps"] is None  # not a Test issue -> no plugin probes
@@ -1146,13 +1146,13 @@ def test_jira_issue_shapes_response_in_the_stable_format(jira_mcp):
 
 def test_jira_issue_rejects_bad_key_without_http(jira_mcp):
     jira_mcp.requests.get = MagicMock()
-    assert jira_mcp.jira_issue("nie-klucz").startswith("BLAD:")
+    assert jira_mcp.jira_issue("not-a-key").startswith("ERROR:")
     jira_mcp.requests.get.assert_not_called()
 
 
 def test_jira_issue_404_maps_to_not_found(jira_mcp):
     jira_mcp.requests.get = MagicMock(return_value=_json_resp(404, {"errorMessages": ["x"]}))
-    assert jira_mcp.jira_issue("PRJ1-9") == "BLAD: not_found"
+    assert jira_mcp.jira_issue("PRJ1-9") == "ERROR: not_found"
 
 
 def test_jira_search_includes_issue_links_and_estimates(jira_mcp):
@@ -1169,17 +1169,17 @@ def test_jira_search_includes_issue_links_and_estimates(jira_mcp):
 
 
 def test_jira_search_invalid_jql_returns_jira_message(jira_mcp):
-    jira_mcp.requests.get = MagicMock(return_value=_json_resp(400, {"errorMessages": ["Pole 'xx' nie istnieje"]}))
-    assert "Pole 'xx' nie istnieje" in jira_mcp.jira_search("xx = 1")
+    jira_mcp.requests.get = MagicMock(return_value=_json_resp(400, {"errorMessages": ["Field 'xx' does not exist"]}))
+    assert "Field 'xx' does not exist" in jira_mcp.jira_search("xx = 1")
 
 
 def test_jira_comment_resolves_assignee_mention(jira_mcp, tmp_path, monkeypatch):
     monkeypatch.setattr(jira_mcp, "_COMMENTS_LOG_FILE", tmp_path / "log.jsonl")
     jira_mcp.requests.get = MagicMock(return_value=_json_resp(200, {"fields": {"assignee": {"name": "a.nowak"}}}))
     jira_mcp.requests.post = MagicMock(return_value=_json_resp(201, {"id": "77"}))
-    data = json.loads(jira_mcp.jira_comment("PRJ1-1", "tresc", mention="assignee"))
+    data = json.loads(jira_mcp.jira_comment("PRJ1-1", "text", mention="assignee"))
     assert data["mention_resolved"] == "a.nowak"
-    assert jira_mcp.requests.post.call_args.kwargs["json"] == {"body": "[~a.nowak]\n\ntresc"}
+    assert jira_mcp.requests.post.call_args.kwargs["json"] == {"body": "[~a.nowak]\n\ntext"}
     assert data["jira_url"].endswith("focusedCommentId=77")
     assert (tmp_path / "log.jsonl").read_text(encoding="utf-8").count("\n") == 1
 
@@ -1191,7 +1191,7 @@ def test_jira_comment_rate_limited_from_disk_log(jira_mcp, tmp_path, monkeypatch
     log.write_text("".join(json.dumps({"ts": now}) + "\n" for _ in range(jira_mcp._COMMENT_RATE_MAX)))
     monkeypatch.setattr(jira_mcp, "_COMMENTS_LOG_FILE", log)
     jira_mcp.requests.post = MagicMock()
-    assert jira_mcp.jira_comment("PRJ1-1", "x").startswith("BLAD: rate limit")
+    assert jira_mcp.jira_comment("PRJ1-1", "x").startswith("ERROR: rate limit")
     jira_mcp.requests.post.assert_not_called()
 
 
@@ -1206,7 +1206,7 @@ def test_jira_comment_old_log_entries_do_not_count(jira_mcp, tmp_path, monkeypat
 def test_jira_comment_rejects_markup_in_mention(jira_mcp, tmp_path, monkeypatch):
     monkeypatch.setattr(jira_mcp, "_COMMENTS_LOG_FILE", tmp_path / "log.jsonl")
     jira_mcp.requests.post = MagicMock()
-    assert jira_mcp.jira_comment("PRJ1-1", "x", mention="a] [~b").startswith("BLAD: mention")
+    assert jira_mcp.jira_comment("PRJ1-1", "x", mention="a] [~b").startswith("ERROR: mention")
     jira_mcp.requests.post.assert_not_called()
 
 
@@ -1215,7 +1215,7 @@ def test_jira_comment_does_not_retry_post_on_5xx(jira_mcp, tmp_path, monkeypatch
     monkeypatch.setattr(jira_mcp, "_COMMENTS_LOG_FILE", tmp_path / "log.jsonl")
     monkeypatch.setattr(jira_mcp.time, "sleep", lambda s: None)
     jira_mcp.requests.post = MagicMock(return_value=_json_resp(502, {"errorMessages": ["proxy"]}))
-    assert jira_mcp.jira_comment("PRJ1-1", "x").startswith("BLAD:")
+    assert jira_mcp.jira_comment("PRJ1-1", "x").startswith("ERROR:")
     assert jira_mcp.requests.post.call_count == 1
 
 
@@ -1228,9 +1228,9 @@ def test_jira_attach_rejects_files_outside_bob_temp_attachments(jira_mcp, monkey
     disguised = tmp_path / "tmp" / "session.json"  # right dir, wrong prefix
     disguised.write_text("{}")
     jira_mcp.requests.post = MagicMock()
-    assert jira_mcp.jira_attach("PRJ1-1", str(secret)).startswith("BLAD: mozna dolaczac tylko")
-    assert jira_mcp.jira_attach("PRJ1-1", str(disguised)).startswith("BLAD: mozna dolaczac tylko")
-    assert jira_mcp.jira_attach("not a key", str(secret)).startswith("BLAD: issue_key")
+    assert jira_mcp.jira_attach("PRJ1-1", str(secret)).startswith("ERROR: only attachments")
+    assert jira_mcp.jira_attach("PRJ1-1", str(disguised)).startswith("ERROR: only attachments")
+    assert jira_mcp.jira_attach("not a key", str(secret)).startswith("ERROR: issue_key")
     jira_mcp.requests.post.assert_not_called()
 
 
@@ -1265,21 +1265,21 @@ def test_jira_boards_resolves_filter_with_partial_success(jira_mcp):
 def test_update_ticket_skips_a_write_field_without_configured_id(jira_mcp, monkeypatch):
     mock_put, captured = _make_put_mock()
     jira_mcp.requests.put = mock_put
-    monkeypatch.delitem(jira_mcp._WRITE_FIELDS, "numer_projektu")
+    monkeypatch.delitem(jira_mcp._WRITE_FIELDS, "project_number")
 
-    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-1", numer_projektu="PRJ-1", dotyczy="FieldOps")
+    result = jira_mcp.jira_update_ticket(issue_key="PRJ1-1", project_number="PRJ-1", affects="FieldOps")
 
     assert result == "OK"
     assert json.loads(captured["data"])["fields"] == {"customfield_10101": ["FieldOps"]}
 
 
-def test_update_ticket_typ_pracy_accepts_label_or_option_id(jira_mcp):
+def test_update_ticket_work_type_accepts_label_or_option_id(jira_mcp):
     mock_put, captured = _make_put_mock()
     jira_mcp.requests.put = mock_put
 
-    jira_mcp.jira_update_ticket(issue_key="PRJ1-1", typ_pracy="prace PROGRAMISTYCZNE")
+    jira_mcp.jira_update_ticket(issue_key="PRJ1-1", work_type="DEVELOPMENT")
     assert json.loads(captured["data"])["fields"]["customfield_10100"] == {"id": "90003"}
-    jira_mcp.jira_update_ticket(issue_key="PRJ1-1", typ_pracy="90004")
+    jira_mcp.jira_update_ticket(issue_key="PRJ1-1", work_type="90004")
     assert json.loads(captured["data"])["fields"]["customfield_10100"] == {"id": "90004"}
 
 
@@ -1287,7 +1287,7 @@ def test_create_in_project_without_work_type_sends_no_work_type_fields(jira_mcp)
     mock_post, captured = _make_post_mock(201, {"key": "PRJ5-1"})
     jira_mcp.requests.post = mock_post
 
-    jira_mcp.jira_create(project="PRJ5", summary="x", issue_type="task", typ_pracy="Testy", dotyczy="FieldOps")
+    jira_mcp.jira_create(project="PRJ5", summary="x", issue_type="task", work_type="Testing", affects="FieldOps")
 
     fields = json.loads(captured["data"])["fields"]
     assert not {"customfield_10100", "customfield_10101", "customfield_10102"} & set(fields)

@@ -1,219 +1,219 @@
 ---
-title: "Kickoff: {Nazwa inicjatywy}"
+title: "Kickoff: {Initiative name}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Kickoff inicjatywy / projektu (Meeting Notes)
+# Template: Initiative / project kickoff (Meeting Notes)
 
-> **Przeznaczenie tego template'u (czytaj uważnie zanim wybierzesz):**
-> - Spotkanie typu **kickoff** — formalny start nowej inicjatywy / projektu / epica / dużego strumienia pracy.
-> - Charakterystyczne sygnały: „startujemy temat X", „pierwsze spotkanie ws. inicjatywy", „przedstawienie zakresu i ról", „uzgadniamy cel i sukces".
-> - Cel dokumentu: **utrwalić wspólne rozumienie** celu, zakresu, ról, ryzyk i harmonogramu na samym starcie — żeby uniknąć rozbieżnych interpretacji 3 miesiące później („myślałem, że robimy X, nie Y").
-> - Często łączony z briefem / project charter — ten template jest jego krótszą, „notatkową" wersją.
+> **What this template is for (read carefully before you choose it):**
+> - A **kickoff** meeting — the formal start of a new initiative / project / epic / large workstream.
+> - Telltale signs: "we're starting topic X", "first meeting about the initiative", "presenting the scope and roles", "agreeing on the goal and what success looks like".
+> - Goal of the document: **to lock in a shared understanding** of the goal, scope, roles, risks and timeline right at the start — to avoid diverging interpretations 3 months later ("I thought we were doing X, not Y").
+> - Often paired with a brief / project charter — this template is its shorter, "notes" version.
 >
-> **Kiedy NIE używać:**
-> - jeśli inicjatywa już trwa, a to był kolejny status → użyj `meeting-notes-status-update.template.md`
-> - jeśli celem było rozstrzygnięcie pojedynczej decyzji → użyj `meeting-notes-decision.template.md`
-> - jeśli mapowaliśmy proces AS IS / TO BE → użyj `meeting-notes-as-is-to-be.template.md`
-> - jeśli to był wywiad jakościowy / discovery z 1–3 osobami → użyj `meeting-notes-discovery-interview.template.md`
-> - jeśli to była obserwacja w miejscu pracy / shadowing → użyj `meeting-notes-contextual-inquiry.template.md`
-> - jeśli to był wywiad ewaluacyjny istniejącego produktu → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli to było podsumowanie zakończonego etapu → użyj `meeting-notes-retrospective.template.md`
+> **When NOT to use:**
+> - if the initiative is already under way and this was another status update → use `meeting-notes-status-update.template.md`
+> - if the goal was to settle a single decision → use `meeting-notes-decision.template.md`
+> - if we mapped an AS IS / TO BE process → use `meeting-notes-as-is-to-be.template.md`
+> - if it was a qualitative / discovery interview with 1–3 people → use `meeting-notes-discovery-interview.template.md`
+> - if it was an observation at the workplace / shadowing → use `meeting-notes-contextual-inquiry.template.md`
+> - if it was an evaluation interview about an existing product → use `meeting-notes-product-feedback-interview.template.md`
+> - if it was a wrap-up of a completed stage → use `meeting-notes-retrospective.template.md`
 >
-> **Jak używać:**
-> - **Sukces zdefiniuj mierzalnie** — jeśli nie umiesz powiedzieć, jak rozpoznamy, że się udało, nie zaczynaj inicjatywy.
-> - **Scope: in / out** — wprost wymień, czego NIE robimy. Brak tej sekcji to gwarancja scope creep.
-> - **Założenia i ryzyka rejestruj nawet jeśli „oczywiste"** — za pół roku przestaną być oczywiste.
-> - **Konwertuj relatywne daty na bezwzględne**.
-> - Plik nazywaj: `kickoff-{inicjatywa-kebab}-{YYYY-MM-DD}.md`.
+> **How to use:**
+> - **Define success measurably** — if you can't say how we will know it worked, don't start the initiative.
+> - **Scope: in / out** — list explicitly what we are NOT doing. Leaving this section out guarantees scope creep.
+> - **Record assumptions and risks even if they are "obvious"** — in six months they will stop being obvious.
+> - **Convert relative dates to absolute ones**.
+> - Name the file: `kickoff-{initiative-kebab}-{YYYY-MM-DD}.md`.
 
 ---
 
-# Kickoff: {Nazwa inicjatywy} — {YYYY-MM-DD}
+# Kickoff: {Initiative name} — {YYYY-MM-DD}
 
-**Plik źródłowy:** [{nazwa pliku transkrypcji / notatek}]({link})
-**Data spotkania:** {YYYY-MM-DD}
-**Czas trwania:** ~{NN} min
-**Inicjatywa / Epic:** {nazwa + link do epica w Jira / Confluence}
-**Sponsor inicjatywy:** {Imię (rola) — osoba budżetowa / decyzyjna}
-**Product Owner:** {Imię}
-**Tech Lead:** {Imię}
+**Source file:** [{transcript / notes file name}]({link})
+**Meeting date:** {YYYY-MM-DD}
+**Duration:** ~{NN} min
+**Initiative / Epic:** {name + link to the epic in Jira / Confluence}
+**Initiative sponsor:** {Name (role) — budget holder / decision-maker}
+**Product Owner:** {Name}
+**Tech Lead:** {Name}
 
-## Uczestnicy
+## Participants
 
-- **Sponsor / decydenci:** {Imię (rola)}, {Imię (rola)}
-- **Zespół wytwórczy:** {Imię (rola)}, {Imię (rola)}, {Imię (rola)}
-- **Stakeholderzy biznesowi:** {Imię (rola)}, {Imię (rola)}
-- **Wzmianka (osoby istotne, ale nieobecne):** {Imię — kontekst, kiedy zostaną włączeni}
-
----
-
-## TL;DR (jednym akapitem)
-
-_{Maks. 5–8 zdań. Po co startujemy → jaki problem rozwiązujemy → dla kogo → jak rozpoznamy sukces → kiedy chcemy skończyć → kto pilotuje. Pisz tak, żeby osoba dołączająca do inicjatywy za miesiąc wszystko z tego rozumiała.}_
+- **Sponsor / decision-makers:** {Name (role)}, {Name (role)}
+- **Delivery team:** {Name (role)}, {Name (role)}, {Name (role)}
+- **Business stakeholders:** {Name (role)}, {Name (role)}
+- **Mentioned (relevant people who were not present):** {Name — context, when they will be brought in}
 
 ---
 
-## Cel inicjatywy
+## TL;DR (in one paragraph)
+
+_{Max. 5–8 sentences. Why we are starting → what problem we are solving → for whom → how we will recognise success → when we want to finish → who is driving it. Write it so that someone joining the initiative a month from now understands everything from it.}_
+
+---
+
+## Initiative goal
 
 ### Problem / opportunity
 
-_{2–4 zdania. Co konkretnie się dzieje (lub nie dzieje), że potrzebujemy tę inicjatywę uruchomić? Dlaczego teraz?}_
+_{2–4 sentences. What exactly is happening (or not happening) that we need to launch this initiative? Why now?}_
 
-### Cel biznesowy
+### Business goal
 
-_{Jednym zdaniem — czego chcemy dostarczyć biznesowi. „Aby [persona] mógł [zrobić X] szybciej / lepiej / w ogóle".}_
+_{In one sentence — what we want to deliver to the business. "So that [persona] can [do X] faster / better / at all".}_
 
-### Hipoteza wartości
+### Value hypothesis
 
-_{Czego oczekujemy, że się stanie, gdy dostarczymy rozwiązanie. „Wierzymy, że [zmiana] doprowadzi do [efekt]; zmierzymy to przez [metryka]."}_
+_{What we expect to happen once we deliver the solution. "We believe that [change] will lead to [effect]; we will measure it through [metric]."}_
 
 ---
 
-## Definicja sukcesu (jak rozpoznamy, że się udało)
+## Definition of success (how we will know it worked)
 
-_{Mierzalnie. Bez „lepiej", „szybciej", „efektywniej" bez liczb. Jeśli nie mamy jeszcze baseline'u — wpisz „do zmierzenia w fazie discovery".}_
+_{Measurably. No "better", "faster", "more efficient" without numbers. If we don't have a baseline yet — write "to be measured in the discovery phase".}_
 
-| # | Metryka sukcesu | Baseline (dziś) | Target | Termin pomiaru |
+| # | Success metric | Baseline (today) | Target | Measurement date |
 |---|------------------|-----------------|--------|----------------|
-| 1 | {np. czas obsługi procesu X} | {NN min} | {NN min} | {YYYY-MM-DD, np. 3 mies. po wdrożeniu} |
+| 1 | {e.g. time to handle process X} | {NN min} | {NN min} | {YYYY-MM-DD, e.g. 3 months after rollout} |
 | 2 | {…} | {…} | {…} | {…} |
 | 3 | {…} | {…} | {…} | {…} |
 
-**Anti-metryki (czego pilnujemy, by NIE spadło):** {np. NPS klientów, adopcja innej funkcjonalności, czas innego procesu}
+**Anti-metrics (what we watch so that it does NOT drop):** {e.g. customer NPS, adoption of another feature, the time of another process}
 
 ---
 
 ## Scope
 
-### In scope (robimy)
+### In scope (we are doing)
 
-1. {Element zakresu 1}
-2. {Element zakresu 2}
-3. {Element zakresu 3}
+1. {Scope item 1}
+2. {Scope item 2}
+3. {Scope item 3}
 
-### Out of scope (świadomie NIE robimy w tej inicjatywie)
+### Out of scope (knowingly NOT doing in this initiative)
 
-_{Krytyczna sekcja — chroni przed scope creep. Wpisz wprost rzeczy, które ktoś mógłby chcieć dorzucić w trakcie.}_
+_{A critical section — it protects against scope creep. List explicitly the things someone might want to add along the way.}_
 
-1. {Co odkładamy + dlaczego — np. „integracja z systemem Z — odłożona do kolejnej iteracji ze względu na zależność od zespołu Q"}
+1. {What we are parking + why — e.g. "integration with system Z — parked until the next iteration because of a dependency on team Q"}
 2. {…}
 
-### Mogą wejść w scope warunkowo
+### May come into scope conditionally
 
-_{Rzeczy, które wpuścimy, jeśli zostanie czas / budżet. Wyraźne „nice-to-have", nie zobowiązanie.}_
+_{Things we will let in if there is time / budget left. A clear "nice-to-have", not a commitment.}_
 
 - {…}
 - {…}
 
 ---
 
-## Personas / dla kogo to robimy
+## Personas / who we are doing this for
 
-_{Główne i wtórne persony, których to dotyczy. Bez tej sekcji projekt skończy się generycznym rozwiązaniem dla nikogo.}_
+_{The primary and secondary personas this affects. Without this section the project will end with a generic solution for nobody.}_
 
-- **Primary:** {persona — kto to jest, jaki jest jej kluczowy job-to-be-done}
+- **Primary:** {persona — who they are, what their key job-to-be-done is}
 - **Secondary:** {persona}
-- **Wpływ na inne grupy:** {np. obsługa, support — w jaki sposób zmiana ich dotknie}
+- **Impact on other groups:** {e.g. operations, support — how the change will affect them}
 
 ---
 
-## Założenia (na których budujemy plan)
+## Assumptions (that the plan is built on)
 
-_{Jeśli któreś z tych założeń przestanie być prawdą — plan trzeba re-review.}_
+_{If any of these assumptions stops being true — the plan needs to be re-reviewed.}_
 
-1. {Założenie 1 — np. „integracja z X będzie dostępna od Q2 2026"}
-2. {Założenie 2 — np. „mamy budżet na zewnętrznego dostawcę Y"}
-3. {Założenie N}
-
----
-
-## Ograniczenia / „rzeczy, które się nie zmienią"
-
-_{Wymienione na spotkaniu jako twarde ograniczenia — regulacje, decyzje zarządu, integracje, których nie ruszamy.}_
-
-- **{Ograniczenie 1}** — {dlaczego}
-- **{Ograniczenie 2}** — {dlaczego}
+1. {Assumption 1 — e.g. "the integration with X will be available from Q2 2026"}
+2. {Assumption 2 — e.g. "we have budget for external vendor Y"}
+3. {Assumption N}
 
 ---
 
-## Ryzyka i mitigacja
+## Constraints / "things that will not change"
 
-| # | Ryzyko | Prawdopodobieństwo | Wpływ | Mitigacja | Właściciel |
+_{Named in the meeting as hard constraints — regulations, board decisions, integrations we are not touching.}_
+
+- **{Constraint 1}** — {why}
+- **{Constraint 2}** — {why}
+
+---
+
+## Risks and mitigation
+
+| # | Risk | Likelihood | Impact | Mitigation | Owner |
 |---|--------|--------------------|-------|-----------|------------|
-| 1 | {opis ryzyka} | {N/Ś/W} | {N/Ś/W} | {co robimy, by się nie zmaterializowało} | {Imię} |
+| 1 | {risk description} | {L/M/H} | {L/M/H} | {what we do so it doesn't materialise} | {Name} |
 | 2 | {…} | {…} | {…} | {…} | {…} |
 | 3 | {…} | {…} | {…} | {…} | {…} |
 
 ---
 
-## Harmonogram (kamienie milowe)
+## Timeline (milestones)
 
-_{Wysoki poziom — nie szczegółowy plan, ale kontrakt na główne checkpointy.}_
+_{High level — not a detailed plan, but a contract on the main checkpoints.}_
 
-| Milestone | Co dostarczamy | Planowana data |
+| Milestone | What we deliver | Planned date |
 |-----------|----------------|----------------|
-| M1 — {nazwa} | {np. discovery zamknięte, decyzja go/no-go} | {YYYY-MM-DD} |
-| M2 — {nazwa} | {np. MVP wdrożony do pilota} | {YYYY-MM-DD} |
-| M3 — {nazwa} | {np. pełen rollout} | {YYYY-MM-DD} |
-| M4 — {nazwa} | {np. pierwszy pomiar metryk sukcesu} | {YYYY-MM-DD} |
+| M1 — {name} | {e.g. discovery closed, go/no-go decision} | {YYYY-MM-DD} |
+| M2 — {name} | {e.g. MVP rolled out to the pilot} | {YYYY-MM-DD} |
+| M3 — {name} | {e.g. full rollout} | {YYYY-MM-DD} |
+| M4 — {name} | {e.g. first measurement of success metrics} | {YYYY-MM-DD} |
 
-**Najbliższy checkpoint:** {YYYY-MM-DD} — {co konkretnie powinno być wtedy gotowe}
+**Next checkpoint:** {YYYY-MM-DD} — {what exactly should be ready by then}
 
 ---
 
-## Role i odpowiedzialności (RACI)
+## Roles and responsibilities (RACI)
 
-_{Wymień kluczowe role — kto za co odpowiada. Nie musi być pełna macierz RACI, ale każda rola w zespole powinna wiedzieć, czego się od niej oczekuje.}_
+_{List the key roles — who is responsible for what. It doesn't have to be a full RACI matrix, but every role on the team should know what is expected of it.}_
 
-| Rola | Osoba | Główna odpowiedzialność |
+| Role | Person | Main responsibility |
 |------|-------|--------------------------|
-| Sponsor | {Imię} | Budżet, eskalacja, finalna decyzja |
-| Product Owner | {Imię} | Priorytety, scope, kontakt z biznesem |
-| Tech Lead | {Imię} | Architektura, jakość, decyzje techniczne |
-| UX / Designer | {Imię} | Projektowanie, badania jakościowe |
-| Analityk | {Imię} | Wymagania, mapowanie procesu, dane |
-| QA | {Imię} | Strategia testów, jakość |
-| {inna rola} | {Imię} | {…} |
+| Sponsor | {Name} | Budget, escalation, final decision |
+| Product Owner | {Name} | Priorities, scope, contact with the business |
+| Tech Lead | {Name} | Architecture, quality, technical decisions |
+| UX / Designer | {Name} | Design, qualitative research |
+| Analyst | {Name} | Requirements, process mapping, data |
+| QA | {Name} | Test strategy, quality |
+| {other role} | {Name} | {…} |
 
 ---
 
-## Zależności zewnętrzne
+## External dependencies
 
-_{Co potrzebujemy od ludzi / zespołów / systemów spoza naszego zespołu, żeby inicjatywa się udała.}_
+_{What we need from people / teams / systems outside our team for the initiative to succeed.}_
 
-- **{Zespół / system 1}** — {czego potrzebujemy, do kiedy, kto po stronie tamtego zespołu jest naszym kontaktem}
-- **{Zespół / system 2}** — {…}
-
----
-
-## Otwarte pytania
-
-1. {Pytanie 1 — kto odpowiada, do kiedy}
-2. {Pytanie 2}
-3. {Pytanie N}
+- **{Team / system 1}** — {what we need, by when, who our contact on that team is}
+- **{Team / system 2}** — {…}
 
 ---
 
-## Action items (po kickoffie)
+## Open questions
 
-| # | Co | Kto | Termin |
+1. {Question 1 — who answers, by when}
+2. {Question 2}
+3. {Question N}
+
+---
+
+## Action items (after the kickoff)
+
+| # | What | Who | Due |
 |---|----|-----|--------|
-| 1 | {np. przygotowanie briefa / user story do refinementu} | {Imię} | {YYYY-MM-DD} |
-| 2 | {np. wpięcie inicjatywy w Jira / Confluence} | {Imię} | {YYYY-MM-DD} |
-| 3 | {np. umówienie pierwszego warsztatu z biznesem} | {Imię} | {YYYY-MM-DD} |
-| 4 | {np. uzgodnienie pomiaru baseline'u metryk} | {Imię} | {YYYY-MM-DD} |
+| 1 | {e.g. prepare a brief / user story for refinement} | {Name} | {YYYY-MM-DD} |
+| 2 | {e.g. set up the initiative in Jira / Confluence} | {Name} | {YYYY-MM-DD} |
+| 3 | {e.g. schedule the first workshop with the business} | {Name} | {YYYY-MM-DD} |
+| 4 | {e.g. agree how to measure the metrics baseline} | {Name} | {YYYY-MM-DD} |
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- Transkrypcja: [{nazwa pliku}]({link})
-- Powiązane dokumenty:
+- Transcript: [{file name}]({link})
+- Related documents:
   - [{brief / project charter}]({link})
-  - [{epic w Jira}]({link})
-  - [{folder Confluence inicjatywy}]({link})
-  - [{poprzednie analizy / discovery, na których budujemy}]({link})
+  - [{epic in Jira}]({link})
+  - [{the initiative's Confluence folder}]({link})
+  - [{earlier analyses / discovery we are building on}]({link})

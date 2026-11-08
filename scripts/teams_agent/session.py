@@ -27,11 +27,11 @@ def ensure_fresh_session() -> bool:
         if age < SESSION_MAX_AGE_S:
             hours = int(age // 3600)
             mins = int(age % 3600 // 60)
-            print(f"Sesja OK (wiek: {hours}h {mins}min)", flush=True)
+            print(f"Session OK (age: {hours}h {mins}min)", flush=True)
             return True
-        print("Sesja wygasla — wymagane ponowne logowanie SSO.", flush=True)
+        print("Session expired — SSO sign-in required again.", flush=True)
     else:
-        print("Brak session.json — wymagane logowanie SSO.", flush=True)
+        print("No session.json — SSO sign-in required.", flush=True)
     return False
 
 

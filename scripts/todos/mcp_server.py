@@ -45,7 +45,7 @@ import org_config  # noqa: E402
 
 from mcp.server.fastmcp import FastMCP
 
-_TZ = ZoneInfo("Europe/Warsaw")
+_TZ = ZoneInfo(org_config.TIMEZONE)
 
 mcp = FastMCP("todos-bob")
 
@@ -57,7 +57,7 @@ _OWNER_MRI = org_config.OWNER_MRI
 
 # Default reminder destination for owner-created todos — the owner's control chat.
 # Non-owner reminders fall back to the chat where the todo was created.
-_OWNER_NOTIFY_CHAT = "Notatki"
+_OWNER_NOTIFY_CHAT = os.environ.get("BOB_NOTES_CHAT") or "Notes"
 
 
 def _now() -> str:
@@ -69,7 +69,7 @@ def _load() -> list[dict]:
         if _TODOS_FILE.exists():
             return json.loads(_TODOS_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[todos] BLAD odczytu: {exc}", file=sys.stderr)
+        print(f"[todos] ERROR reading: {exc}", file=sys.stderr)
     return []
 
 
@@ -80,7 +80,7 @@ def _save(todos: list[dict]) -> None:
             encoding="utf-8",
         )
     except Exception as exc:
-        print(f"[todos] BLAD zapisu: {exc}", file=sys.stderr)
+        print(f"[todos] ERROR writing: {exc}", file=sys.stderr)
 
 
 def _short_id() -> str:
@@ -115,10 +115,10 @@ def _can_modify(task: dict) -> bool:
 
 
 def _auth_error(task: dict) -> str:
-    creator = task.get("created_by") or "nieznany"
+    creator = task.get("created_by") or "unknown"
     return (
-        f"Brak uprawnień. Zadanie #{task['id']} może edytować tylko "
-        f"{creator} (lub {org_config.OWNER_DISPLAY_NAME} jako admin)."
+        f"ERROR: Not allowed. Task #{task['id']} can be changed only by "
+        f"{creator} (or {org_config.OWNER_DISPLAY_NAME} as admin)."
     )
 
 
@@ -133,7 +133,7 @@ def _parse_due_date(raw: str) -> str | None:
         except ValueError:
             continue
     # Unrecognized format — store as-is; label rendering will fall back to plain display.
-    print(f"[todos] due_date format nierozpoznany, przechowuję as-is: {raw!r}", file=sys.stderr)
+    print(f"[todos] due_date format not recognised, storing as-is: {raw!r}", file=sys.stderr)
     return raw
 
 
@@ -157,7 +157,7 @@ def _parse_notify_at(raw: str) -> str | None:
             return datetime.strptime(raw, fmt).strftime("%Y-%m-%dT%H:%M:%S")
         except ValueError:
             continue
-    print(f"[todos] notify_at format nierozpoznany, przechowuję as-is: {raw!r}", file=sys.stderr)
+    print(f"[todos] notify_at format not recognised, storing as-is: {raw!r}", file=sys.stderr)
     return raw
 
 
@@ -170,11 +170,11 @@ def _due_label(due_date: str | None) -> str:
         today = datetime.now(_TZ).date()
         delta = (due - today).days
         if delta < 0:
-            return f"  ⚠ ZALEGŁA ({due_date})"
+            return f"  ⚠ OVERDUE ({due_date})"
         if delta == 0:
-            return f"  ⏰ DZIŚ ({due_date})"
+            return f"  ⏰ TODAY ({due_date})"
         if delta <= 3:
-            return f"  🔜 za {delta}d ({due_date})"
+            return f"  🔜 in {delta}d ({due_date})"
         return f"  📅 {due_date}"
     except ValueError:
         return f"  📅 {due_date}"
@@ -192,7 +192,7 @@ def add_todo(
     """Add a new task to the to-do list.
 
     The task is owned by the person who requested it (from BOB_SENDER env).
-    Only the creator (or Jan) can later update or delete it.
+    Only the creator (or the owner) can later update or delete it.
 
     Set notify_at to make Bob actively send a reminder on the target chat at that time.
     When notify_at is set and notify_chat is empty, the reminder fires on the chat where
@@ -211,9 +211,9 @@ def add_todo(
     current_chat = os.environ.get("BOB_CURRENT_CHAT", "")
     notify_at_norm = _parse_notify_at(notify_at)
     explicit_notify_chat = notify_chat.strip()
-    # Reminder routing rule: owner-created todos default to the "Notatki" control chat;
+    # Reminder routing rule: owner-created todos default to the owner's control chat;
     # everyone else's todos default to the chat where the todo was created. Explicit
-    # notify_chat overrides both — used when the request literally says "na <chat>".
+    # notify_chat overrides both — used when the request literally names a chat ("on <chat>").
     if notify_at_norm:
         if explicit_notify_chat:
             resolved_notify_chat = explicit_notify_chat
@@ -242,13 +242,13 @@ def add_todo(
     todos = _load()
     todos.append(task)
     _save(todos)
-    creator_label = f" (zlecone przez {task['created_by']})" if task["created_by"] else ""
-    due_label = f", termin: {task['due_date']}" if task["due_date"] else ""
+    creator_label = f" (requested by {task['created_by']})" if task["created_by"] else ""
+    due_label = f", due: {task['due_date']}" if task["due_date"] else ""
     notify_label = (
         f", 🔔 {task['notify_at']} → {task['notify_chat']}" if task["notify_at"] else ""
     )
     return (
-        f"Dodano #{task['id']}: {task['title']} → {task['assigned_to']}"
+        f"Added #{task['id']}: {task['title']} → {task['assigned_to']}"
         f"{creator_label}{due_label}{notify_label}"
     )
 
@@ -280,14 +280,14 @@ def list_todos(assigned_to: str = "", status: str = "", all_chats: bool = False)
 
     if not filtered:
         if assigned_to or status:
-            return "Brak pasujących zadań."
-        return "Lista zadań jest pusta."
+            return "No matching tasks."
+        return "The task list is empty."
 
     lines = []
     for t in filtered:
         status_label = {
-            "todo": "do zrobienia",
-            "in_progress": "w trakcie",
+            "todo": "to do",
+            "in_progress": "in progress",
             "done": "done",
         }.get(t.get("status", "todo"), t.get("status", "?"))
         line = (
@@ -298,17 +298,17 @@ def list_todos(assigned_to: str = "", status: str = "", all_chats: bool = False)
             f"{_due_label(t.get('due_date'))}"
         )
         if t.get("notify_at"):
-            fired = " (wysłane)" if t.get("notified_at") else " (zaplanowane)"
+            fired = " (sent)" if t.get("notified_at") else " (scheduled)"
             line += f"  |  🔔 {t['notify_at']} → {t.get('notify_chat') or '?'}{fired}"
         if t.get("created_by"):
-            line += f"  |  zlecone przez {t['created_by']}"
+            line += f"  |  requested by {t['created_by']}"
         if all_chats and t.get("chat"):
             line += f"  |  {t['chat']}"
         if t.get("notes"):
-            line += f"\n       Notatka: {t['notes']}"
+            line += f"\n       Note: {t['notes']}"
         lines.append(line)
 
-    return f"Zadania ({len(filtered)}):\n" + "\n".join(lines)
+    return f"Tasks ({len(filtered)}):\n" + "\n".join(lines)
 
 
 @mcp.tool()
@@ -324,7 +324,7 @@ def update_todo(
 ) -> str:
     """Update an existing task (partial update — only provided fields are changed).
 
-    Only the task creator or Jan (admin) can update a task.
+    Only the task creator or the owner (admin) can update a task.
     Allowed statuses: "todo", "in_progress", "done".
 
     Pass "-" for notify_at to cancel an active reminder (clears notify_at + notify_chat).
@@ -350,7 +350,7 @@ def update_todo(
                 task["assigned_to"] = assigned_to.strip()
             if status:
                 if status not in ("todo", "in_progress", "done"):
-                    return f"Nieprawidłowy status: {status!r}. Użyj: todo, in_progress, done."
+                    return f"ERROR: Invalid status: {status!r}. Use: todo, in_progress, done."
                 task["status"] = status
                 if status == "done" and not task.get("completed_at"):
                     task["completed_at"] = _now()
@@ -371,7 +371,7 @@ def update_todo(
                         task["notify_chat"] = notify_chat.strip()
                     elif not task.get("notify_chat"):
                         # Routing fallback: pick by ORIGINAL creator, not the current caller.
-                        # Owner-created todos go to Jan's control chat; otherwise, the
+                        # Owner-created todos go to the owner's control chat; otherwise, the
                         # chat where the todo was opened (i.e. the conversation it belongs to).
                         if task.get("created_by_mri") == _OWNER_MRI:
                             task["notify_chat"] = _OWNER_NOTIFY_CHAT
@@ -382,16 +382,16 @@ def update_todo(
             elif notify_chat:
                 task["notify_chat"] = notify_chat.strip()
             _save(todos)
-            due_suffix = f", termin: {task['due_date']}" if task.get("due_date") else ""
+            due_suffix = f", due: {task['due_date']}" if task.get("due_date") else ""
             notify_suffix = (
                 f", 🔔 {task['notify_at']} → {task.get('notify_chat') or '?'}"
                 if task.get("notify_at") else ""
             )
             return (
-                f"Zaktualizowano #{id}: {task['title']}"
+                f"Updated #{id}: {task['title']}"
                 f" ({task['status']}) → {task['assigned_to']}{due_suffix}{notify_suffix}"
             )
-    return f"Nie znaleziono zadania #{id}."
+    return f"ERROR: Task #{id} not found."
 
 
 @mcp.tool()
@@ -430,21 +430,21 @@ def list_upcoming_todos(days: int = 3) -> str:
             no_due.append(t)
 
     if not overdue and not upcoming:
-        return f"Brak zadań zaległych ani zbliżających się w ciągu {days} dni."
+        return f"No overdue tasks and none due within {days} days."
 
     lines = []
 
     if overdue:
-        lines.append("⚠ ZALEGŁE:")
+        lines.append("⚠ OVERDUE:")
         for _, t in sorted(overdue, key=lambda x: x[0]):
-            lines.append(f"  #{t['id']}  {t.get('assigned_to','?')}  |  {t['title']}  |  termin: {t['due_date']}")
+            lines.append(f"  #{t['id']}  {t.get('assigned_to','?')}  |  {t['title']}  |  due: {t['due_date']}")
             if t.get("notes"):
                 lines.append(f"       {t['notes']}")
 
     if upcoming:
-        lines.append(f"\n🔜 ZBLIŻAJĄCE SIĘ (do {days} dni):")
+        lines.append(f"\n🔜 DUE SOON (within {days} days):")
         for delta, t in sorted(upcoming, key=lambda x: x[0]):
-            days_label = "dziś" if delta == 0 else f"za {delta}d"
+            days_label = "today" if delta == 0 else f"in {delta}d"
             lines.append(
                 f"  #{t['id']}  {t.get('assigned_to','?')}  |  {t['title']}  |  {days_label} ({t['due_date']})"
             )
@@ -458,7 +458,7 @@ def list_upcoming_todos(days: int = 3) -> str:
 def delete_todo(id: str) -> str:
     """Permanently delete a task from the to-do list.
 
-    Only the task creator or Jan (admin) can delete a task.
+    Only the task creator or the owner (admin) can delete a task.
 
     Args:
         id: Task ID (8-char hex, from list_todos output).
@@ -470,8 +470,8 @@ def delete_todo(id: str) -> str:
                 return _auth_error(task)
             todos = [t for t in todos if t.get("id") != id]
             _save(todos)
-            return f"Usunięto #{id}."
-    return f"Nie znaleziono zadania #{id}."
+            return f"Deleted #{id}."
+    return f"ERROR: Task #{id} not found."
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +502,7 @@ def due_for_fire(now: datetime | None = None) -> list[dict]:
         try:
             at_dt = datetime.fromisoformat(t["notify_at"])
         except (ValueError, TypeError):
-            print(f"[todos] notify_at nie do parsowania: {t.get('id')} = {t.get('notify_at')!r}",
+            print(f"[todos] notify_at cannot be parsed: {t.get('id')} = {t.get('notify_at')!r}",
                   file=sys.stderr)
             continue
         if at_dt <= now:
@@ -562,7 +562,7 @@ def add_reminder_todo(
     sender: str,
     sender_mri: str,
 ) -> str:
-    """Create a todo seeded as an active reminder. Used by cli.py for 'Bob, przypomnij...'.
+    """Create a todo seeded as an active reminder. Used by cli.py for the 'Bob, remind ...' command.
 
     The caller passes notify_chat explicitly (parsed from the user's command), so this
     function does NOT apply the owner-vs-others routing fallback — it trusts what the
@@ -607,8 +607,8 @@ def format_pending_reminders() -> str:
     """Legacy: list only armed reminders. Kept for callers that explicitly want this view."""
     pending = list_pending_reminders()
     if not pending:
-        return "Brak zaplanowanych przypomnień."
-    lines = ["Zaplanowane przypomnienia:"]
+        return "No reminders scheduled."
+    lines = ["Scheduled reminders:"]
     for t in pending:
         chat = t.get("notify_chat") or "?"
         title = (t.get("title") or "")[:80]
@@ -646,7 +646,7 @@ def _format_todo_line(t: dict, show_chat: bool = False) -> str:
 
     When show_chat is True (used in the all-chats view), the source chat name is
     used as the leading bracketed label and the short id is moved to the tail
-    (still visible for `usuń przypomnienie [id]`). Otherwise the id stays at the
+    (still visible for the delete-reminder command). Otherwise the id stays at the
     front like before — in a per-chat view the chat name would be redundant.
     """
     if show_chat:
@@ -658,11 +658,11 @@ def _format_todo_line(t: dict, show_chat: bool = False) -> str:
     parts.append(title)
     extras = []
     if t.get("notify_at"):
-        fired = "wysłane" if t.get("notified_at") else "fire"
+        fired = "sent" if t.get("notified_at") else "fire"
         chat = t.get("notify_chat") or "?"
         extras.append(f"🔔 {t['notify_at']} → '{chat}' ({fired})")
     if t.get("due_date") and not t.get("notify_at"):
-        extras.append(f"termin {t['due_date']}")
+        extras.append(f"due {t['due_date']}")
     if t.get("assigned_to"):
         extras.append(f"→ {t['assigned_to']}")
     if show_chat:
@@ -678,7 +678,7 @@ def format_todos_for_chat(current_chat: str, show_all: bool = False) -> str:
     show_all=True (used on the owner's control chat) lists todos across every chat.
     Otherwise only todos whose `chat` field matches current_chat are shown.
 
-    Output groups: ⚠ zaległe → ⏰ dziś → 🔜 nadchodzące → 📋 bez terminu.
+    Output groups: ⚠ overdue → ⏰ today → 🔜 upcoming → 📋 no due date.
     Active reminders (with notify_at) are marked inline alongside passive ones — UX
     treats them as one kind of thing.
     """
@@ -687,31 +687,31 @@ def format_todos_for_chat(current_chat: str, show_all: bool = False) -> str:
         todos = [t for t in todos if t.get("chat") == current_chat]
     todos = [t for t in todos if t.get("status") != "done"]
     if not todos:
-        scope = "we wszystkich chatach" if show_all else f"w '{current_chat}'"
-        return f"Brak zadań {scope}."
+        scope = "in any chat" if show_all else f"in '{current_chat}'"
+        return f"No tasks {scope}."
 
     today_iso = datetime.now(_TZ).date().isoformat()
     buckets = _categorise(todos, today_iso)
     header = (
-        f"Zadania (wszystkie chaty, {len(todos)}):"
+        f"Tasks (all chats, {len(todos)}):"
         if show_all else
-        f"Zadania w '{current_chat}' ({len(todos)}):"
+        f"Tasks in '{current_chat}' ({len(todos)}):"
     )
     lines = [header]
     if buckets["overdue"]:
-        lines.append(f"\n⚠ ZALEGŁE ({len(buckets['overdue'])}):")
+        lines.append(f"\n⚠ OVERDUE ({len(buckets['overdue'])}):")
         for t in buckets["overdue"]:
             lines.append(_format_todo_line(t, show_chat=show_all))
     if buckets["today"]:
-        lines.append(f"\n⏰ DZIŚ ({len(buckets['today'])}):")
+        lines.append(f"\n⏰ TODAY ({len(buckets['today'])}):")
         for t in buckets["today"]:
             lines.append(_format_todo_line(t, show_chat=show_all))
     if buckets["upcoming"]:
-        lines.append(f"\n🔜 NADCHODZĄCE ({len(buckets['upcoming'])}):")
+        lines.append(f"\n🔜 UPCOMING ({len(buckets['upcoming'])}):")
         for t in buckets["upcoming"]:
             lines.append(_format_todo_line(t, show_chat=show_all))
     if buckets["no_date"]:
-        lines.append(f"\n📋 BEZ TERMINU ({len(buckets['no_date'])}):")
+        lines.append(f"\n📋 NO DUE DATE ({len(buckets['no_date'])}):")
         for t in buckets["no_date"]:
             lines.append(_format_todo_line(t, show_chat=show_all))
     return "\n".join(lines)
@@ -758,7 +758,7 @@ def delete_overdue_todos(current_chat: str, show_all: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    print(f"[todos] Serwer startuje, plik: {_TODOS_FILE}", file=sys.stderr)
+    print(f"[todos] Server starting, file: {_TODOS_FILE}", file=sys.stderr)
     from mcp_admin.ports import MCP_PORTS
     from mcp_admin.transport import run_mcp
     run_mcp(mcp, default_port=MCP_PORTS["todos-bob"])

@@ -1,27 +1,27 @@
-"""Upload pliku do Teams chatu — dostarczenie pliku przez przegladarke.
+"""Upload a file to a Teams chat — the file is delivered through the browser.
 
-Sciezka REST-only (PUT na SP + POST chatsvc z properties.files) nie wyszla:
-SharePoint odrzuca PUT bez OAuth handshake Teams Web Client (`accessDenied`,
-401/403 lub `invalidRequestDigest`). Pelen handshake wymaga POST do
-`/_layouts/15/filebrowser.aspx?app=TeamsFile` + `/_api/SP.OAuth.NativeClient/Authenticate`
-ktore web client uruchamia jako boot flow — odtworzenie tego z poziomu Pythona
-to znacznie wiecej niz POC.
+The REST-only path (PUT to SharePoint + POST to chatsvc with properties.files) did not work:
+SharePoint rejects the PUT without the Teams Web Client OAuth handshake (`accessDenied`,
+401/403 or `invalidRequestDigest`). The full handshake needs a POST to
+`/_layouts/15/filebrowser.aspx?app=TeamsFile` + `/_api/SP.OAuth.NativeClient/Authenticate`,
+which the web client runs as its boot flow — reproducing that from Python
+is far more than a proof of concept.
 
-Co dziala niezawodnie i jest tu zaimplementowane:
-  1. Playwright launches headless Chromium z `session.json`.
-  2. Switch na target chat (`scraper.switch_to_chat_by_name`).
-  3. **CDP `Input.dispatchDragEvent`** doreczy plik do composera — CDP-level event
-     ma `isTrusted=true`, wiec Teams akceptuje go tak samo jak prawdziwy drop
-     z desktopu. JS-synthesized `DragEvent` z DataTransfer (isTrusted=false)
-     jest odrzucany.
-  4. Wciska Enter w composerze.
-  5. Polling REST chatsvc (`api_client.get_messages`) sprawdza ze swieza wiadomosc
-     z `properties.files` faktycznie pojawila sie na chacie — bez tego latwo
-     przegapic ciche failure (np. upload zablokowany po stronie Teams).
+What works reliably and is implemented here:
+  1. Playwright launches headless Chromium with `session.json`.
+  2. Switch to the target chat (`scraper.switch_to_chat_by_name`).
+  3. **CDP `Input.dispatchDragEvent`** delivers the file to the composer — a CDP-level event
+     has `isTrusted=true`, so Teams accepts it just like a real drop
+     from the desktop. A JS-synthesized `DragEvent` with DataTransfer (isTrusted=false)
+     is rejected.
+  4. Press Enter in the composer.
+  5. Polling chatsvc REST (`api_client.get_messages`) checks that a fresh message
+     with `properties.files` really appeared in the chat — without it, a silent
+     failure is easy to miss (e.g. the upload blocked on the Teams side).
 
-Koszt: ~5-8 s na wywolanie (launch + Teams shell + chat switch + drop + verify).
-Bob nie powinien tego wolac na kazdej wiadomosci, ale dla okazjonalnego "wrzuc
-plik X na chat Y" jest OK.
+Cost: ~5-8 s per call (launch + Teams shell + chat switch + drop + verify).
+Bob should not call this on every message, but for an occasional "put
+file X in chat Y" it is fine.
 
 Public API:
   upload_and_send(chat_name, file_path, text="") -> str | None
@@ -49,7 +49,7 @@ from session import load_storage_state  # noqa: E402
 SESSION_FILE = Path(__file__).parent / "session.json"
 TEAMS_URL = "https://teams.microsoft.com/v2/"
 
-# Bezpiecznik: notatki .md <= 512 KB, pliki audio (MP3) do ~50 MB.
+# Safety cap: .md notes <= 512 KB, audio files (MP3) up to ~50 MB.
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
@@ -76,7 +76,7 @@ _COMPOSER_SELECTORS = [
 
 
 def _capture_token(page) -> None:
-    """Sciagnij Bearer token z pierwszego chatsvc call zeby REST verify dzialal."""
+    """Grab the Bearer token from the first chatsvc call so the REST verify works."""
     def _on_request(req) -> None:
         if "chatsvc" not in req.url:
             return
@@ -103,15 +103,15 @@ def _find_composer_rect(page, timeout_s: float = 10.0) -> dict | None:
 def _cdp_drop_file(page, file_path: Path, x: float, y: float) -> bool:
     """Dispatch a TRUSTED drag-and-drop sequence via Chrome DevTools Protocol.
 
-    `Input.dispatchDragEvent` z `data.files` przepuszczonym przez Chromium daje
-    eventy z `isTrusted=true` — odwrotnie niz JS-syntezowany DragEvent. To
-    JEDYNA metoda ktora dostarcza plik do composera (paperclip
-    ukryty, drag-JS odrzucany, paste-JS odrzucany).
+    `Input.dispatchDragEvent` with `data.files` passed through Chromium produces
+    events with `isTrusted=true` — unlike a JS-synthesized DragEvent. It is the
+    ONLY method that delivers the file to the composer (paperclip
+    hidden, drag-JS rejected, paste-JS rejected).
     """
     try:
         client = page.context.new_cdp_session(page)
     except Exception as exc:
-        print(f"[upload] CDP session blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[upload] CDP session error: {exc}", file=sys.stderr, flush=True)
         return False
     drag_data = {
         "items": [],
@@ -126,7 +126,7 @@ def _cdp_drop_file(page, file_path: Path, x: float, y: float) -> bool:
             })
             page.wait_for_timeout(120)
     except Exception as exc:
-        print(f"[upload] CDP dispatchDragEvent blad: {exc}",
+        print(f"[upload] CDP dispatchDragEvent error: {exc}",
               file=sys.stderr, flush=True)
         return False
     return True
@@ -140,7 +140,7 @@ def _type_text(page, text: str) -> None:
         box.click(timeout=2000)
         box.type(text, delay=10)
     except Exception as exc:
-        print(f"[upload] type_text blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[upload] type_text error: {exc}", file=sys.stderr, flush=True)
 
 
 def _press_enter(page, cx: float | None = None, cy: float | None = None) -> bool:
@@ -159,21 +159,21 @@ def _press_enter(page, cx: float | None = None, cy: float | None = None) -> bool
         page.keyboard.press("Enter")
         return True
     except Exception as exc:
-        print(f"[upload] Enter blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[upload] Enter error: {exc}", file=sys.stderr, flush=True)
         return False
 
 
 def _verify(conv_id: str, baseline_seq: int, file_name: str,
             timeout_s: float = 45.0) -> dict | None:
-    """Poll chatsvc REST aż pojawi sie wiadomosc z sequence_id > baseline + attachmentem.
+    """Poll chatsvc REST until a message with sequence_id > baseline and an attachment appears.
 
-    Nie matchujemy po file_name bo SharePoint moze zrobic conflict rename
-    (`name.md` → `name (1).md`). Zaufaj sekwencji + obecnosci jakiegokolwiek
-    attachmentu — od momentu baseline tylko nasz upload moze dodac plik.
+    We do not match on file_name because SharePoint may rename on conflict
+    (`name.md` → `name (1).md`). Trust the sequence + the presence of any
+    attachment — after the baseline only our upload can add a file.
 
-    sender_mri check: probujemy USER_MRI, ale jesli sender_mri jest pusty
-    (zdarza sie gdy from field ma inny format), akceptujemy kazda wiadomosc
-    z attachmentem powyzej baseline — to jedyny wpis po naszym uploading.
+    sender_mri check: we try USER_MRI, but if sender_mri is empty
+    (happens when the from field has another format), we accept any message
+    with an attachment above the baseline — it is the only entry after our upload.
     """
     deadline = time.time() + timeout_s
     poll = 0
@@ -201,7 +201,7 @@ def _verify(conv_id: str, baseline_seq: int, file_name: str,
             has_att = sum(1 for m in msgs if m.get("attachments"))
             print(f"[upload] verify poll {poll}: {len(msgs)} msg, "
                   f"seq={min(seqs)}-{max(seqs)} baseline={baseline_seq} "
-                  f"z_att={has_att}",
+                  f"with_att={has_att}",
                   file=sys.stderr, flush=True)
 
         for m in reversed(msgs):
@@ -215,7 +215,7 @@ def _verify(conv_id: str, baseline_seq: int, file_name: str,
             # Accept if sender_mri matches USER_MRI OR if sender_mri is empty
             # (API sometimes omits /contacts/ path for CDP-sent messages).
             if mri and mri != api.USER_MRI:
-                print(f"[upload] verify: pomin wiadomosc od {mri!r} (nie USER_MRI)",
+                print(f"[upload] verify: skipping message from {mri!r} (not USER_MRI)",
                       file=sys.stderr, flush=True)
                 continue
             return {
@@ -246,7 +246,7 @@ def _find_already_posted(conv_id: str, floor_seq: int, file_name: str) -> dict |
     try:
         msgs = api.get_messages(conv_id, n=30)
     except Exception as exc:
-        print(f"[upload] dedup-check blad: {exc}", file=sys.stderr, flush=True)
+        print(f"[upload] dedup-check error: {exc}", file=sys.stderr, flush=True)
         return None
     if not msgs:
         return None
@@ -273,39 +273,39 @@ def upload_and_send(
     conv_id: str | None = None,
     timeout_s: float = 60.0,
 ) -> str | None:
-    """Wgraj plik do Teams chatu i wyslij wiadomosc (opcjonalnie z dopiskiem).
+    """Upload a file to a Teams chat and send the message (optionally with a note).
 
     Args:
-        chat_name: substring nazwy chatu do switch_to_chat_by_name (np. "Notatki",
-                   "Ewa Nowak"). Powinno wystarczyc kilka znakow unikalnych.
-        file_path: lokalny plik do uploadu (max 512 KB).
-        text: opcjonalny tekst dopisany w wiadomosci.
-        conv_id: jezeli znamy id (np. "48:notes") to omijamy REST find. Uzywany
-                 do REST verify tak czy tak — jesli None, prob lookup via
+        chat_name: substring of the chat name for switch_to_chat_by_name (e.g. "Notes",
+                   "Ewa Nowak"). A few unique characters should be enough.
+        file_path: local file to upload (max 512 KB).
+        text: optional text added to the message.
+        conv_id: when the id is known (e.g. "48:notes") the REST lookup is skipped. Used
+                 for the REST verify either way — when None, it is looked up via
                  api_client.find_conversation_id(chat_name).
-        timeout_s: max czekanie na verify upload.
+        timeout_s: max wait for the upload verify.
 
     Returns:
-        Teams message ID (str) gdy verify wyszedl, None w razie bledu.
+        Teams message ID (str) when the verify succeeded, None on error.
     """
     file_path = Path(file_path)
     if not file_path.exists() or not file_path.is_file():
-        print(f"[upload] BLAD: plik nie istnieje: {file_path}", file=sys.stderr)
+        print(f"[upload] ERROR: file does not exist: {file_path}", file=sys.stderr)
         return None
     size = file_path.stat().st_size
     if size == 0:
-        print(f"[upload] BLAD: plik pusty (0 B), odrzucam: {file_path.name}",
+        print(f"[upload] ERROR: empty file (0 B), rejecting: {file_path.name}",
               file=sys.stderr)
         return None
     if size > _MAX_UPLOAD_BYTES:
-        print(f"[upload] BLAD: plik {size} B > limit {_MAX_UPLOAD_BYTES}",
+        print(f"[upload] ERROR: file {size} B > limit {_MAX_UPLOAD_BYTES}",
               file=sys.stderr)
         return None
 
     if not conv_id:
         conv_id = api.find_conversation_id(chat_name)
         if not conv_id:
-            print(f"[upload] BLAD: nie znalazlem conv_id dla {chat_name!r}",
+            print(f"[upload] ERROR: conv_id not found for {chat_name!r}",
                   file=sys.stderr)
             return None
 
@@ -323,7 +323,7 @@ def upload_and_send(
         # a real upload.
         floor_seq = 0
         _floor_seq_known = False
-        print(f"[upload] BLAD ustalania floor_seq, dedup-check na retry pominiety: {exc}",
+        print(f"[upload] ERROR determining floor_seq, retry dedup-check skipped: {exc}",
               file=sys.stderr, flush=True)
 
     _MAX_ATTEMPTS = 3
@@ -336,11 +336,11 @@ def upload_and_send(
             already = _find_already_posted(conv_id, floor_seq, file_path.name) \
                 if _floor_seq_known else None
             if already:
-                print(f"[upload] plik juz na chacie z wczesniejszej proby "
-                      f"(msg_id={already['msg_id']}) — pomijam retry",
+                print(f"[upload] file already in the chat from an earlier attempt "
+                      f"(msg_id={already['msg_id']}) — skipping retry",
                       file=sys.stderr, flush=True)
                 return str(already["msg_id"])
-            print(f"[upload] retry {attempt}/{_MAX_ATTEMPTS} za 4s ...",
+            print(f"[upload] retry {attempt}/{_MAX_ATTEMPTS} in 4s ...",
                   file=sys.stderr, flush=True)
             time.sleep(4)
         result = _upload_attempt(p_file=file_path, p_chat=chat_name,
@@ -368,7 +368,7 @@ def _upload_attempt(
     if not conv_id:
         conv_id = api.find_conversation_id(chat_name)
         if not conv_id:
-            print(f"[upload] BLAD: nie znalazlem conv_id dla {chat_name!r}",
+            print(f"[upload] ERROR: conv_id not found for {chat_name!r}",
                   file=sys.stderr)
             return None
 
@@ -401,19 +401,19 @@ def _upload_attempt(
                     'div[role="treeitem"]', state="visible", timeout=60000,
                 )
                 page.wait_for_timeout(500)
-                print("[upload] Teams faza 1 OK (treeitem visible)", file=sys.stderr, flush=True)
+                print("[upload] Teams phase 1 OK (treeitem visible)", file=sys.stderr, flush=True)
             except Exception:
                 page.wait_for_timeout(10000)
-                print("[upload] Teams faza 1 timeout — fallback 10s", file=sys.stderr, flush=True)
+                print("[upload] Teams phase 1 timeout — fallback 10s", file=sys.stderr, flush=True)
 
             # Switch to target chat (rail is loaded → conv_id match is fast, 10s max)
             switched = scraper.switch_to_chat_by_conv_id(page, conv_id, timeout_s=10)
             if not switched:
-                print(f"[upload] conv_id rail miss, fallback do switch_by_name {chat_name!r}",
+                print(f"[upload] conv_id rail miss, falling back to switch_by_name {chat_name!r}",
                       file=sys.stderr)
                 switched = scraper.switch_to_chat_by_name(page, chat_name, timeout_s=20)
             if not switched:
-                print(f"[upload] BLAD: nie wszedlem na chat {chat_name!r} / {conv_id!r}",
+                print(f"[upload] ERROR: could not open the chat {chat_name!r} / {conv_id!r}",
                       file=sys.stderr)
                 return None
 
@@ -429,16 +429,16 @@ def _upload_attempt(
                 try:
                     page.wait_for_selector(_sel, state="visible", timeout=5000)
                     page.wait_for_timeout(300)
-                    print(f"[upload] Teams faza 2 OK ({_sel})", file=sys.stderr, flush=True)
+                    print(f"[upload] Teams phase 2 OK ({_sel})", file=sys.stderr, flush=True)
                     _phase2_ok = True
                     break
                 except Exception:
                     continue
             if not _phase2_ok:
                 page.wait_for_timeout(10000)
-                print("[upload] Teams faza 2 fallback 10s", file=sys.stderr, flush=True)
+                print("[upload] Teams phase 2 fallback 10s", file=sys.stderr, flush=True)
 
-            # Baseline ZANIM dropniemy — REST verify potem szuka swiezszego seq.
+            # Baseline BEFORE the drop — the REST verify then looks for a newer seq.
             try:
                 _msgs = api.get_messages(conv_id, n=20)
                 baseline_seq = max((m.get("sequence_id") or 0) for m in _msgs) \
@@ -446,19 +446,19 @@ def _upload_attempt(
             except Exception:
                 baseline_seq = 0
 
-            # wait_for_selector(state="visible") ZAWSZE timeoutuje bo ckeditor jest
-            # mounted jako `ck-blurred` (hidden) az do focus — ale w trakcie tego
-            # timeoutu Teams konczy mounting layoutu, wiec po jego wygasnieciu
-            # polling rect (z `getBoundingClientRect`, ktore widzi hidden) zwraca
-            # poprawny non-zero rect w 1-2 iter. To nielogiczne ale dziala
-            # niezawodnie.
+            # wait_for_selector(state="visible") ALWAYS times out because ckeditor is
+            # mounted as `ck-blurred` (hidden) until focus — but during that
+            # timeout Teams finishes mounting the layout, so once it expires
+            # polling the rect (via `getBoundingClientRect`, which sees hidden) returns
+            # a correct non-zero rect within 1-2 iterations. Odd, but it works
+            # reliably.
             try:
                 page.wait_for_selector('[data-tid="ckeditor"]', state="attached", timeout=25000)
             except Exception:
                 pass
             rect = _find_composer_rect(page, timeout_s=10.0)
             if not rect:
-                print("[upload] BLAD: composer nie zmountowal sie",
+                print("[upload] ERROR: composer did not mount",
                       file=sys.stderr)
                 return None
             cx = rect["x"] + rect["w"] / 2
@@ -476,16 +476,16 @@ def _upload_attempt(
                   f"w={rect['w']:.0f} h={rect['h']:.0f}", file=sys.stderr, flush=True)
             if not _cdp_drop_file(page, file_path, cx, cy):
                 return None
-            # Daj Teamsowi czas na upload + chip mounting przed Enter.
+            # Give Teams time for the upload + chip mounting before Enter.
             page.wait_for_timeout(4000)
 
-            # Screenshot po dropie.
+            # Screenshot after the drop.
             _dbg = Path(tempfile.gettempdir()) / "bob-upload-after-drop.png"
             try:
                 page.screenshot(path=str(_dbg))
-                print(f"[upload] screenshot po drop: {_dbg}", file=sys.stderr, flush=True)
+                print(f"[upload] screenshot after drop: {_dbg}", file=sys.stderr, flush=True)
             except Exception as _e:
-                print(f"[upload] screenshot blad: {_e}", file=sys.stderr, flush=True)
+                print(f"[upload] screenshot error: {_e}", file=sys.stderr, flush=True)
 
             # Re-query rect after chip mounted — chip adds ~40px height, shifting layout.
             # Using stale cx/cy would click the chip itself instead of the text area.
@@ -506,7 +506,7 @@ def _upload_attempt(
 
             verify = _verify(conv_id, baseline_seq, file_path.name, timeout_s=timeout_s)
             if not verify:
-                print("[upload] BLAD: REST nie potwierdzilo uploadu w timeout",
+                print("[upload] ERROR: REST did not confirm the upload within the timeout",
                       file=sys.stderr)
                 return None
             print(f"[upload] OK msg_id={verify['msg_id']} "
@@ -522,27 +522,28 @@ def _upload_attempt(
 
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Upload pliku do Teams chatu (Playwright + CDP drag).",
+        description="Upload a file to a Teams chat (Playwright + CDP drag).",
     )
-    ap.add_argument("file", type=Path, help="Sciezka do pliku.")
-    ap.add_argument("--chat", default="Notatki",
-                    help="Substring nazwy chatu. Default: Notatki (48:notes).")
+    ap.add_argument("file", type=Path, help="Path to the file.")
+    ap.add_argument("--chat", default="Notes",
+                    help="Substring of the chat name. Default: Notes (48:notes).")
     ap.add_argument("--text", default="",
-                    help="Opcjonalny tekst dopisany do wiadomosci.")
+                    help="Optional text added to the message.")
     ap.add_argument("--conv-id", default=None,
-                    help="Opcjonalny conv_id (omija REST lookup po nazwie).")
+                    help="Optional conv_id (skips the REST lookup by name).")
     args = ap.parse_args(argv)
 
     msg_id = upload_and_send(
         chat_name=args.chat,
         file_path=args.file,
         text=args.text,
-        conv_id=args.conv_id,
+        # the default "Notes" chat is the owner's notes-to-self, which has a fixed id
+        conv_id=args.conv_id or (api.NOTES_CONV_ID if args.chat == "Notes" else None),
     )
     if msg_id:
         print(f"OK msg_id={msg_id}")
         return 0
-    print("BLAD: upload/send nie powiodl sie", file=sys.stderr)
+    print("ERROR: upload/send failed", file=sys.stderr)
     return 1
 
 

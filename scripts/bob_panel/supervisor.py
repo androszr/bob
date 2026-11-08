@@ -9,10 +9,11 @@ the panel (it then comes back as the panel's own process).
 Stop = SIGINT (= Ctrl+C, Bob's own cleanup), then SIGTERM, then SIGKILL.
 
 Teams login from the panel (the terminal only starts the panel): login() opens the SSO
-browser (login.py --done-file), the panel's "Jestem zalogowany" calls login_confirm(), and after a good login Bob
-is started when asked ("Zaloguj i uruchom"). start/restart refuse while session.json needs a login, so a restart
+browser (login.py --done-file), the panel's "I'm signed in" calls login_confirm(), and after a good login Bob
+is started when asked ("Sign in and start Bob"). start/restart refuse while session.json needs a login, so a restart
 never leaves Bob down. Bob is started again with the panel (autostart, e.g. after a reboot) when he was meant to
-run (state "ma_dzialac": set by start, cleared by a manual stop) and the session is still valid.
+run (state "should_run": set by start, cleared by a manual stop; older state files said "ma_dzialac") and the
+session is still valid.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import os
 import shlex
 import signal
 import subprocess
+import sys
 import threading
 import time
 from datetime import UTC, datetime
@@ -40,6 +42,20 @@ LOGIN_DONE = STATE_DIR / "login-done"
 LOGIN_REL = "scripts/teams_agent/login.py"
 _lock = threading.Lock()
 _login: dict = {}                          # the running login: proc, started, then_start, by
+
+
+def adopt_legacy(old: Path, new: Path, files: dict[str, str] | None = None) -> Path:
+    """Older builds kept this folder under a Polish name: move it to the new name once (only when the new one
+    does not exist yet), then rename the legacy files inside it the same way. Returns `new`."""
+    try:
+        if old.is_dir() and not new.exists():
+            os.replace(old, new)
+        for was, now in (files or {}).items():
+            if (new / was).exists() and not (new / now).exists():
+                os.replace(new / was, new / now)
+    except OSError as exc:
+        print(f"[panel] could not adopt {old.name} as {new.name}: {exc}", file=sys.stderr, flush=True)
+    return new
 
 
 def _ps() -> list[tuple[int, str, str]]:
@@ -66,7 +82,7 @@ _state_lock = threading.Lock()
 
 
 def _write_state(**fields) -> None:
-    """Read-modify-write under a lock, atomic on disk: a reader never sees {} (that would drop ma_dzialac)."""
+    """Read-modify-write under a lock, atomic on disk: a reader never sees {} (that would drop should_run)."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     import json  # noqa: PLC0415
     with _state_lock:
@@ -86,14 +102,19 @@ def _write_state(**fields) -> None:
 def read_state() -> dict:
     try:
         import json  # noqa: PLC0415
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    if not isinstance(state, dict):
+        return {}
+    if "should_run" not in state and "ma_dzialac" in state:      # written by an older build
+        state["should_run"] = state["ma_dzialac"]
+    return state
 
 
 def _alive(pid: int) -> bool:
     # A Bob started by the panel is its child: once it exits it stays a zombie until reaped, and a zombie
-    # still answers kill(pid, 0) - the restart of 23.10.2026 01:02 waited for it and never started Bob again.
+    # still answers kill(pid, 0) - a restart once waited for it and never started Bob again.
     try:
         done, _status = os.waitpid(pid, os.WNOHANG)
         if done == pid:
@@ -113,7 +134,7 @@ def stop(by: str = "panel", keep_wanted: bool = False) -> dict:
     with _lock:
         bob = find_bob()
         if not bob:
-            return {"ok": True, "message": "Bob nie działał."}
+            return {"ok": True, "message": "Bob was not running."}
         pid = bob["pid"]
         for sig, wait in ((signal.SIGINT, STOP_GRACE_S), (signal.SIGTERM, 10), (signal.SIGKILL, 5)):
             try:
@@ -127,8 +148,8 @@ def stop(by: str = "panel", keep_wanted: bool = False) -> dict:
                 break
         ok = not _alive(pid)
         _write_state(last_stop=datetime.now(UTC).isoformat(), last_stop_by=by,
-                     **({} if keep_wanted else {"ma_dzialac": False}))
-        return {"ok": ok, "message": f"Zatrzymany (pid {pid})." if ok else f"Nie udało się zatrzymać pid {pid}."}
+                     **({} if keep_wanted else {"should_run": False}))
+        return {"ok": ok, "message": f"Stopped (pid {pid})." if ok else f"Could not stop pid {pid}."}
 
 
 def session_ok() -> bool:
@@ -139,14 +160,14 @@ def session_ok() -> bool:
 
 
 _NEEDS_LOGIN = {"ok": False, "needs_login": True,
-                "message": "Sesja Teams wygasła - najpierw „Zaloguj do Teams” (albo „Zaloguj i uruchom”)."}
+                "message": "The Teams session has expired - first \"Sign in to Teams\" (or \"Sign in and start Bob\")."}
 
 
 def start(by: str = "panel") -> dict:
     with _lock:
         bob = find_bob()
         if bob:
-            return {"ok": True, "message": f"Bob już działa (pid {bob['pid']}).", "pid": bob["pid"]}
+            return {"ok": True, "message": f"Bob is already running (pid {bob['pid']}).", "pid": bob["pid"]}
         if not session_ok():
             return dict(_NEEDS_LOGIN)
         STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -158,22 +179,22 @@ def start(by: str = "panel") -> dict:
         proc = subprocess.Popen([SHELL, "-il", "-c", cmd], stdin=subprocess.DEVNULL, stdout=log, stderr=log,  # noqa: S603
                                 start_new_session=True, cwd=str(REPO))
         log.close()
-        _write_state(last_start=datetime.now(UTC).isoformat(), last_start_by=by, pid=proc.pid, ma_dzialac=True)
+        _write_state(last_start=datetime.now(UTC).isoformat(), last_start_by=by, pid=proc.pid, should_run=True)
         for _ in range(20):                     # the login shell execs into python within a second or two
             time.sleep(0.5)
             if proc.poll() is not None:
-                return {"ok": False, "message": f"Bob zakończył się od razu (kod {proc.returncode}) - zobacz log."}
+                return {"ok": False, "message": f"Bob exited at once (code {proc.returncode}) - see the log."}
             if find_bob():
                 break
         found = find_bob()
         return {"ok": bool(found), "pid": (found or {}).get("pid"),
-                "message": f"Uruchomiony (pid {(found or {}).get('pid')})." if found else "Uruchamia się..."}
+                "message": f"Started (pid {(found or {}).get('pid')})." if found else "Starting..."}
 
 
 def restart(by: str = "panel") -> dict:
     if not session_ok():
-        return dict(_NEEDS_LOGIN, message="Restart wstrzymany: sesja Teams wygasła, a po zatrzymaniu Bob by nie "
-                                          "wstał. Najpierw „Zaloguj do Teams”.")
+        return dict(_NEEDS_LOGIN, message="Restart held back: the Teams session has expired, so after the stop Bob "
+                                          "would not come back. First \"Sign in to Teams\".")
     s = stop(by, keep_wanted=True)
     if not s["ok"]:
         return s
@@ -183,13 +204,13 @@ def restart(by: str = "panel") -> dict:
 
 
 def login(by: str = "panel", then_start: bool = False) -> dict:
-    """Open the Teams SSO browser (login.py --done-file) on this Mac; the owner logs in and clicks "Jestem zalogowany".
+    """Open the Teams SSO browser (login.py --done-file) on this Mac; the owner logs in and clicks "I'm signed in".
     then_start: start Bob once the session is saved."""
     with _lock:
         cur = _login.get("proc")
         if cur is not None and cur.poll() is None:
             _login["then_start"] = _login.get("then_start") or then_start
-            return {"ok": True, "message": "Logowanie już trwa - dokończ je w otwartej przeglądarce."}
+            return {"ok": True, "message": "A login is already running - finish it in the open browser."}
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         os.chmod(STATE_DIR, 0o700)
         LOGIN_DONE.unlink(missing_ok=True)
@@ -202,8 +223,8 @@ def login(by: str = "panel", then_start: bool = False) -> dict:
         _login.update(proc=proc, started=datetime.now(UTC).isoformat(), then_start=then_start, by=by)
         _write_state(last_login_start=_login["started"], last_login_by=by)
     threading.Thread(target=_after_login, args=(proc,), daemon=True).start()
-    return {"ok": True, "message": "Otwieram przeglądarkę na tym Macu: zaloguj się (SSO + MFA, „Pozostań "
-                                   "zalogowany” = Tak), a gdy zobaczysz Teams, kliknij „Jestem zalogowany”."}
+    return {"ok": True, "message": "Opening a browser on this Mac: log in (SSO + MFA, \"Stay signed in\" = Yes), "
+                                   "and when you see Teams, click \"I'm signed in\"."}
 
 
 def _after_login(proc) -> None:
@@ -216,15 +237,15 @@ def _after_login(proc) -> None:
         then_start, by = _login.get("then_start"), _login.get("by", "panel")
     _write_state(last_login_end=_login["finished"], last_login_code=rc)
     if rc == 0 and then_start:
-        _login["start_result"] = start(f"{by} (po logowaniu)")
+        _login["start_result"] = start(f"{by} (after login)")
 
 
 def login_confirm() -> dict:
     proc = _login.get("proc")
     if proc is None or proc.poll() is not None:
-        return {"ok": False, "message": "Logowanie nie trwa - kliknij najpierw „Zaloguj do Teams”."}
+        return {"ok": False, "message": "No login is running - click \"Sign in to Teams\" first."}
     LOGIN_DONE.touch()
-    return {"ok": True, "message": "Sprawdzam stronę i zapisuję sesję (plus SharePoint) - kilka sekund."}
+    return {"ok": True, "message": "Checking the page and saving the session (plus SharePoint) - a few seconds."}
 
 
 def login_status() -> dict:
@@ -242,7 +263,7 @@ def login_status() -> dict:
 def autostart() -> dict | None:
     """At panel start (login, reboot): bring Bob back when he was meant to run and needs no login."""
     st = read_state()
-    if find_bob() or not st.get("ma_dzialac") or not session_ok():
+    if find_bob() or not st.get("should_run") or not session_ok():
         return None
     return start("panel (autostart)")
 

@@ -100,7 +100,7 @@ def tasks(limit: int = 60) -> list[dict]:
             continue
         out.append({
             "ts": e.get("ts"), "chat": e.get("chat_name"), "sender": e.get("sender"),
-            "event": e.get("event") or e.get("action") or ("odpowiedź" if e.get("reply") else None),
+            "event": e.get("event") or e.get("action") or ("reply" if e.get("reply") else None),
             "text": (e.get("incoming_text") or "")[:240],
             "reply": (e.get("reply") or "")[:240],
             "status": e.get("status"),
@@ -167,9 +167,10 @@ def _arith(expr: str) -> float:
 
 
 def chats() -> list[dict]:
-    cfg = _json(CHAT_CONFIG, {}).get("chats") or {}
-    ws = _json(WATCH_STATE, {})
     from bob_panel import rolecfg  # noqa: PLC0415
+    raw = _json(CHAT_CONFIG, {})
+    cfg = rolecfg.roles.normalize_chats(raw.get("chats") or {} if isinstance(raw, dict) else {})
+    ws = _json(WATCH_STATE, {})
     _known, default = rolecfg.groups()
     labels = rolecfg.agent_labels()
     out = []
@@ -179,10 +180,10 @@ def chats() -> list[dict]:
         st = ws.get(name) or {}
         out.append({
             "name": name, "caller": c.get("caller"), "persona": c.get("persona"),
-            "label": labels.get(c.get("persona") or "", "Bob"), "roles": c.get("role"),
+            "label": labels.get(c.get("persona") or "", "Bob"), "roles": c.get("roles"),
             "groups": default if eff is None else eff, "all_groups": eff is None or set(default) <= set(eff),
             "flags": [k for k in ("control_chat", "ingest_only") if c.get(k)]
-                     + (["kanał zewnętrzny"] if c.get("kanal_fr") else [])
+                     + (["external chat"] if c.get("external_chat") else [])
                      + ([f"internet: {c['internet']}"] if c.get("internet") else []),
             "last_activity": _iso_from_epoch(st.get("last_activity_ts")) if isinstance(st, dict) else None,
             "last_reply": _iso_from_epoch(st.get("last_bob_reply_time")) if isinstance(st, dict) else None,
@@ -214,12 +215,14 @@ def _personas() -> list[str]:
 
 # -- live dashboard (Dashboard) ------------------------------------------------------------------------
 PERF_JSONL = TEAMS / "perf-metrics.jsonl"
-_KIND = {"watch_send": "odpowiedz", "catchup_send": "odpowiedz", "watch_skip_silent_sentinel": "milczenie",
-         "watch_skip_answered": "juz_odpowiedziane"}
+_KIND = {"watch_send": "reply", "catchup_send": "reply", "watch_skip_silent_sentinel": "silent",
+         "watch_skip_answered": "already_answered"}
+_KINDS = ("reply", "silent", "already_answered")
+_KIND_TOTAL = {"reply": "replies", "silent": "silent", "already_answered": "already_answered"}
 
 
 def _hour_slot(ts: str):
-    """The UTC hour of a timestamp. Warsaw's offset is whole hours, so this is also the local hour, and UTC keys
+    """The UTC hour of a timestamp. The local offset is whole hours, so this is also the local hour, and UTC keys
     stay distinct at the DST change - where the two local 02:00 hours compare equal (one slot, 25 h window)."""
     try:
         d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
@@ -255,11 +258,10 @@ def dashboard(hours: int = 24) -> dict:
         if slot not in index:
             continue
         c = chats.setdefault(chat, {"name": chat, "cells": [[0, 0, 0] for _ in slots], "total": 0,
-                                    "odpowiedzi": 0, "milczenie": 0, "juz_odpowiedziane": 0})
-        k = ("odpowiedz", "milczenie", "juz_odpowiedziane").index(kind)
-        c["cells"][index[slot]][k] += 1
+                                    "replies": 0, "silent": 0, "already_answered": 0})
+        c["cells"][index[slot]][_KINDS.index(kind)] += 1
         c["total"] += 1
-        c[{"odpowiedz": "odpowiedzi"}.get(kind, kind)] += 1
+        c[_KIND_TOTAL[kind]] += 1
         feed.append({"ts": e.get("ts"), "chat": chat, "kind": kind, "sender": e.get("sender"),
                      "text": (e.get("incoming_text") or "")[:160], "reply": (e.get("reply") or "")[:160]})
     calls = [0] * len(slots)
@@ -283,20 +285,20 @@ def dashboard(hours: int = 24) -> dict:
         cost[i] += c_usd
         if e.get("duration_ms"):
             dur[i].append(float(e["duration_ms"]) / 1000)
-        chat = (e.get("ctx") or {}).get("chat") or "(bez czatu)"
+        chat = (e.get("ctx") or {}).get("chat") or "(no chat)"
         per_chat_cost[chat] = per_chat_cost.get(chat, Decimal(0)) + c_usd
     all_dur = sorted(d for ds in dur for d in ds)
     rows = sorted(chats.values(), key=lambda c: -c["total"])
     for r in rows:
-        r["koszt"] = float(round(per_chat_cost.get(r["name"], Decimal(0)), 2))
+        r["cost"] = float(round(per_chat_cost.get(r["name"], Decimal(0)), 2))
     return {
-        "hours": [s.astimezone(ZoneInfo("Europe/Warsaw")).isoformat() for s in slots],
+        "hours": [s.astimezone(ZoneInfo(org_config.TIMEZONE)).isoformat() for s in slots],
         "chats": rows,
         "load": {"calls": calls, "cost": [float(round(x, 3)) for x in cost],
                  "dur_avg": [round(sum(d) / len(d), 1) if d else None for d in dur]},
-        "kpi": {"obsluzone": sum(r["total"] for r in rows), "odpowiedzi": sum(r["odpowiedzi"] for r in rows),
-                "milczenie": sum(r["milczenie"] for r in rows), "wywolania": sum(calls),
-                "koszt": float(round(sum(cost, Decimal(0)), 2)), "kanaly": len(rows),
-                "czas_mediana": round(all_dur[len(all_dur) // 2], 1) if all_dur else None},
+        "kpi": {"handled": sum(r["total"] for r in rows), "replies": sum(r["replies"] for r in rows),
+                "silent": sum(r["silent"] for r in rows), "calls": sum(calls),
+                "cost": float(round(sum(cost, Decimal(0)), 2)), "chats": len(rows),
+                "median_s": round(all_dur[len(all_dur) // 2], 1) if all_dur else None},
         "feed": list(reversed(feed[-12:])),
     }

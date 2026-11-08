@@ -293,9 +293,9 @@ def test_generated_path_returns_correct_name(runner, tmp_path):
 
 SAMPLE_BRIEF = (
     "# Brief\n\n"
-    "### Wiadomość 1 — Powitanie\n"
-    "Opis sekcji 1.\n\n"
-    "### Wiadomość 2 — GIF\n"
+    "### Message 1 — Welcome\n"
+    "Section 1 description.\n\n"
+    "### Message 2 — GIF\n"
     "GIF: sprint start\n"
 )
 
@@ -325,7 +325,7 @@ def test_phase_generate_writes_file(runner, tmp_path, monkeypatch):
         call_count += 1
         m = MagicMock()
         m.returncode = 0
-        m.stdout = json.dumps({"result": f"Wiadomosc {call_count}", "is_error": False})
+        m.stdout = json.dumps({"result": f"Message {call_count}", "is_error": False})
         m.stderr = ""
         return m
 
@@ -390,7 +390,7 @@ def test_phase_dry_run_reads_file_not_claude(runner, tmp_path, monkeypatch):
     assert result is True
     # Claude must NOT have been called (no generation).
     assert claude_called == []
-    # Messages sent to Notatki (control channel).
+    # Messages sent to the control chat.
     runner._stub_api.send_html_message.assert_called_once()
     runner._stub_api.send_gif.assert_called_once_with("sprint end", notatki)
 

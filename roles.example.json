@@ -1,125 +1,125 @@
 {
-  "_comment": "Roles for Bob. Copy to roles.json (gitignored, or point BOB_ROLES_FILE at another path) and edit. A chat in chat-config.json gets \"role\": [...] instead of a hand-written \"mcp\" list; its access is the union of the roles' \"dostep\" plus the chat's \"dodatkowo\" minus its \"bez\". A chat with \"kanal_fr\": true never gets a group flagged \"tylko_zespol\" (team-only). The role \"asystent\" is required: it means every default group (the old \"mcp\": null). \"wiedza\" entries: \"wpiecie\" is \"prompt\" (appended to the system prompt of chats with the role), \"narzedzie\" (read by a tool on request) or \"kod\" (wired in the code, described here only). \"obraz\" is a file name from scripts/bob_panel/static/bob/ (without .svg) - the role's picture in the panel. The file is read on every reply, so a change applies immediately.",
-  "grupy": {
+  "_comment": "Roles for Bob. Copy to roles.json (gitignored, or point BOB_ROLES_FILE at another path) and edit. A chat in chat-config.json gets \"roles\": [...] instead of a hand-written \"mcp\" list; its access is the union of the roles' \"access\" plus the chat's \"add_groups\" minus its \"remove_groups\". A chat with \"external_chat\": true never gets a group flagged \"team_only\". The role \"assistant\" is required: it means every default group (the old \"mcp\": null). \"knowledge\" entries: \"wiring\" is \"prompt\" (appended to the system prompt of chats with the role), \"tool\" (read by a tool on request) or \"code\" (wired in the code, described here only). \"image\" is a file name from scripts/bob_panel/static/bob/ (without .svg) - the role's picture in the panel. The file is read on every reply, so a change applies immediately. Files written with the older Polish keys still load.",
+  "groups": {
     "jira": {
-      "opis": "Jira - odczyt zgloszen i wyszukiwanie"
+      "description": "Jira - read issues and search"
     },
     "jira_write": {
-      "opis": "Jira - zakladanie i zmiany zgloszen (token wlasciciela)"
+      "description": "Jira - create and change issues (the owner's token)"
     },
     "jira_hypercare": {
-      "opis": "Jira - tylko zakladanie, zalaczniki, komentarze i powiazania (kanaly z uzytkownikami zewnetrznymi)"
+      "description": "Jira - create, attach, comment and link only (chats with external users)"
     },
     "todos": {
-      "opis": "Lista zadan wlasciciela"
+      "description": "The owner's to-do list"
     },
     "datetime": {
-      "opis": "Data i kalendarz"
+      "description": "Date and calendar"
     },
-    "urlopy": {
-      "opis": "Urlopy zespolu (SharePoint)"
+    "leave": {
+      "description": "Team leave (SharePoint)"
     },
     "md_to_mp3": {
-      "opis": "Zamiana notatek na audio"
+      "description": "Turn notes into audio"
     },
     "snowflake": {
-      "opis": "Raporty ze Snowflake (predefiniowane zapytania, interaktywne strony)",
-      "tylko_zespol": true
+      "description": "Snowflake reports (predefined queries, interactive pages)",
+      "team_only": true
     }
   },
-  "role": {
-    "asystent": {
-      "nazwa": "Asystent",
+  "roles": {
+    "assistant": {
+      "name": "Assistant",
       "emoji": "🧑‍💻",
-      "opis": "Bob jako ogolny asystent: Jira, zadania, urlopy, data, notatki audio.",
-      "dostep": [
+      "description": "Bob as a general assistant: Jira, to-dos, leave, dates, audio notes.",
+      "access": [
         "jira",
         "jira_write",
         "jira_hypercare",
         "todos",
         "datetime",
-        "urlopy",
+        "leave",
         "md_to_mp3"
       ],
-      "umiejetnosci": [
+      "skills": [
         {
-          "nazwa": "Odpowiedzi na czatach",
-          "opis": "Rozmowa z narzedziami grup z dostepu",
-          "gdzie": "scripts/teams_agent/prompts/bob.md"
+          "name": "Replies in chats",
+          "description": "Conversation with the tools of the groups in its access",
+          "where": "scripts/teams_agent/prompts/bob.md"
         },
         {
-          "nazwa": "Notatki prywatne",
-          "opis": "„Bob, zapamietaj: ...” na kazdym czacie",
-          "gdzie": "scripts/teams_agent/cli.py"
+          "name": "Private notes",
+          "description": "\"Bob, remember: ...\" in any chat",
+          "where": "scripts/teams_agent/cli.py"
         }
       ],
-      "wiedza": [
+      "knowledge": [
         {
-          "id": "mapa-wiedzy",
-          "nazwa": "Mapa wiedzy",
-          "plik": "knowledge/general/knowledge-map.context.md",
-          "wpiecie": "prompt",
-          "opis": "Co gdzie lezy w folderze knowledge/"
+          "id": "knowledge-map",
+          "name": "Knowledge map",
+          "file": "knowledge/general/knowledge-map.context.md",
+          "wiring": "prompt",
+          "description": "What lives where in the knowledge/ folder"
         }
       ],
-      "obraz": "bob-working-thinking"
+      "image": "bob-working-thinking"
     },
     "project_manager": {
-      "nazwa": "Project manager",
+      "name": "Project manager",
       "emoji": "📋",
-      "opis": "Prowadzenie zgloszen projektu: czytanie i zapisy w Jirze, daty.",
-      "dostep": [
+      "description": "Running the project's issues: reading and writing in Jira, dates.",
+      "access": [
         "jira",
         "jira_write",
         "datetime"
       ],
-      "umiejetnosci": [
+      "skills": [
         {
-          "nazwa": "Zgloszenia w Jirze",
-          "opis": "Zakladanie, komentowanie i zmiana statusu zgloszen",
-          "gdzie": "scripts/jira"
+          "name": "Jira issues",
+          "description": "Create, comment on and move issues",
+          "where": "scripts/jira"
         }
       ],
-      "wiedza": [],
-      "obraz": "bob-working-debugger"
+      "knowledge": [],
+      "image": "bob-working-debugger"
     },
-    "notatki": {
-      "nazwa": "Notatki",
+    "notes": {
+      "name": "Notes",
       "emoji": "📝",
-      "opis": "Zadania i notatki: lista zadan, audio z notatek, daty.",
-      "dostep": [
+      "description": "To-dos and notes: the to-do list, audio from notes, dates.",
+      "access": [
         "todos",
         "md_to_mp3",
         "datetime"
       ],
-      "umiejetnosci": [
+      "skills": [
         {
-          "nazwa": "Lista zadan",
-          "opis": "Dodawanie i przeglad zadan wlasciciela",
-          "gdzie": "scripts/todos"
+          "name": "To-do list",
+          "description": "Add and review the owner's to-dos",
+          "where": "scripts/todos"
         }
       ],
-      "wiedza": [],
-      "obraz": "bob-eureka"
+      "knowledge": [],
+      "image": "bob-eureka"
     },
     "data_analyst": {
-      "nazwa": "Analityk danych",
+      "name": "Data analyst",
       "emoji": "📊",
-      "opis": "Raporty ze Snowflake i odpowiedzi na zgloszenia o prognozach. Nigdy na czacie z osobami z zewnatrz.",
-      "dostep": [
+      "description": "Snowflake reports and answers to forecast issues. Never in a chat with external people.",
+      "access": [
         "snowflake",
         "jira",
         "datetime"
       ],
-      "umiejetnosci": [
+      "skills": [
         {
-          "nazwa": "Raporty ze Snowflake",
-          "opis": "Cztery interaktywne raporty z predefiniowanych zapytan",
-          "gdzie": "scripts/snowflake_bob"
+          "name": "Snowflake reports",
+          "description": "Four interactive reports from predefined queries",
+          "where": "scripts/snowflake_bob"
         }
       ],
-      "wiedza": [],
-      "obraz": "bob-working-thinking"
+      "knowledge": [],
+      "image": "bob-working-thinking"
     }
   }
 }

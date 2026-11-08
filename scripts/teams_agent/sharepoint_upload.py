@@ -30,6 +30,7 @@ Public API:
 
 from __future__ import annotations
 
+import re
 import sys
 import urllib.parse
 from pathlib import Path
@@ -66,11 +67,13 @@ _REST_NAME_ATTEMPTS = 5
 # SPException code of "file already exists" (the message itself is localised)
 _FILE_EXISTS_CODE = "-2130575257"
 
-_UPLOAD_BUTTON_TEXT = "Utwórz lub przekaż"
-_UPLOAD_MENU_ITEM_TEXT = "Przekazywanie plików"
-_CONFLICT_KEEP_BOTH_TEXT = "Zachowaj oba"
+# SharePoint UI labels for the browser fallback; the page language follows the account,
+# so both the English and the Polish label are matched.
+_UPLOAD_BUTTON_TEXT = re.compile(r"Create or upload|Utwórz lub przekaż", re.IGNORECASE)
+_UPLOAD_MENU_ITEM_TEXT = re.compile(r"Files upload|Upload files|Przekazywanie plików", re.IGNORECASE)
+_CONFLICT_KEEP_BOTH_TEXT = re.compile(r"Keep both|Zachowaj oba", re.IGNORECASE)
 
-# Bezpiecznik: notatki .md <= 512 KB, pliki audio (MP3) do ~50 MB.
+# Safety cap: .md notes are <= 512 KB, audio files (MP3) up to ~50 MB.
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
@@ -116,7 +119,7 @@ def _upload_rest(data: bytes, folder_path: str, dest_name: str, *, session_facto
     for attempt in (1, 2):
         cookies = attachments.ensure_cookies(site_url + "/")
         if "FedAuth" not in cookies:
-            print("[sp-upload] REST: brak ciasteczka FedAuth", file=sys.stderr)
+            print("[sp-upload] REST: no FedAuth cookie", file=sys.stderr)
             return None
         s = make()
         s.cookies.update(cookies)
@@ -143,7 +146,7 @@ def _upload_rest(data: bytes, folder_path: str, dest_name: str, *, session_facto
             r.raise_for_status()
             info = r.json()
             if int(info.get("Length") or -1) != len(data):
-                print(f"[sp-upload] REST: zapisano {info.get('Length')} B zamiast {len(data)} B",
+                print(f"[sp-upload] REST: stored {info.get('Length')} B instead of {len(data)} B",
                       file=sys.stderr)
                 return None
             parsed = urllib.parse.urlparse(site_url)
@@ -151,7 +154,7 @@ def _upload_rest(data: bytes, folder_path: str, dest_name: str, *, session_facto
             print(f"[sp-upload] OK (REST): {info.get('Name')!r} -> {file_url}", file=sys.stderr)
             return file_url
         except Exception as exc:  # noqa: BLE001 -- any REST failure -> the UI fallback
-            print(f"[sp-upload] REST blad: {exc}", file=sys.stderr)
+            print(f"[sp-upload] REST error: {exc}", file=sys.stderr)
             return None
         finally:  # cli watch lives for days: no pooled connection left behind per upload
             s.close()
@@ -187,15 +190,15 @@ def upload_file(
         return None
     file_path = Path(file_path)
     if not file_path.exists() or not file_path.is_file():
-        print(f"[sp-upload] BLAD: plik nie istnieje: {file_path}", file=sys.stderr)
+        print(f"[sp-upload] ERROR: file does not exist: {file_path}", file=sys.stderr)
         return None
     size = file_path.stat().st_size
     if size == 0:
-        print(f"[sp-upload] BLAD: plik pusty (0 B), odrzucam: {file_path.name}",
+        print(f"[sp-upload] ERROR: file is empty (0 B), rejected: {file_path.name}",
               file=sys.stderr)
         return None
     if size > _MAX_UPLOAD_BYTES:
-        print(f"[sp-upload] BLAD: plik {size} B > limit {_MAX_UPLOAD_BYTES}",
+        print(f"[sp-upload] ERROR: file is {size} B > limit {_MAX_UPLOAD_BYTES}",
               file=sys.stderr)
         return None
 
@@ -205,7 +208,7 @@ def upload_file(
         url = _upload_rest(file_path.read_bytes(), DEFAULT_FOLDER_PATH, dest_name)
         if url:
             return url
-        print("[sp-upload] REST nie wyszedl - probuje przez przegladarke", file=sys.stderr)
+        print("[sp-upload] REST failed - trying the browser", file=sys.stderr)
     return _upload_ui(file_path, folder_url, dest_name, timeout_s)
 
 
@@ -228,20 +231,20 @@ def _upload_ui(file_path: Path, folder_url: str, dest_name: str, timeout_s: floa
 
             current_url = page.url
             if "login.microsoftonline.com" in current_url or "login.live.com" in current_url:
-                print("[sp-upload] BLAD: sesja wygasla — przekierowanie do logowania. "
-                      "Uruchom login.py.", file=sys.stderr)
+                print("[sp-upload] ERROR: session expired — redirected to login. "
+                      "Run login.py.", file=sys.stderr)
                 return None
 
             folder_path = _folder_path_from_page_url(current_url)
             if not folder_path:
-                print(f"[sp-upload] BLAD: nie mogę wyciągnąć folder path z URL {current_url!r}",
+                print(f"[sp-upload] ERROR: cannot extract the folder path from URL {current_url!r}",
                       file=sys.stderr)
                 return None
 
             try:
                 page.get_by_text(_UPLOAD_BUTTON_TEXT, exact=False).first.click(timeout=10000)
             except Exception as exc:
-                print(f"[sp-upload] BLAD: nie znalazlem przycisku {_UPLOAD_BUTTON_TEXT!r}: {exc}",
+                print(f"[sp-upload] ERROR: upload button not found ({_UPLOAD_BUTTON_TEXT.pattern!r}): {exc}",
                       file=sys.stderr)
                 return None
             page.wait_for_timeout(800)
@@ -260,15 +263,15 @@ def _upload_ui(file_path: Path, folder_url: str, dest_name: str, timeout_s: floa
                     page.get_by_text(_UPLOAD_MENU_ITEM_TEXT, exact=False).first.click()
                 fc_info.value.set_files(str(_staged.resolve()))
             except Exception as exc:
-                print(f"[sp-upload] BLAD: file chooser: {exc}", file=sys.stderr)
+                print(f"[sp-upload] ERROR: file chooser: {exc}", file=sys.stderr)
                 return None
 
             deadline_conflict = 5000
             try:
                 keep_both = page.get_by_text(_CONFLICT_KEEP_BOTH_TEXT, exact=False).first
                 keep_both.click(timeout=deadline_conflict)
-                print(f"[sp-upload] konflikt nazwy dla {dest_name!r} — kliknieto "
-                      f"{_CONFLICT_KEEP_BOTH_TEXT!r}", file=sys.stderr)
+                print(f"[sp-upload] name conflict for {dest_name!r} — clicked "
+                      "keep both", file=sys.stderr)
             except Exception:
                 pass  # no conflict dialog — expected path when dest_name is unique
 
@@ -285,7 +288,7 @@ def _upload_ui(file_path: Path, folder_url: str, dest_name: str, timeout_s: floa
                     break
 
             if not found:
-                print(f"[sp-upload] BLAD: nie potwierdzono uploadu {dest_name!r} w {deadline}s",
+                print(f"[sp-upload] ERROR: upload of {dest_name!r} not confirmed within {deadline}s",
                       file=sys.stderr)
                 return None
 
@@ -303,20 +306,20 @@ def _main(argv: list[str] | None = None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Upload pliku do folderu SharePoint (Playwright + file chooser).",
+        description="Upload a file to a SharePoint folder (Playwright + file chooser).",
     )
-    ap.add_argument("file", type=Path, help="Sciezka do pliku.")
+    ap.add_argument("file", type=Path, help="Path to the file.")
     ap.add_argument("--folder-url", default=DEFAULT_FOLDER_URL,
-                     help="Docelowy folder SharePoint (sharing URL).")
+                     help="Target SharePoint folder (sharing URL).")
     ap.add_argument("--dest-name", default=None,
-                     help="Nazwa pliku w SharePoint (domyslnie: nazwa lokalna).")
+                     help="File name in SharePoint (default: the local name).")
     args = ap.parse_args(argv)
 
     url = upload_file(args.file, folder_url=args.folder_url, dest_name=args.dest_name)
     if url:
         print(f"OK url={url}")
         return 0
-    print("BLAD: upload nie powiodl sie", file=sys.stderr)
+    print("ERROR: upload failed", file=sys.stderr)
     return 1
 
 

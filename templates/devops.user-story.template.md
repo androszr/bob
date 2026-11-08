@@ -1,106 +1,106 @@
-# Template: User Story DevOps
+# Template: DevOps User Story
 
-> **Jak używać:**
-> - User Story DevOps opisuje wartość dostarczaną zespołom deweloperskim lub operacjom — nie użytkownikowi końcowemu aplikacji
-> - Zespół DevOps nie stosuje procesu Discovery — US trafia bezpośrednio do backlogu PRJ4
-> - US w Jira **Delivery (PRJ4)** z `label: PRJ4`, `Sprint: PRJ4 BACKLOG`
-> - Każda US powinna być podpięta pod konkretny epic
-> - Kryteria akceptacji = scenariusze do weryfikacji (nie wymagania — te idą do sekcji Wymagania)
-> - Powiąż US w Jira z powiązanymi ticketami — zależności, blokady, zadania realizacyjne
-> - Dokumentacja w języku polskim; terminy branżowe EN dopuszczalne (pipeline, deploy, cluster, node, Helm, Terraform)
-> - US nie może wejść na refinement z otwartymi kwestiami — wszystkie pytania muszą być zamknięte lub jawnie przeniesione do Out of scope
+> **How to use:**
+> - A DevOps User Story describes value delivered to development or operations teams — not to the app's end user
+> - The DevOps team does not use the Discovery process — the US goes straight to the PRJ4 backlog
+> - A US in Jira **Delivery (PRJ4)** with `label: PRJ4`, `Sprint: PRJ4 BACKLOG`
+> - Every US should be linked to a specific epic
+> - Acceptance criteria = scenarios to verify (not requirements — those go in the Requirements section)
+> - Link the US in Jira to its related tickets — dependencies, blockers, delivery tasks
+> - Write documentation in plain English; standard industry terms are fine (pipeline, deploy, cluster, node, Helm, Terraform)
+> - A US cannot go to refinement with open questions — every question must be closed or explicitly moved to Out of scope
 
 ---
 
-## 📋 Nagłówek
+## 📋 Header
 
-| Pole | Wartość |
+| Field | Value |
 |------|---------|
-| **Epic** | {link do Epica} |
-| **UX Brief** | {link do UX Briefu w Confluence — opcjonalne} |
-| **Figma** | {link do makiety — opcjonalne} |
-| **Powiązane US** | {linki do powiązanych User Stories, jeśli dotyczy} |
-| **Zależności** | {linki do ticketów blokujących lub blokowanych} |
-| **Rodzaj zmiany** | { Praca Projektowa } |
-| **Dotyczy** | _(nazwa produktu lub obszaru)_ |
-| **Typ pracy** | { Prace programistyczne } |
+| **Epic** | {link to the Epic} |
+| **UX Brief** | {link to the UX Brief in Confluence — optional} |
+| **Figma** | {link to the mockup — optional} |
+| **Related US** | {links to related User Stories, if any} |
+| **Dependencies** | {links to blocking or blocked tickets} |
+| **Change type** | { Project work } |
+| **Affects** | _(product or area name)_ |
+| **Work type** | { Development } |
 
 ---
 
 ## User Story
 
-> Jako **{rola: DevOps / Platform Engineer / SRE}** chcę **{działanie / możliwość}**, aby **{cel / wartość — np. szybszy deploy, lepsza obserwowalność, wyższa dostępność}**.
+> As a **{role: DevOps / Platform Engineer / SRE}** I want **{action / capability}**, so that **{goal / value — e.g. faster deploys, better observability, higher availability}**.
 
 ---
 
-## Kontekst i cel
+## Context and goal
 
-_{Krótki opis — po co ta story istnieje, jaki problem rozwiązuje, co się dzieje bez tej funkcji. 2–4 zdania. Może zawierać odniesienie do procesu operacyjnego, SLA lub incydentu.}_
-
----
-
-## Wymagania funkcjonalne
-
-_{Szczegółowa logika działania — co system/infrastruktura ma robić. Konfiguracja, zachowanie pipeline'u, polityki, alerty.}_
-
-### 1. {Nazwa obszaru wymagań}
-
-1.1. {Wymaganie}
-
-1.2. {Wymaganie}
-
-### 2. {Nazwa obszaru wymagań}
-
-2.1. {Wymaganie}
-
-_(Sekcje numerowane — każde wymaganie ma unikalny identyfikator np. 1.1, 2.3 — ułatwia odnoszenie się do nich w review i komentarzach)_
+_{A short description — why this story exists, what problem it solves, what happens without this feature. 2–4 sentences. May refer to an operational process, an SLA or an incident.}_
 
 ---
 
-## Kryteria techniczne
+## Functional requirements
 
-_{Wymagania niefunkcjonalne — wydajność, bezpieczeństwo, dostępność, zgodność.}_
+_{The detailed logic — what the system/infrastructure has to do. Configuration, pipeline behaviour, policies, alerts.}_
 
-- {np. Rozwiązanie musi być kompatybilne z Kubernetes 1.28+}
-- {np. Sekret nie może być przechowywany w repozytorium — wymagane użycie Vault/Sealed Secrets}
-- {np. Czas przełączenia failover < 30s}
-- {np. Zmiana musi być odwracalna bez downtime'u (blue-green / canary)}
+### 1. {Requirement area name}
+
+1.1. {Requirement}
+
+1.2. {Requirement}
+
+### 2. {Requirement area name}
+
+2.1. {Requirement}
+
+_(Numbered sections — every requirement has a unique ID such as 1.1, 2.3 — which makes them easy to refer to in reviews and comments)_
 
 ---
 
-## Kryteria akceptacji
+## Technical criteria
 
-_{Testowalne scenariusze weryfikujące, że story jest ukończona. Każde kryterium powinno dawać jednoznaczną odpowiedź TAK/NIE.}_
+_{Non-functional requirements — performance, security, availability, compliance.}_
 
-> **Wskazówki:**
-> - AC powinny być weryfikowalne bez zaglądania do kodu infrastrukturalnego
-> - Uwzględnij scenariusze: happy path, failure/rollback, edge case
-> - Jeśli AC dotyczy metryki — podaj próg i okres pomiaru
+- {e.g. The solution must be compatible with Kubernetes 1.28+}
+- {e.g. Secrets must not be stored in the repository — Vault/Sealed Secrets is required}
+- {e.g. Failover switch time < 30s}
+- {e.g. The change must be reversible without downtime (blue-green / canary)}
 
-- [ ] **AC1:** {np. Pipeline wykonuje deploy na staging w < 5 min}
-- [ ] **AC2:** {np. W przypadku błędu deploy automatycznie wykonuje rollback do poprzedniej wersji}
-- [ ] **AC3:** {np. Alert w Slack pojawia się w < 1 min od przekroczenia progu CPU > 80%}
+---
+
+## Acceptance criteria
+
+_{Testable scenarios that verify the story is finished. Each criterion should give a clear YES/NO answer.}_
+
+> **Tips:**
+> - ACs should be verifiable without looking at the infrastructure code
+> - Cover these scenarios: happy path, failure/rollback, edge case
+> - If an AC concerns a metric — give the threshold and the measurement period
+
+- [ ] **AC1:** {e.g. The pipeline deploys to staging in < 5 min}
+- [ ] **AC2:** {e.g. If the deploy fails, it automatically rolls back to the previous version}
+- [ ] **AC3:** {e.g. A Slack alert appears within < 1 min of CPU crossing the 80% threshold}
 
 ---
 
 ## Out of scope
 
-_{Co jest jawnie wyłączone z tej story.}_
+_{What is explicitly excluded from this story.}_
 
-- {Element X — obsłużony w {link do ticketu}}
-- {Element Y — poza zakresem tej iteracji, decyzja: {powód}}
+- {Item X — handled in {link to ticket}}
+- {Item Y — outside the scope of this iteration, decision: {reason}}
 
 ---
 
-## Kwestie otwarte
+## Open questions
 
-| # | Pytanie | Właściciel | Status |
+| # | Question | Owner | Status |
 |---|---------|------------|--------|
-| 1 | {pytanie} | {imię / rola} | ⏳ Otwarte |
-| 2 | {pytanie} | {imię / rola} | ✅ Zamknięte: {odpowiedź} |
+| 1 | {question} | {name / role} | ⏳ Open |
+| 2 | {question} | {name / role} | ✅ Closed: {answer} |
 
 ---
 
-## Notatki / Decyzje
+## Notes / Decisions
 
-_{Opcjonalne — ustalenia z refinementu, decyzje architektoniczne, kontekst nie pasujący do innych sekcji.}_
+_{Optional — agreements from refinement, architecture decisions, context that fits no other section.}_

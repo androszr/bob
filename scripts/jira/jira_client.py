@@ -12,6 +12,8 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import jira_fields  # noqa: E402
 import org_config  # noqa: E402 — also loads .env from the project root
 
 _ENV_FILE = org_config.ENV_FILE
@@ -88,7 +90,7 @@ def _get(path: str, params: dict | None = None) -> dict | list | None:
         r.raise_for_status()
         return r.json()
     except Exception as exc:
-        print(f"[jira] GET {path} blad: {exc}", file=sys.stderr)
+        print(f"[jira] GET {path} error: {exc}", file=sys.stderr)
         return None
 
 
@@ -149,7 +151,7 @@ def get_sprint_issues(sprint_id: int, fields: str = DEFAULT_FIELDS) -> list[dict
     """All non-subtask issues in a sprint."""
     jql = (
         f"sprint = {sprint_id} AND project = {PROJECT} "
-        f"AND issuetype NOT IN (Podzadanie, \"Bug sub-task\") "
+        f"AND issuetype NOT IN subTaskIssueTypes() "
         f"ORDER BY status ASC"
     )
     return _search(jql, fields=fields)
@@ -283,17 +285,15 @@ def get_issue_brief(key: str, max_desc: int = 3000) -> dict | None:
     return {
         "key": data.get("key", key),
         "summary": f.get("summary") or "",
-        "opis": (f.get("description") or "").strip()[:max_desc],
-        "zglaszajacy": (f.get("reporter") or {}).get("displayName") or "",
-        "utworzono": f.get("created") or "",
+        "description": (f.get("description") or "").strip()[:max_desc],
+        "reporter": (f.get("reporter") or {}).get("displayName") or "",
+        "created": f.get("created") or "",
     }
 
 
 # Org custom fields read by jira-bob's jira_issue (scripts/jira/mcp_server.py) —
 # {customfield_id: label}, from config/jira-fields.json ("extra_custom_fields").
-JIRA_FIELDS = org_config.load_json_config(
-    "JIRA_FIELDS_FILE", org_config.REPO_ROOT / "config" / "jira-fields.json",
-)
+JIRA_FIELDS = jira_fields.load()
 EXTRA_CUSTOM_FIELDS: dict[str, str] = dict(JIRA_FIELDS.get("extra_custom_fields") or {})
 
 

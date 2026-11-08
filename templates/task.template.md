@@ -1,95 +1,95 @@
 ---
-title: "{Krótki tytuł zadania}"
+title: "{Short task title}"
 type: task
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — co jest do zrobienia i dlaczego}"
+author: {First Last}
+summary: "{1 sentence — what needs doing and why}"
 ---
 
-# Template: Zadanie (Task)
+# Template: Task
 
-> **Jak używać:**
-> - Zadanie to mniejsza zakresem inicjatywa podejmowana przez Zespół do Discovery lub Delivery.
-> - ⚠️ Poniższe trzy zasady dotyczą projektów **Acme — aplikacja mobilna (PRJ1) i portal (PRJ2)**. Dla innych projektów nazwy kolejek i konwencje mogą się różnić.
-> - Zadanie w Jira **Discovery (PRJ3)** = zadanie podejmowane do Discovery
-> - Zadanie w Jira **Delivery (PRJ1)** = zadanie zespołowe do realizacji
-> - Do sprintu może wejść tylko zadanie z kolejki PRJ1
-> - Oba typy zadań powinny być wycenione w fazie refinementów ze story pointami
-> - Zadanie dla zespołu PRJ4 powinno zawierać: `label: PRJ4`, `Sprint: PRJ4 BACKLOG`
-> - Każde zadanie powinno być podpięte pod konkretny epik
-> - Wypełnij wstępnie nagłówek i sekcje przed startem, następnie rozwijaj w kolejnych fazach
-> - Sprawdź zgodność z Definition of Ready przed przeniesieniem do Delivery na Ready for Planning
+> **How to use:**
+> - A task is a smaller piece of work the Team takes on for Discovery or Delivery.
+> - ⚠️ The three rules below apply to the **Acme — mobile app (PRJ1) and portal (PRJ2)** projects. Other projects may use different queue names and conventions.
+> - A task in Jira **Discovery (PRJ3)** = a task taken on for Discovery
+> - A task in Jira **Delivery (PRJ1)** = a team task to be delivered
+> - Only a task from the PRJ1 queue can enter a sprint
+> - Both kinds of task should be estimated in story points during refinement
+> - A task for the PRJ4 team should carry: `label: PRJ4`, `Sprint: PRJ4 BACKLOG`
+> - Every task should be linked to a specific epic
+> - Fill in the header and sections roughly before you start, then expand them in later phases
+> - Check it against the Definition of Ready before moving it to Delivery as Ready for Planning
 
-> **Kiedy używać:**
-> - gdy praca nie wymaga formuły User Story — nie musi samodzielnie dostarczać wartości użytkownikowi końcowemu
-> - mniejszy element funkcjonalności lub pracy wspierający realizację US lub epika
-> - konkretna czynność: techniczna (BE/FE/DB), analityczna, QA, DevOps, design
+> **When to use:**
+> - when the work does not need the User Story form — it does not have to deliver value to the end user on its own
+> - a smaller piece of functionality or work that supports a US or an epic
+> - a concrete activity: technical (BE/FE/DB), analysis, QA, DevOps, design
 
 ---
 
-## 📋 Nagłówek
+## 📋 Header
 
-| Pole | Wartość |
+| Field | Value |
 |------|---------|
-| **Epic** | {link do Epica} |
-| **Typ zadania** | {Implementacja / Analiza / DevOps / Design / QA} |
-| **Powiązana User Story** | {link do US, z której wynika to zadanie} |
-| **Komponent / Warstwa** | {np. BE / FE / DB / Infrastruktura} |
-| **Etykieta** | {np. zlecenia / harmonogram / mapa / offline / powiadomienia / design / PRJ4} |
-| **Rodzaj zmiany** | {np. Praca Projektowa} |
-| **Dotyczy** | {np. Aplikacja mobilna / Portal / Platforma} |
-| **Typ pracy** | {np. Prace programistyczne / Analizy biznesowe wdrożeniowe — stan TO-BE} |
+| **Epic** | {link to the Epic} |
+| **Task type** | {Implementation / Analysis / DevOps / Design / QA} |
+| **Related User Story** | {link to the US this task comes from} |
+| **Component / Layer** | {e.g. BE / FE / DB / Infrastructure} |
+| **Label** | {e.g. orders / schedule / map / offline / notifications / design / PRJ4} |
+| **Change type** | {e.g. Project work} |
+| **Affects** | {e.g. Mobile app / Portal / Platform} |
+| **Work type** | {e.g. Development / Business analysis — TO-BE state} |
 
 ---
 
-## Cel zadania
+## Task goal
 
-_{Jedno zdanie: co i po co. Skąd to zadanie wynika — odniesienie do funkcji lub problemu z US.}_
+_{One sentence: what and why. Where this task comes from — a reference to the feature or problem in the US.}_
 
-> {np. "Dostosowanie modelu danych mikroserwisu Zlecenia do aktualnego kontraktu eventów, umożliwiające poprawne działanie US PRJ1-XXXX."}
-
----
-
-## Zakres prac
-
-_{Numerowana lista konkretnych czynności do wykonania. Powinna być wystarczająco szczegółowa, żeby można było estymować i śledzić postęp.}_
-
-### 1. {Obszar prac}
-
-- {Konkretna zmiana / akcja}
-- {Konkretna zmiana / akcja}
-
-### 2. {Obszar prac}
-
-- {Konkretna zmiana / akcja}
+> {e.g. "Align the Orders microservice data model with the current event contract, so that US PRJ1-XXXX works correctly."}
 
 ---
 
-## Wycena wstępna
+## Scope of work
 
-- Analiza / architektura: —
+_{A numbered list of concrete things to do. Detailed enough to estimate and to track progress.}_
+
+### 1. {Work area}
+
+- {Concrete change / action}
+- {Concrete change / action}
+
+### 2. {Work area}
+
+- {Concrete change / action}
+
+---
+
+## Initial estimate
+
+- Analysis / architecture: —
 - BE: —
 - Web: —
 - Android: —
 - iOS: —
 - Design: —
-- Testy: —
+- Testing: —
 - PM / DevOps: —
 - **TOTAL: —**
 
 **Role Identity:**
-- [ ] Technik serwisowy
-- [ ] Dyspozytor
-- [ ] Kierownik regionu
-- [ ] Klient
+- [ ] Service technician
+- [ ] Dispatcher
+- [ ] Regional manager
+- [ ] Customer
 - [ ] Admin
 
-Uwagi: —
+Notes: —
 
 ---
 
-## Zależności i ryzyka
+## Dependencies and risks
 
-_{Opcjonalne — co może zablokować realizację, co musi być gotowe przed rozpoczęciem.}_
+_{Optional — what could block the work, what has to be ready before it starts.}_
 
-- {Zależność / ryzyko}
+- {Dependency / risk}

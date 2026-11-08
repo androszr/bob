@@ -1,171 +1,171 @@
 ---
-title: "Wywiad discovery: {Imię / Rola}"
+title: "Discovery interview: {Name / Role}"
 type: meeting
 date: {YYYY-MM-DD}
-author: {Imię Nazwisko}
-summary: "{1 zdanie — o czym było spotkanie i jaki jest główny wniosek}"
+author: {First Last}
+summary: "{1 sentence — what the meeting was about and its main takeaway}"
 ---
 
-# Template: Wywiad / discovery z użytkownikiem (Meeting Notes)
+# Template: User interview / discovery (Meeting Notes)
 
-> **Przeznaczenie tego template'u (czytaj uważnie zanim wybierzesz):**
-> - Rozmowa typu **wywiad jakościowy / user interview / sesja discovery** z 1–3 rozmówcami (najczęściej z biznesu: technik serwisowy, dyspozytor, użytkownik aplikacji, ekspert dziedzinowy, stakeholder).
-> - Cel: **zrozumieć perspektywę rozmówcy** — jego pracę, bóle, kontekst, słownictwo. **Nie mapujemy formalnie procesu AS IS → TO BE** (jeśli wywiad rozrósł się do warsztatu mapującego, użyj template'u as-is-to-be).
-> - **Klasyczny wywiad jakościowy bez obserwacji procesu i bez konkretnego produktu w tle** — np. „opowiedz, jak wygląda Twój typowy dzień", „co Cię ostatnio frustrowało w pracy". Jeśli rozmowa miała formę „jak korzystasz z aplikacji X" albo obserwowałeś rozmówcę w miejscu pracy — patrz „Kiedy NIE używać".
-> - Wyjście: insighty + cytaty + bóle + pomysły rozmówcy — surowy materiał badawczy do dalszej analizy.
+> **What this template is for (read carefully before you choose it):**
+> - A **qualitative interview / user interview / discovery session** with 1–3 interviewees (most often from the business: field service technician, dispatcher, app user, domain expert, stakeholder).
+> - Goal: **to understand the interviewee's perspective** — their work, pain points, context, vocabulary. **We are not formally mapping an AS IS → TO BE process** (if the interview grew into a mapping workshop, use the as-is-to-be template).
+> - **A classic qualitative interview, with no process observation and no specific product in the background** — e.g. "tell me what a typical day looks like for you", "what frustrated you at work recently". If the conversation was "how do you use app X", or you observed the interviewee at their workplace — see "When NOT to use".
+> - Output: insights + quotes + pain points + the interviewee's ideas — raw research material for further analysis.
 >
-> **Kiedy NIE używać:**
-> - jeśli to była **obserwacja w miejscu pracy** (contextual inquiry / shadowing / wizyta badawcza w oddziale/biurze) → użyj `meeting-notes-contextual-inquiry.template.md`
-> - jeśli to był **wywiad ewaluacyjny istniejącego produktu** („jak korzystasz z aplikacji X, co działa, co boli") → użyj `meeting-notes-product-feedback-interview.template.md`
-> - jeśli to był warsztat z mapowaniem procesu (kilku uczestników, demo „na żywo", schemat dokumentów) → użyj `meeting-notes-as-is-to-be.template.md`
-> - jeśli to był status / sync zespołu → użyj `meeting-notes-status-update.template.md`
-> - jeśli celem było podjęcie decyzji → użyj `meeting-notes-decision.template.md`
-> - jeśli to był start nowej inicjatywy → użyj `meeting-notes-kickoff.template.md`
-> - jeśli to było podsumowanie zakończonej fazy → użyj `meeting-notes-retrospective.template.md`
+> **When NOT to use:**
+> - if it was an **observation at the workplace** (contextual inquiry / shadowing / field visit to a branch/office) → use `meeting-notes-contextual-inquiry.template.md`
+> - if it was an **evaluation interview about an existing product** ("how do you use app X, what works, what hurts") → use `meeting-notes-product-feedback-interview.template.md`
+> - if it was a process-mapping workshop (several participants, a live demo, a document diagram) → use `meeting-notes-as-is-to-be.template.md`
+> - if it was a team status update / sync → use `meeting-notes-status-update.template.md`
+> - if the goal was to make a decision → use `meeting-notes-decision.template.md`
+> - if it was the start of a new initiative → use `meeting-notes-kickoff.template.md`
+> - if it was a wrap-up of a completed phase → use `meeting-notes-retrospective.template.md`
 >
-> **Jak używać:**
-> - **Cytaty dosłowne** — to fundament wywiadu jakościowego. Bez parafraz, bez interpretacji wewnątrz cytatu.
-> - Każdy ból / insight → krótki opis + dosłowny cytat z imieniem rozmówcy. Numeruj — łatwiej odwołać się później.
-> - Oddzielaj **co rozmówca powiedział** od **co my z tego wnioskujemy** (sekcja „interpretacja / hipotezy" osobno).
-> - **Konwertuj relatywne daty na bezwzględne**.
-> - Plik nazywaj: `wywiad-{rola-rozmówcy-kebab}-{YYYY-MM-DD}.md` lub `discovery-{temat-kebab}-{YYYY-MM-DD}.md`.
+> **How to use:**
+> - **Verbatim quotes** — they are the foundation of a qualitative interview. No paraphrasing, no interpretation inside a quote.
+> - Each pain point / insight → a short description + a verbatim quote with the interviewee's name. Number them — easier to refer to later.
+> - Keep **what the interviewee said** apart from **what we conclude from it** (a separate "interpretation / hypotheses" section).
+> - **Convert relative dates to absolute ones**.
+> - Name the file: `interview-{interviewee-role-kebab}-{YYYY-MM-DD}.md` or `discovery-{topic-kebab}-{YYYY-MM-DD}.md`.
 
 ---
 
-# Wywiad: {Rola / Imię rozmówcy} — {Temat / obszar}
+# Interview: {Interviewee's role / name} — {Topic / area}
 
-**Plik źródłowy:** [{nazwa pliku transkrypcji}]({link})
-**Data rozmowy:** {YYYY-MM-DD}
-**Czas trwania:** ~{NN} min
-**Format:** {1-on-1 / 1-on-2 / sesja grupowa N osób / telefon / spotkanie online / on-site}
-**Inicjatywa / kontekst:** {nazwa inicjatywy, w ramach której prowadzimy discovery}
-**Cel rozmowy:** {jedno zdanie — np. zrozumieć, jak dyspozytor obsługuje przekładanie wizyt u klienta}
+**Source file:** [{transcript file name}]({link})
+**Interview date:** {YYYY-MM-DD}
+**Duration:** ~{NN} min
+**Format:** {1-on-1 / 1-on-2 / group session of N people / phone / online meeting / on-site}
+**Initiative / context:** {name of the initiative under which we are doing discovery}
+**Interview goal:** {one sentence — e.g. understand how a dispatcher handles rescheduling customer visits}
 
-## Rozmówcy
+## Interviewees
 
-- **{Imię (rola)}** — {staż w roli, krótki kontekst: typ zleceń, region, doświadczenie}
-- **{Imię (rola)}** — {kontekst, jeśli było więcej osób}
+- **{Name (role)}** — {time in role, brief context: type of work orders, region, experience}
+- **{Name (role)}** — {context, if there were more people}
 
-## Strona prowadząca
+## Interviewers
 
-- {Imię (PO / UX / Researcher / Analityk)}, {Imię (rola)}
-
----
-
-## TL;DR (jednym akapitem)
-
-_{Maks. 4–6 zdań. Kto, o czym, co najważniejsze wyniesione, jaki cytat-klucz oddaje sedno, jaka jest następna akcja. Pisz tak, by kolega z zespołu nie musiał słuchać nagrania.}_
+- {Name (PO / UX / Researcher / Analyst)}, {Name (role)}
 
 ---
 
-## Cytat-klucz (najmocniejszy moment rozmowy)
+## TL;DR (in one paragraph)
 
-> **{Imię}:** „{dosłowny cytat — taki, który najlepiej oddaje ton, ból lub aspirację rozmówcy}"
+_{Max. 4–6 sentences. Who, about what, the most important takeaways, which key quote captures the essence, what the next action is. Write it so a teammate doesn't have to listen to the recording.}_
+
+---
+
+## Key quote (the strongest moment of the interview)
+
+> **{Name}:** "{verbatim quote — the one that best captures the interviewee's tone, pain point or aspiration}"
 >
-> _Kontekst:_ {co działo się w rozmowie, gdy padło to zdanie}
+> _Context:_ {what was going on in the conversation when this was said}
 
 ---
 
-## Tematy rozmowy (struktura wywiadu)
+## Interview topics (interview structure)
 
-_{Jeden pod-nagłówek na każdy duży temat, który był poruszony. Pod każdym: 3–6 zdań streszczenia + 1–2 dosłowne cytaty. Trzymaj się chronologii rozmowy lub przegrupuj tematycznie — co czytelniejsze.}_
+_{One subheading for each major topic covered. Under each: a 3–6 sentence summary + 1–2 verbatim quotes. Follow the order of the conversation or regroup by theme — whichever reads better.}_
 
-### {Temat 1 — np. „Jak wygląda Twój typowy dzień pracy"}
+### {Topic 1 — e.g. "What does a typical working day look like for you"}
 
-{Krótkie streszczenie tego, co rozmówca powiedział — 3–6 zdań.}
+{A short summary of what the interviewee said — 3–6 sentences.}
 
-> **{Imię}:** „{dosłowny cytat}"
+> **{Name}:** "{verbatim quote}"
 
-### {Temat 2 — np. „Co Cię najbardziej irytuje w aktualnym narzędziu"}
+### {Topic 2 — e.g. "What annoys you most about the current tool"}
 
-{Streszczenie.}
+{Summary.}
 
-> **{Imię}:** „{cytat}"
-> **{Imię}:** „{cytat}"
+> **{Name}:** "{quote}"
+> **{Name}:** "{quote}"
 
-### {Temat 3 — …}
+### {Topic 3 — …}
 
 {…}
 
 ---
 
-## Bóle / problemy (lista jednoznacznie wyartykułowanych)
+## Pain points / problems (list of clearly articulated ones)
 
-_{Każdy ból = jedno zdanie + cytat. Bez interpretacji. Numeruj.}_
+_{Each pain point = one sentence + a quote. No interpretation. Number them.}_
 
-| # | Ból | Cytat / dowód |
+| # | Pain point | Quote / evidence |
 |---|-----|---------------|
-| 1 | {krótki opis bólu} | {Imię}: „{dosłowny cytat}" |
-| 2 | {krótki opis bólu} | {Imię}: „{cytat lub opis incydentu}" |
+| 1 | {short description of the pain point} | {Name}: "{verbatim quote}" |
+| 2 | {short description of the pain point} | {Name}: "{quote or description of an incident}" |
 | 3 | {…} | {…} |
 
 ---
 
-## Pomysły / sugestie rozmówcy
+## The interviewee's ideas / suggestions
 
-_{Co sam zaproponował — nawet jeśli niewykonalne. Nie odrzucaj na wejściu — czasem za naiwnym pomysłem stoi realna potrzeba.}_
+_{What they proposed themselves — even if it is not feasible. Don't dismiss it up front — sometimes a naive idea hides a real need.}_
 
-1. **{Pomysł 1}** — {opis + cytat}
-2. **{Pomysł 2}** — {opis + cytat}
-3. **{Pomysł 3}** — {opis}
-
----
-
-## Czego rozmówca **NIE** zrobiłby / na co się nie zgodzi
-
-_{Bardzo wartościowa sekcja — explicite zgłaszane ograniczenia, „red lines". Pomijając, ryzykujesz propozycję, która zostanie odrzucona.}_
-
-- **{Ograniczenie 1}** — {dlaczego, cytat jeśli pomocny}
-- **{Ograniczenie 2}** — {…}
+1. **{Idea 1}** — {description + quote}
+2. **{Idea 2}** — {description + quote}
+3. **{Idea 3}** — {description}
 
 ---
 
-## Słownictwo rozmówcy (glosariusz)
+## What the interviewee would **NOT** do / will not agree to
 
-_{Terminy, które rozmówca używał inaczej niż my albo specyficzne dla jego dziedziny. Ważne — używanie ich w UI / komunikacji obniża barierę adopcji.}_
+_{A very valuable section — explicitly stated constraints, "red lines". Skip it and you risk a proposal that gets rejected.}_
 
-| Termin rozmówcy | Co przez to rozumie | Jak my to nazywamy |
+- **{Constraint 1}** — {why, a quote if helpful}
+- **{Constraint 2}** — {…}
+
+---
+
+## The interviewee's vocabulary (glossary)
+
+_{Terms the interviewee used differently from us, or that are specific to their domain. Important — using them in the UI / communication lowers the barrier to adoption.}_
+
+| Interviewee's term | What they mean by it | What we call it |
 |-----------------|---------------------|--------------------|
-| {„{termin}"} | {definicja w jego rozumieniu} | {nasz odpowiednik / brak} |
-| {„{termin}"} | {…} | {…} |
+| {"{term}"} | {definition as they understand it} | {our equivalent / none} |
+| {"{term}"} | {…} | {…} |
 
 ---
 
-## Interpretacja / hipotezy zespołu (osobno od cytatów)
+## Team interpretation / hypotheses (kept apart from the quotes)
 
-_{Tu już można interpretować. Wyraźnie oznaczone jako nasza interpretacja, nie słowa rozmówcy. To wejście do dalszej analizy.}_
+_{Here you can interpret. Clearly marked as our interpretation, not the interviewee's words. This is input for further analysis.}_
 
-- **Hipoteza 1:** {…} — _wsparte przez_: ból #2, #5; cytat z tematu „X"
-- **Hipoteza 2:** {…}
-- **Co warto zweryfikować w kolejnych wywiadach:** {…}
+- **Hypothesis 1:** {…} — _supported by_: pain points #2, #5; quote from topic "X"
+- **Hypothesis 2:** {…}
+- **Worth validating in later interviews:** {…}
 
 ---
 
-## Otwarte pytania
+## Open questions
 
-1. {Pytanie 1 — czego nie zdążyliśmy zapytać / co wymaga doprecyzowania}
-2. {Pytanie 2}
-3. {Pytanie N}
+1. {Question 1 — what we didn't get to ask / what needs clarifying}
+2. {Question 2}
+3. {Question N}
 
 ---
 
 ## Action items
 
-| # | Co | Kto | Termin |
+| # | What | Who | Due |
 |---|----|-----|--------|
-| 1 | {np. przesłać wnioski do PO} | {Imię} | {YYYY-MM-DD} |
-| 2 | {np. zaprosić kolejnego rozmówcę z innej persony} | {Imię} | {YYYY-MM-DD} |
-| 3 | {np. wrócić do rozmówcy z prototypem} | {Imię} | {YYYY-MM-DD} |
+| 1 | {e.g. send the findings to the PO} | {Name} | {YYYY-MM-DD} |
+| 2 | {e.g. invite another interviewee from a different persona} | {Name} | {YYYY-MM-DD} |
+| 3 | {e.g. go back to the interviewee with a prototype} | {Name} | {YYYY-MM-DD} |
 
 ---
 
-## Załączniki / źródła
+## Attachments / sources
 
-- Transkrypcja audio: [{nazwa pliku}]({link})
-- Kluczowe momenty:
-  - {MM:SS} — {temat / cytat-klucz}
-  - {MM:SS} — {moment „aha"}
-  - {MM:SS} — {ból #N}
-- Powiązane wywiady / dokumenty:
-  - [{inny wywiad z tej samej persony / inicjatywy}]({link})
+- Audio transcript: [{file name}]({link})
+- Key moments:
+  - {MM:SS} — {topic / key quote}
+  - {MM:SS} — {"aha" moment}
+  - {MM:SS} — {pain point #N}
+- Related interviews / documents:
+  - [{another interview with the same persona / initiative}]({link})
   - [{user story / brief}]({link})

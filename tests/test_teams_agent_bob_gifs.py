@@ -70,7 +70,7 @@ def test_plan_gifs_bob_mood_returns_plan_and_strips_tag():
     assert plan == {"kind": "bob_gif", "mood": "happy", "gif_name": "bob-happy.gif", "phrase": plan["phrase"]}
 
 
-@pytest.mark.parametrize("persona", ["example", "nie-ma-takiej-persony"])
+@pytest.mark.parametrize("persona", ["example", "no-such-persona"])
 def test_plan_gifs_personas_skip_bob_mascot_but_strip_tag(persona):
     cleaned, plan = cli._plan_gifs("Gotowe. [BOB_GIF: happy]", persona=persona)
     assert cleaned == "Gotowe." and plan is None

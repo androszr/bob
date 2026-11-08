@@ -31,25 +31,25 @@ start_panel() {
     (cd "$REPO" && nohup python3 scripts/bob_panel/server.py >>"$LOG" 2>&1 &)
   fi
   for _ in $(seq 1 20); do up && return 0; sleep 0.5; done
-  echo "Panel nie wstał - zobacz log: $LOG" >&2
+  echo "The panel did not start - see the log: $LOG" >&2
   exit 1
 }
 
 case "${1:-open}" in
   open|start)
     start_panel
-    agent || echo "Wskazówka: ./bob install - panel będzie startował sam po zalogowaniu do Maca."
-    echo "Panel Boba: $URL"
+    agent || echo "Tip: ./bob install - the panel will then start on its own when you log in to the Mac."
+    echo "Bob's panel: $URL"
     open "$URL" 2>/dev/null || true
     ;;
   status)
     if up; then
       curl -s "$URL/api/status" | python3 -c 'import json,sys; s=json.load(sys.stdin); b=s["bob"]; t=s["teams_session"]
-print("Panel: działa (" + sys.argv[1] + ")")
-print("Bob:   " + ("działa, pid %s" % b.get("pid") if b.get("running") else "zatrzymany"))
-print("Teams: " + ("trzeba się zalogować (w panelu)" if t.get("login_needed") else "sesja ważna, %s h" % t.get("age_h")))' "$URL"
+print("Panel: running (" + sys.argv[1] + ")")
+print("Bob:   " + ("running, pid %s" % b.get("pid") if b.get("running") else "stopped"))
+print("Teams: " + ("sign-in needed (in the panel)" if t.get("login_needed") else "session valid, %s h" % t.get("age_h")))' "$URL"
     else
-      echo "Panel: nie działa - uruchom: ./bob"
+      echo "Panel: not running - start it with: ./bob"
     fi
     ;;
   restart)
@@ -60,7 +60,7 @@ print("Teams: " + ("trzeba się zalogować (w panelu)" if t.get("login_needed") 
       sleep 1
     fi
     start_panel
-    echo "Panel zrestartowany: $URL (Bob działa dalej)"
+    echo "Panel restarted: $URL (Bob keeps running)"
     ;;
   install)
     "$REPO/scripts/bob_panel/install_launchd.sh" --force

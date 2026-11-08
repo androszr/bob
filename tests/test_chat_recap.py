@@ -18,6 +18,8 @@ import chat_recap  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _TARGET_DATE = date(2026, 5, 26)
+# The owner's alias from the test environment (an "own" speaker, never a participant).
+_OWNER = chat_recap.org_config.OWNER_ALIAS
 # A timestamp that falls on 2026-05-26 in Europe/Warsaw (UTC+2 in May)
 _TS_MORNING = "2026-05-26T08:00:00.000Z"
 _TS_AFTERNOON = "2026-05-26T14:30:00.000Z"
@@ -54,7 +56,7 @@ def chats_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def public_chat(chats_dir: Path) -> Path:
-    """A JSONL with a non-own speaker in HISTORIA ROZMOWY — classified public."""
+    """A JSONL with a non-own speaker in CONVERSATION HISTORY — classified public."""
     records = [
         {"type": "ai-title", "aiTitle": "Teams Discussion", "sessionId": "pub-001"},
         {
@@ -63,11 +65,11 @@ def public_chat(chats_dir: Path) -> Path:
             "timestamp": _TS_MORNING,
             "sessionId": "pub-001",
             "content": (
-                "[BAZA WIEDZY]\njakis tekst wiedzy\n\n"
-                "[HISTORIA ROZMOWY]\n"
-                "Szef: Hej, co z projektem?\n"
-                "EXT Person 58: Projekt idzie dobrze.\n"
-                "Bob: Swietnie.\n"
+                "[KNOWLEDGE BASE]\nsome knowledge text\n\n"
+                "[CONVERSATION HISTORY]\n"
+                f"{_OWNER}: Hi, how is the project going?\n"
+                "EXT Person 58: The project is going well.\n"
+                "Bob: Great.\n"
             ),
         },
         {
@@ -76,14 +78,14 @@ def public_chat(chats_dir: Path) -> Path:
             "sessionId": "pub-001",
             "message": {
                 "role": "user",
-                "content": "[BAZA WIEDZY]\njakis tekst\n\n[HISTORIA ROZMOWY]\nSzef: co nowego?",
+                "content": f"[KNOWLEDGE BASE]\nsome text\n\n[CONVERSATION HISTORY]\n{_OWNER}: what is new?",
             },
         },
         {
             "type": "user",
             "timestamp": _TS_AFTERNOON,
             "sessionId": "pub-001",
-            "message": {"role": "user", "content": "Sprawdz status zadania JIRA-123."},
+            "message": {"role": "user", "content": "Check the status of task JIRA-123."},
         },
     ]
     p = chats_dir / "pub-001.jsonl"
@@ -101,13 +103,13 @@ def private_chat(chats_dir: Path) -> Path:
             "type": "user",
             "timestamp": _TS_MORNING,
             "sessionId": "priv-001",
-            "message": {"role": "user", "content": "Pomoze mi zaplanowac sprint."},
+            "message": {"role": "user", "content": "Help me plan the sprint."},
         },
         {
             "type": "user",
             "timestamp": _TS_AFTERNOON,
             "sessionId": "priv-001",
-            "message": {"role": "user", "content": "Jan: co mamy na Q3?"},
+            "message": {"role": "user", "content": f"{_OWNER}: what do we have for Q3?"},
         },
     ]
     p = chats_dir / "priv-001.jsonl"
@@ -135,11 +137,11 @@ def empty_chat(chats_dir: Path) -> Path:
 
 @pytest.fixture()
 def knowledge_prefix_chat(chats_dir: Path) -> Path:
-    """A JSONL where first user message starts with [BAZA WIEDZY]."""
+    """A JSONL where first user message starts with [KNOWLEDGE BASE]."""
     records = [
         {
             "type": "ai-title",
-            "aiTitle": "Baza Wiedzy Chat",
+            "aiTitle": "Knowledge Base Chat",
             "sessionId": "baza-001",
         },
         {
@@ -149,11 +151,11 @@ def knowledge_prefix_chat(chats_dir: Path) -> Path:
             "message": {
                 "role": "user",
                 "content": (
-                    "[BAZA WIEDZY]\n"
-                    "jakis tekst wiedzy\n"
+                    "[KNOWLEDGE BASE]\n"
+                    "some knowledge text\n"
                     "\n"
-                    "[HISTORIA ROZMOWY]\n"
-                    "Prawdziwa wiadomosc uzytkownika jest tutaj i powinna byc pierwsza."
+                    "[CONVERSATION HISTORY]\n"
+                    "The real user message is here and should come first."
                 ),
             },
         },
@@ -173,7 +175,7 @@ def other_day_chat(chats_dir: Path) -> Path:
             "type": "user",
             "timestamp": "2026-05-25T10:00:00.000Z",
             "sessionId": "old-001",
-            "message": {"role": "user", "content": "Stary chat."},
+            "message": {"role": "user", "content": "Old chat."},
         },
     ]
     p = chats_dir / "old-001.jsonl"
@@ -274,23 +276,23 @@ def test_parse_chat_handles_corrupt_json(chats_dir: Path) -> None:
 
 
 def test_classify_public_detects_outside_speaker() -> None:
-    msgs = ["EXT Person 58: Hej\nBob: ok\n"]
+    msgs = ["EXT Person 58: Hi\nBob: ok\n"]
     assert chat_recap._classify(msgs) == "public"
 
 
 def test_classify_private_only_own_speakers() -> None:
-    msgs = ["Szef: co slychac?\nBob: wszystko ok\nJan: super\n"]
+    msgs = [f"{_OWNER}: how is it going?\nBob: all good\n{_OWNER}: great\n"]
     assert chat_recap._classify(msgs) == "private"
 
 
 def test_classify_private_no_speakers() -> None:
-    msgs = ["Zwykly tekst bez wzorca mowcy."]
+    msgs = ["Plain text with no speaker pattern."]
     assert chat_recap._classify(msgs) == "private"
 
 
 def test_classify_ignores_knowledge_bracket_patterns() -> None:
-    """[BAZA WIEDZY] lines that look like 'Key: value' should not be speakers."""
-    msgs = ["[BAZA WIEDZY]\nDostepne foldery:\n  general/\nBob: ok\n"]
+    """[KNOWLEDGE BASE] lines that look like 'Key: value' should not be speakers."""
+    msgs = ["[KNOWLEDGE BASE]\nAvailable folders:\n  general/\nBob: ok\n"]
     # The regex excludes [ and ] from speaker names, so no false positive
     assert chat_recap._classify(msgs) == "private"
 
@@ -301,8 +303,8 @@ def test_classify_ignores_knowledge_bracket_patterns() -> None:
 
 
 def test_extract_first_user_question_plain() -> None:
-    result = chat_recap._extract_first_user_question(["Normalne pytanie usera."])
-    assert result == "Normalne pytanie usera."
+    result = chat_recap._extract_first_user_question(["A normal user question."])
+    assert result == "A normal user question."
 
 
 def test_extract_first_user_question_truncates() -> None:
@@ -312,18 +314,40 @@ def test_extract_first_user_question_truncates() -> None:
     assert len(result) == 83  # 80 + "..."
 
 
-def test_extract_first_user_question_strips_baza_wiedzy() -> None:
+def test_extract_first_user_question_strips_knowledge_base() -> None:
+    msg = (
+        "[KNOWLEDGE BASE]\n"
+        "some knowledge text\n"
+        "\n"
+        "[CONVERSATION HISTORY]\n"
+        "The real user message here."
+    )
+    result = chat_recap._extract_first_user_question([msg])
+    assert "KNOWLEDGE BASE" not in result
+    assert "CONVERSATION HISTORY" not in result
+    assert "The real" in result
+
+
+def test_extract_first_user_question_strips_polish_markers() -> None:
+    """Sessions written by older builds use [BAZA WIEDZY] / [HISTORIA ROZMOWY]."""
     msg = (
         "[BAZA WIEDZY]\n"
-        "jakis tekst wiedzy\n"
+        "some knowledge text\n"
         "\n"
         "[HISTORIA ROZMOWY]\n"
-        "Prawdziwa wiadomosc usera tutaj."
+        "The real user message here."
     )
     result = chat_recap._extract_first_user_question([msg])
     assert "BAZA WIEDZY" not in result
     assert "HISTORIA ROZMOWY" not in result
-    assert "Prawdziwa" in result
+    assert result == "The real user message here."
+
+
+def test_extract_first_user_question_mixed_markers() -> None:
+    """An English preamble followed by a Polish history header (or the reverse) is stripped too."""
+    for kb, hist in (("KNOWLEDGE BASE", "HISTORIA ROZMOWY"), ("BAZA WIEDZY", "CONVERSATION HISTORY")):
+        msg = f"[{kb}]\nsome text\n\n[{hist}]\nThe question."
+        assert chat_recap._extract_first_user_question([msg]) == "The question."
 
 
 def test_extract_first_user_question_from_knowledge_prefix_chat(
@@ -331,8 +355,8 @@ def test_extract_first_user_question_from_knowledge_prefix_chat(
 ) -> None:
     summary = chat_recap._parse_chat(knowledge_prefix_chat)
     assert summary is not None
-    assert "BAZA WIEDZY" not in summary.first_question
-    assert "Prawdziwa" in summary.first_question
+    assert "KNOWLEDGE BASE" not in summary.first_question
+    assert "The real" in summary.first_question
 
 
 # ---------------------------------------------------------------------------
@@ -341,10 +365,10 @@ def test_extract_first_user_question_from_knowledge_prefix_chat(
 
 
 def test_extract_participants_excludes_own() -> None:
-    msgs = ["EXT Person 58: Hej\nBob: ok\nSzef: tak\nZosia K: pytanie\n"]
+    msgs = [f"EXT Person 58: Hi\nBob: ok\n{_OWNER}: yes\nZosia K: a question\n"]
     participants = chat_recap._extract_participants(msgs)
     assert "Bob" not in participants
-    assert "Szef" not in participants
+    assert _OWNER not in participants
     assert "EXT Person 58" in participants
     assert "Zosia K" in participants
 
@@ -362,14 +386,14 @@ def test_extract_participants_preserves_order() -> None:
 
 def test_format_section_contains_headers() -> None:
     section = chat_recap._format_section([], _TARGET_DATE)
-    assert "## Chaty" in section
-    assert "### Publiczne" in section
-    assert "### Prywatne" in section
+    assert "## Chats" in section
+    assert "### Public" in section
+    assert "### Private" in section
 
 
-def test_format_section_empty_shows_brak() -> None:
+def test_format_section_empty_shows_none() -> None:
     section = chat_recap._format_section([], _TARGET_DATE)
-    assert "*(brak)*" in section
+    assert "*(none)*" in section
 
 
 def test_format_section_public_and_private() -> None:
@@ -377,7 +401,7 @@ def test_format_section_public_and_private() -> None:
         session_id="p1",
         channel="teams-agent",
         ai_title="Pub Chat",
-        first_question="co nowego?",
+        first_question="what is new?",
         classification="public",
         participants=["Zosia"],
         start_time=datetime(2026, 5, 26, 10, 0, tzinfo=UTC),
@@ -387,7 +411,7 @@ def test_format_section_public_and_private() -> None:
         session_id="p2",
         channel="teams-agent",
         ai_title="Priv Chat",
-        first_question="planowanie Q3",
+        first_question="Q3 planning",
         classification="private",
         participants=[],
         start_time=datetime(2026, 5, 26, 12, 0, tzinfo=UTC),
@@ -406,57 +430,71 @@ def test_format_section_public_and_private() -> None:
 
 def test_upsert_creates_new_file(tmp_path: Path) -> None:
     target = tmp_path / "2026-05-26.md"
-    section = "## Chaty -- 2026-05-26\n\n### Publiczne\n\n*(brak)*\n"
+    section = "## Chats -- 2026-05-26\n\n### Public\n\n*(none)*\n"
     chat_recap._upsert_section(target, section, _TARGET_DATE)
     assert target.exists()
     content = target.read_text(encoding="utf-8")
     assert "# Recap 2026-05-26" in content
-    assert "## Chaty" in content
+    assert "## Chats" in content
 
 
 def test_upsert_replaces_existing_section(tmp_path: Path) -> None:
     target = tmp_path / "2026-05-26.md"
     initial = (
         "# Recap 2026-05-26\n\n"
-        "## Chaty -- 2026-05-26\n\n"
-        "### Publiczne\n\n*(brak)*\n\n"
-        "### Prywatne\n\n*(brak)*\n\n"
-        "## Inne\n\njakis tekst\n"
+        "## Chats -- 2026-05-26\n\n"
+        "### Public\n\n*(none)*\n\n"
+        "### Private\n\n*(none)*\n\n"
+        "## Other\n\nsome text\n"
     )
     target.write_text(initial, encoding="utf-8")
     new_section = (
-        "## Chaty -- 2026-05-26\n\n"
-        "### Publiczne\n\n**NewChat** (10:00-11:00)\n\n"
-        "### Prywatne\n\n*(brak)*\n"
+        "## Chats -- 2026-05-26\n\n"
+        "### Public\n\n**NewChat** (10:00-11:00)\n\n"
+        "### Private\n\n*(none)*\n"
     )
     chat_recap._upsert_section(target, new_section, _TARGET_DATE)
     content = target.read_text(encoding="utf-8")
     assert "NewChat" in content
     # Should not duplicate the section
-    assert content.count("## Chaty") == 1
+    assert content.count("## Chats") == 1
     # Subsequent section should still be present
-    assert "## Inne" in content
+    assert "## Other" in content
+
+
+def test_upsert_replaces_polish_section_from_older_builds(tmp_path: Path) -> None:
+    """A recap written by an older build ("## Chaty") is replaced, not duplicated."""
+    target = tmp_path / "2026-05-26.md"
+    target.write_text(
+        "# Recap 2026-05-26\n\n## Chaty -- 2026-05-26\n\n### Publiczne\n\n*(brak)*\n\n## Other\n\nx\n",
+        encoding="utf-8",
+    )
+    chat_recap._upsert_section(target, "## Chats -- 2026-05-26\n\n*(none)*\n", _TARGET_DATE)
+    content = target.read_text(encoding="utf-8")
+    assert "## Chaty" not in content
+    assert content.count("## Chats") == 1
+    assert "## Other" in content
 
 
 def test_upsert_appends_when_no_section(tmp_path: Path) -> None:
     target = tmp_path / "2026-05-26.md"
-    initial = "# Recap 2026-05-26\n\n## Spotkania\n\nbrak\n"
+    initial = "# Recap 2026-05-26\n\n## Meetings\n\nnone\n"
     target.write_text(initial, encoding="utf-8")
-    section = "## Chaty -- 2026-05-26\n\n*(brak)*\n"
+    section = "## Chats -- 2026-05-26\n\n*(none)*\n"
     chat_recap._upsert_section(target, section, _TARGET_DATE)
     content = target.read_text(encoding="utf-8")
-    assert "## Spotkania" in content
-    assert "## Chaty" in content
+    assert "## Meetings" in content
+    assert "## Chats" in content
 
 
 def test_upsert_idempotent(tmp_path: Path) -> None:
     """Running upsert twice must not duplicate the section."""
     target = tmp_path / "2026-05-26.md"
-    section = "## Chaty -- 2026-05-26\n\n### Publiczne\n\n*(brak)*\n\n### Prywatne\n\n*(brak)*\n"
+    section = "## Chats -- 2026-05-26\n\n### Public\n\n*(none)*\n\n### Private\n\n*(none)*\n"
     chat_recap._upsert_section(target, section, _TARGET_DATE)
     chat_recap._upsert_section(target, section, _TARGET_DATE)
     content = target.read_text(encoding="utf-8")
-    assert content.count("## Chaty") == 1
+    assert content.count("## Chats") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -539,8 +577,8 @@ def test_main_no_write(
     )
 
     captured = capsys.readouterr()
-    assert "### Publiczne" in captured.out
-    assert "### Prywatne" in captured.out
+    assert "### Public" in captured.out
+    assert "### Private" in captured.out
 
     # No files should be created
     assert not pub_dir.exists() or not (pub_dir / "2026-05-26.md").exists()
@@ -552,7 +590,7 @@ def test_main_idempotent(
     public_chat: Path,
     private_chat: Path,
 ) -> None:
-    """Running main twice does not duplicate ## Chaty section."""
+    """Running main twice does not duplicate ## Chats section."""
     pub_dir = tmp_path / "public"
     priv_dir = tmp_path / "private"
 
@@ -571,5 +609,5 @@ def test_main_idempotent(
     pub_content = (pub_dir / "2026-05-26.md").read_text(encoding="utf-8")
     priv_content = (priv_dir / "2026-05-26.md").read_text(encoding="utf-8")
 
-    assert pub_content.count("## Chaty") == 1
-    assert priv_content.count("## Chaty") == 1
+    assert pub_content.count("## Chats") == 1
+    assert priv_content.count("## Chats") == 1

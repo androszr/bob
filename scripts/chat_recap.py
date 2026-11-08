@@ -4,9 +4,9 @@ Usage:
     python scripts/chat_recap.py [YYYY-MM-DD] [--no-write] [--chats-dir DIR]
         [--public-output-dir DIR] [--private-output-dir DIR]
 
-Reads source_data/chats/*.jsonl, filters by mtime (local Europe/Warsaw date),
-classifies as public (other speakers found) or private (only Jan/Bob),
-and upserts a "## Chaty" section into:
+Reads source_data/chats/*.jsonl, filters by mtime (local date in org_config.TIMEZONE),
+classifies as public (other speakers found) or private (only the owner/Bob),
+and upserts a "## Chats" section (older files: "## Chaty") into:
   - knowledge/daily-recap/YYYY-MM-DD.md  (public, committed)
   - source_data/chat-recap-private/YYYY-MM-DD.md  (private, gitignored)
 Both sections are also printed to stdout.
@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 import logts  # noqa: F401, I001 — patches sys.stderr with CET timestamps
 import org_config  # noqa: E402
 
-_TZ = ZoneInfo("Europe/Warsaw")
+_TZ = ZoneInfo(org_config.TIMEZONE)
 
 # Speakers treated as "own" — do not classify chat as public: the bot, the owner's
 # alias and each word of the owner's display name (transcripts use the first name).
@@ -36,14 +36,15 @@ _OWN_SPEAKERS: set[str] = {"Bob", org_config.OWNER_ALIAS, *org_config.OWNER_DISP
 # Regex: capture speaker name (up to 40 chars, no newline or colon) before ": "
 _SPEAKER_RE = re.compile(r"^([^\n:\[\]]{1,40}):\s", re.MULTILINE)
 
-# Regex to strip the knowledge-base preamble injected by queue-operation
+# Regex to strip the knowledge-base preamble injected by queue-operation.
+# English markers are canonical; the Polish ones ([BAZA WIEDZY], [HISTORIA ROZMOWY]) come from older sessions.
 _BAZA_WIEDZY_RE = re.compile(
-    r"^\[BAZA WIEDZY\].*?(?=\[HISTORIA ROZMOWY\]|\Z)", re.DOTALL
+    r"^\[(?:KNOWLEDGE BASE|BAZA WIEDZY)\].*?(?=\[(?:CONVERSATION HISTORY|HISTORIA ROZMOWY)\]|\Z)", re.DOTALL
 )
-_HISTORIA_HEADER_RE = re.compile(r"^\[HISTORIA ROZMOWY\]\s*\n?", re.MULTILINE)
+_HISTORIA_HEADER_RE = re.compile(r"^\[(?:CONVERSATION HISTORY|HISTORIA ROZMOWY)\]\s*\n?", re.MULTILINE)
 
-# Regex to match the Chaty section for upsert
-_CHATY_SECTION_RE = re.compile(r"## Chaty[^\n]*\n.*?(?=\n## |\Z)", re.DOTALL)
+# Regex to match the Chats section for upsert ("## Chaty" is the heading older builds wrote)
+_CHATY_SECTION_RE = re.compile(r"## Chat(?:s|y)\b[^\n]*\n.*?(?=\n## |\Z)", re.DOTALL)
 
 
 @dataclass
@@ -60,7 +61,7 @@ class ChatSummary:
 
 
 def _list_chat_files(chats_dir: Path, target_date: date) -> list[Path]:
-    """Return .jsonl files whose mtime falls on target_date in Europe/Warsaw."""
+    """Return .jsonl files whose mtime falls on target_date in the local time zone."""
     result = []
     for p in sorted(chats_dir.glob("*.jsonl")):
         mtime_utc = datetime.fromtimestamp(p.stat().st_mtime, tz=UTC)
@@ -159,7 +160,7 @@ def _parse_ts(ts_str: str) -> datetime:
 
 
 def _strip_knowledge_preamble(text: str) -> str:
-    """Strip [BAZA WIEDZY] preamble, keeping only [HISTORIA ROZMOWY] content."""
+    """Strip the [KNOWLEDGE BASE] preamble, keeping only the [CONVERSATION HISTORY] content."""
     stripped = _BAZA_WIEDZY_RE.sub("", text).strip()
     stripped = _HISTORIA_HEADER_RE.sub("", stripped).strip()
     return stripped
@@ -174,7 +175,7 @@ def _classify(messages: list[str]) -> Literal["public", "private"]:
     """Classify a chat as public (other speakers present) or private."""
     for msg in messages:
         # Strip knowledge preamble before looking for speakers to avoid false positives
-        # e.g. "Dostepne foldery:" in BAZA WIEDZY being treated as a speaker
+        # e.g. "Available folders:" in the knowledge base being treated as a speaker
         text = _strip_knowledge_preamble(msg)
         for speaker in _extract_speakers(text):
             speaker_stripped = speaker.strip()
@@ -189,9 +190,9 @@ def _extract_first_user_question(messages: list[str]) -> str:
         text = msg.strip()
         if not text:
             continue
-        # Strip [BAZA WIEDZY] preamble
+        # Strip the [KNOWLEDGE BASE] preamble
         text = _BAZA_WIEDZY_RE.sub("", text).strip()
-        # Strip [HISTORIA ROZMOWY] header line
+        # Strip the [CONVERSATION HISTORY] header line
         text = _HISTORIA_HEADER_RE.sub("", text).strip()
         # Take first non-empty line
         for line in text.splitlines():
@@ -218,7 +219,7 @@ def _extract_participants(messages: list[str]) -> list[str]:
 
 
 def _format_time_range(start: datetime | None, end: datetime | None) -> str:
-    """Format start-end as HH:MM-HH:MM in Europe/Warsaw."""
+    """Format start-end as HH:MM-HH:MM in the local time zone."""
     if start is None or end is None:
         return "??:??-??:??"
     s = start.astimezone(_TZ).strftime("%H:%M")
@@ -227,48 +228,48 @@ def _format_time_range(start: datetime | None, end: datetime | None) -> str:
 
 
 def _format_section(summaries: list[ChatSummary], target_date: date) -> str:
-    """Build the '## Chaty' markdown section."""
+    """Build the '## Chats' markdown section."""
     date_str = target_date.isoformat()
     public = [s for s in summaries if s.classification == "public"]
     private = [s for s in summaries if s.classification == "private"]
 
-    lines = [f"## Chaty -- {date_str}", ""]
+    lines = [f"## Chats -- {date_str}", ""]
 
-    lines.append("### Publiczne")
+    lines.append("### Public")
     lines.append("")
     if public:
         for s in public:
             time_range = _format_time_range(s.start_time, s.end_time)
             participants_str = (
-                (", ".join(s.participants)) if s.participants else "brak"
+                (", ".join(s.participants)) if s.participants else "none"
             )
             channel_str = f" #{s.channel}" if s.channel else ""
             lines.append(f"**{s.ai_title}**{channel_str} ({time_range}) `{s.session_id}`")
-            lines.append(f"Uczestnicy: {participants_str}")
-            lines.append(f"Pierwsze pytanie: {s.first_question}")
+            lines.append(f"Participants: {participants_str}")
+            lines.append(f"First question: {s.first_question}")
             lines.append("")
     else:
-        lines.append("*(brak)*")
+        lines.append("*(none)*")
         lines.append("")
 
-    lines.append("### Prywatne")
+    lines.append("### Private")
     lines.append("")
     if private:
         for s in private:
             time_range = _format_time_range(s.start_time, s.end_time)
             channel_str = f" #{s.channel}" if s.channel else ""
             lines.append(f"**{s.ai_title}**{channel_str} ({time_range}) `{s.session_id}`")
-            lines.append(f"Pierwsze pytanie: {s.first_question}")
+            lines.append(f"First question: {s.first_question}")
             lines.append("")
     else:
-        lines.append("*(brak)*")
+        lines.append("*(none)*")
         lines.append("")
 
     return "\n".join(lines)
 
 
 def _upsert_section(file_path: Path, section: str, target_date: date) -> None:
-    """Create or update the Chaty section in target markdown file."""
+    """Create or update the Chats section in target markdown file."""
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not file_path.exists():
@@ -300,7 +301,7 @@ def main(argv: list[str] | None = None) -> None:
         "date",
         nargs="?",
         default=None,
-        help="Target date YYYY-MM-DD (default: today in Europe/Warsaw)",
+        help="Target date YYYY-MM-DD (default: today in the local time zone)",
     )
     parser.add_argument(
         "--no-write",
@@ -366,12 +367,12 @@ def main(argv: list[str] | None = None) -> None:
         # Public output (only public chats)
         public_file = public_output_dir / f"{date_str}.md"
         _upsert_section(public_file, public_section, target_date)
-        print(f"Zapisano publiczne: {public_file}")
+        print(f"Saved public: {public_file}")
 
         # Private output (only private chats)
         private_file = private_output_dir / f"{date_str}.md"
         _upsert_section(private_file, private_section, target_date)
-        print(f"Zapisano prywatne: {private_file}")
+        print(f"Saved private: {private_file}")
 
 
 if __name__ == "__main__":

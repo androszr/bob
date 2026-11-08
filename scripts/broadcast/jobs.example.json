@@ -3,22 +3,22 @@
     "id": "planning-prep",
     "channel": "NOTATKI_CONV_ID_PLACEHOLDER",
     "enabled": false,
-    "description": "Podsumowanie przed planningiem zespolu: status sprintu + kontekst KB + ostatnie notatki.",
+    "description": "Summary before the team's planning: sprint status + knowledge-base context + recent notes.",
     "tools": [
       "jira"
     ],
-    "prompt": "Przygotuj zwiezle podsumowanie dla zespolu przed planningiem. 1) Sprawdz status biezacego sprintu w Jirze (otwarte tickety, readiness, health). 2) Pociagnij relewantny kontekst z bazy wiedzy (KB). 3) Przejrzyj ostatnie notatki ze spotkan. Zwroc gotowy do wklejenia na czacie post po polsku: sekcje 'Status sprintu', 'Otwarte tematy', 'Na co zwrocic uwage na planningu'. Bez preambuly."
+    "prompt": "Write a concise summary for the team before planning. 1) Check the current sprint status in Jira (open tickets, readiness, health). 2) Pull relevant context from the knowledge base (KB). 3) Look through the latest meeting notes. Return a post ready to paste into the chat, with sections 'Sprint status', 'Open topics', 'What to watch for in planning'. No preamble."
   },
   {
     "id": "planning-prep-team-a",
     "name": "Planning — TeamA",
     "channel": "19:00000000000000000000000000000002@thread.v2",
     "enabled": false,
-    "description": "Przygotowanie do Sprint Planningu dla zespolu TeamA — powitanie, nieobecnosci, przeglad backlogu per osoba, GIF.",
+    "description": "Sprint planning prep for TeamA — welcome, absences, backlog review per person, GIF.",
     "team": "TeamA",
     "tools": [
       "jira",
-      "urlopy"
+      "leave"
     ],
     "brief_file": "briefs/planning-prep.example.md"
   },
@@ -28,7 +28,7 @@
     "schedule_type": "daily",
     "channel": "19:00000000000000000000000000000002@thread.v2",
     "enabled": false,
-    "description": "Codzienny standup TeamA — kto nie zalogowal czasu, co robil zespol poprzedniego dnia roboczego.",
+    "description": "TeamA daily standup — who did not log time, what the team did on the previous working day.",
     "team": "TeamA",
     "tools": [
       "jira",
@@ -44,7 +44,7 @@
     "channel": "19:00000000000000000000000000000002@thread.v2",
     "enabled": false,
     "team": "TeamA",
-    "description": "Co TeamA zalogowal w Tempo za poprzedni dzien roboczy (Jira direct, per osoba), braki z @tagiem, urlopy z kalendarza."
+    "description": "What TeamA logged in Tempo for the previous working day (Jira direct, per person), missing logs with an @tag, leave from the calendar."
   },
   {
     "id": "worklog-daily-team-b",
@@ -54,11 +54,11 @@
     "channel": "19:00000000000000000000000000000005@thread.v2",
     "enabled": false,
     "team": "TeamB",
-    "description": "Co TeamB zalogowal w Tempo za poprzedni dzien roboczy."
+    "description": "What TeamB logged in Tempo for the previous working day."
   },
   {
     "id": "worklog-missing-recap",
-    "name": "Brak logu czasu — powtórka 12:00",
+    "name": "Missing time log — 12:00 recap",
     "schedule_type": "daily",
     "generator": "worklog-missing",
     "channel": "19:00000000000000000000000000000006@thread.v2",
@@ -67,7 +67,7 @@
       "TeamA",
       "TeamB"
     ],
-    "description": "Powtorka 12:00 dla managerow (bez @tagow): kto ze wszystkich zespolow nie zalogowal czasu za poprzedni dzien roboczy i kto byl na urlopie. Bez AI."
+    "description": "12:00 recap for managers (no @tags): who across all teams did not log time for the previous working day and who was on leave. No AI."
   },
   {
     "id": "morning-pulse",
@@ -75,10 +75,10 @@
     "schedule_type": "daily",
     "channel": "19:00000000000000000000000000000002@thread.v2",
     "enabled": false,
-    "description": "Poranny raport ze Snowflake: jak liderzy zespolow potraktowali wczorajsze podpowiedzi obsady.",
+    "description": "Morning report from Snowflake: how team leads acted on yesterday's staffing suggestions.",
     "tools": [
       "snowflake"
     ],
-    "prompt": "Wywolaj report_morning_pulse bez parametrow. Napisz jedno zdanie z najwazniejsza liczba z wyniku i podaj link do raportu. Jesli wynik zaczyna sie od DEMO:, napisz, ze to dane przykladowe. Jesli zaczyna sie od ERROR:, napisz krotko, ze raportu dzis nie ma."
+    "prompt": "Call report_morning_pulse with no parameters. Write one sentence with the most important number from the result and give the link to the report. If the result starts with DEMO:, say it is sample data. If it starts with ERROR:, say briefly that there is no report today."
   }
 ]

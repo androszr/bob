@@ -31,32 +31,32 @@ def _tlog(tag: str, t0: float, extra: str = "") -> None:
 
 @mcp.tool()
 def now() -> str:
-    """Zwroc aktualna date i czas w strefie Europe/Warsaw.
+    """Return the current date and time in Bob's configured time zone.
 
-    Nie wymaga zadnych parametrow. Zwraca JSON z:
-      iso        str  -- data w formacie YYYY-MM-DD
-      weekday_pl str  -- nazwa dnia tygodnia po polsku (np. "Sobota")
-      iso_week   int  -- numer tygodnia ISO (1-53)
-      time_cet   str  -- aktualny czas w formacie HH:MM (CET/CEST)
+    Takes no parameters. Returns JSON with:
+      iso        str  -- date as YYYY-MM-DD
+      weekday    str  -- weekday name in English (e.g. "Saturday")
+      weekday_pl str  -- weekday name in Polish (e.g. "Sobota")
+      iso_week   int  -- ISO week number (1-53)
+      time_cet   str  -- current local time as HH:MM (configured time zone)
 
-    Przykladowe wywolanie MCP:
+    Example MCP call:
       { "name": "now", "arguments": {} }
     """
     t0 = time.perf_counter()
     print("[datetime-mcp] now start", file=sys.stderr, flush=True)
     try:
         from datetime import datetime
-        from zoneinfo import ZoneInfo
 
-        _CET = ZoneInfo("Europe/Warsaw")
-        now_cet = datetime.now(_CET)
-        d = now_cet.date()
+        now_local = datetime.now(resolver._CET)
+        d = now_local.date()
         result = json.dumps(
             {
                 "iso": d.isoformat(),
+                "weekday": resolver._DAY_LABELS[d.weekday()],
                 "weekday_pl": resolver._DAY_LABELS_PL[d.weekday()],
                 "iso_week": d.isocalendar().week,
-                "time_cet": now_cet.strftime("%H:%M"),
+                "time_cet": now_local.strftime("%H:%M"),
             },
             ensure_ascii=False,
         )
@@ -64,33 +64,38 @@ def now() -> str:
         return result
     except Exception as exc:  # noqa: BLE001
         _tlog(f"now error: {exc}", t0)
-        return f"BLAD: {exc}"
+        return f"ERROR: {exc}"
 
 
 @mcp.tool()
 def resolve_date(expr: str) -> str:
-    """Zamien polskie wyrazenie wzglednej daty na konkretna date ISO.
+    """Turn a relative date expression into a concrete ISO date.
 
-    expr: Wyrazenie daty po polsku, np.:
-      "jutro", "wczoraj", "przedwczoraj", "pojutrze",
-      "poniedzialek", "ubiegly wtorek", "przyszla sroda",
-      "za 5 dni", "3 dni temu",
+    expr: A date expression in English or Polish, e.g.:
+      "today", "tomorrow", "yesterday", "day after tomorrow",
+      "monday", "last tuesday", "next wednesday",
+      "in 5 days", "3 days ago", "next business day",
+      "jutro", "ubiegly wtorek", "za 5 dni",
       "15.06", "15.06.2026", "2026-06-15"
 
-    Zwraca JSON z:
+    A bare weekday, "this <weekday>" and "next <weekday>" are the nearest upcoming
+    one; the Polish "przyszły <dzień>" is the one after that.
+
+    Returns JSON with:
       iso        str  -- YYYY-MM-DD
-      weekday_pl str  -- polska nazwa dnia tygodnia
-      is_past    bool -- czy data jest w przeszlosci wzgledem dzis
-      is_future  bool -- czy data jest w przyszlosci wzgledem dzis
+      weekday    str  -- English weekday name
+      weekday_pl str  -- Polish weekday name
+      is_past    bool -- whether the date is before today
+      is_future  bool -- whether the date is after today
 
-    Gdy wyrazenie jest nierozpoznane zwraca {"error": "BLAD: ..."}.
+    When the expression is not recognised, returns {"error": "ERROR: ..."}.
 
-    ZASADA: dla wyrazen wzglednych (jutro, poniedzialek, ubiegly tydzien,
-    za 3 dni) wywolaj NAJPIERW ten tool, a dopiero potem urlopy_check /
-    list_oncall / sf_aggregates z uzyskanym YYYY-MM-DD.
+    RULE: for relative expressions (tomorrow, monday, last week, in 3 days) call
+    this tool FIRST, and only then leave_check / list_oncall / sf_aggregates
+    with the resulting YYYY-MM-DD.
 
-    Przykladowe wywolanie MCP:
-      { "name": "resolve_date", "arguments": { "expr": "przyszly poniedzialek" } }
+    Example MCP call:
+      { "name": "resolve_date", "arguments": { "expr": "next monday" } }
     """
     t0 = time.perf_counter()
     print(f"[datetime-mcp] resolve_date start expr={expr!r}", file=sys.stderr, flush=True)
@@ -101,55 +106,62 @@ def resolve_date(expr: str) -> str:
         return result
     except Exception as exc:  # noqa: BLE001
         _tlog(f"resolve_date error: {exc}", t0)
-        return json.dumps({"error": f"BLAD: {exc}"}, ensure_ascii=False)
+        return json.dumps({"error": f"ERROR: {exc}"}, ensure_ascii=False)
 
 
 @mcp.tool()
 def weekday(iso_date: str) -> str:
-    """Zwroc polska nazwe dnia tygodnia dla daty ISO.
+    """Return the weekday name for an ISO date.
 
-    iso_date: Data w formacie YYYY-MM-DD.
+    iso_date: Date as YYYY-MM-DD.
 
-    Zwraca JSON z:
-      weekday_pl str  -- polska nazwa dnia tygodnia (np. "Poniedzialek")
+    Returns JSON with:
+      weekday    str  -- English weekday name (e.g. "Monday")
+      weekday_pl str  -- Polish weekday name (e.g. "Poniedziałek")
 
-    Przykladowe wywolanie MCP:
+    Example MCP call:
       { "name": "weekday", "arguments": { "iso_date": "2026-06-15" } }
     """
     t0 = time.perf_counter()
     print(f"[datetime-mcp] weekday start iso_date={iso_date!r}", file=sys.stderr, flush=True)
     try:
         name = resolver.weekday(iso_date)
-        result = json.dumps({"weekday_pl": name}, ensure_ascii=False)
+        if name.startswith("ERROR:"):
+            result = json.dumps({"error": name}, ensure_ascii=False)
+        else:
+            result = json.dumps(
+                {"weekday": name, "weekday_pl": resolver.weekday_pl(iso_date)}, ensure_ascii=False
+            )
         _tlog("weekday done", t0)
         return result
     except Exception as exc:  # noqa: BLE001
         _tlog(f"weekday error: {exc}", t0)
-        return json.dumps({"error": f"BLAD: {exc}"}, ensure_ascii=False)
+        return json.dumps({"error": f"ERROR: {exc}"}, ensure_ascii=False)
 
 
 @mcp.tool()
 def date_range(expr: str) -> str:
-    """Zamien wyrazenie zakresu dat na konkretne daty ISO.
+    """Turn a date range expression into concrete ISO dates.
 
-    expr: Wyrazenie zakresu po polsku, np.:
-      "ten tydzien", "ubiegly tydzien", "przyszly tydzien",
-      "ten miesiac", "ubiegly miesiac", "przyszly miesiac",
-      "za 5 dni", "3 dni temu"
+    expr: A range expression in English or Polish, e.g.:
+      "this week", "last week", "next week",
+      "this month", "last month", "next month",
+      "in 5 days", "3 days ago",
+      "ten tydzien", "ubiegly miesiac"
 
-    Zwraca JSON z:
-      from_iso   str  -- YYYY-MM-DD (poczatek zakresu, wlacznie)
-      to_iso     str  -- YYYY-MM-DD (koniec zakresu, wlacznie)
-      month      str  -- "YYYY-MM" (tylko dla wyrazen miesiaca; uzyteczne dla
+    Returns JSON with:
+      from_iso   str  -- YYYY-MM-DD (start of the range, inclusive)
+      to_iso     str  -- YYYY-MM-DD (end of the range, inclusive)
+      month      str  -- "YYYY-MM" (month expressions only; useful for
                          list_oncall(month=...))
 
-    Gdy wyrazenie jest nierozpoznane zwraca {"error": "BLAD: ..."}.
+    When the expression is not recognised, returns {"error": "ERROR: ..."}.
 
-    UWAGA: "ubiegly tydzien" dla sf_aggregates = od poniedzialku do niedzieli.
-    Przekaz from_iso jako date_from i to_iso jako date_to.
+    NOTE: "last week" for sf_aggregates = Monday to Sunday.
+    Pass from_iso as date_from and to_iso as date_to.
 
-    Przykladowe wywolanie MCP:
-      { "name": "date_range", "arguments": { "expr": "ubiegly tydzien" } }
+    Example MCP call:
+      { "name": "date_range", "arguments": { "expr": "last week" } }
     """
     t0 = time.perf_counter()
     print(f"[datetime-mcp] date_range start expr={expr!r}", file=sys.stderr, flush=True)
@@ -160,7 +172,7 @@ def date_range(expr: str) -> str:
         return result
     except Exception as exc:  # noqa: BLE001
         _tlog(f"date_range error: {exc}", t0)
-        return json.dumps({"error": f"BLAD: {exc}"}, ensure_ascii=False)
+        return json.dumps({"error": f"ERROR: {exc}"}, ensure_ascii=False)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ os.environ["JIRA_FIELDS_FILE"] = str(_FIXTURES / "jira-fields.json")
 os.environ.update({
     "OWNER_TEAMS_USER_ID": "00000000-0000-0000-0000-000000000000",
     "OWNER_DISPLAY_NAME": "Kowalski Jan",
-    "OWNER_ALIAS": "Szef",
+    "OWNER_ALIAS": "Boss",
     "OWNER_JIRA_LOGIN": "jan.kowalski@example.com",
     "ORG_EMAIL_DOMAIN": "example.com",
     "JIRA_URL": "https://jira.example.com",
@@ -36,8 +36,8 @@ os.environ.update({
 _MCP_TMP = tempfile.mkdtemp(prefix="bob-test-mcp-")
 os.environ["BOB_MCP_RUNDIR"] = _MCP_TMP
 os.environ["BOB_MCP_CONFIG"] = str(Path(_MCP_TMP) / "mcp-config.json")
-for _unset in ("JIRA_BOARD_ID", "JIRA_PROJECT", "JIRA_TEAMS", "URLOPY_SHAREPOINT_URL",
-               "SHAREPOINT_UPLOAD_FOLDER_URL"):
+for _unset in ("JIRA_BOARD_ID", "JIRA_PROJECT", "JIRA_TEAMS", "LEAVE_SHAREPOINT_URL",
+               "URLOPY_SHAREPOINT_URL", "SHAREPOINT_UPLOAD_FOLDER_URL", "BOB_TIMEZONE"):
     os.environ[_unset] = ""
 
 

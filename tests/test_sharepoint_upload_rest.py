@@ -101,3 +101,13 @@ def test_an_unconfigured_folder_skips_the_upload(tmp_path):
     f = tmp_path / "a.md"
     f.write_text("abc")
     assert sp.upload_file(f, folder_url="") is None
+
+
+@pytest.mark.parametrize("pattern,labels", [
+    ("_UPLOAD_BUTTON_TEXT", ["Create or upload", "Utwórz lub przekaż"]),
+    ("_UPLOAD_MENU_ITEM_TEXT", ["Files upload", "Upload files", "Przekazywanie plików"]),
+    ("_CONFLICT_KEEP_BOTH_TEXT", ["Keep both", "Zachowaj oba"]),
+])
+def test_browser_fallback_matches_english_and_polish_ui_labels(pattern, labels):
+    for label in labels:
+        assert getattr(sp, pattern).search(label), label

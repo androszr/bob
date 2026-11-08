@@ -30,7 +30,7 @@ from pathlib import Path
 
 CHAT_LIST_SELECTORS = [
     # Teams v2 (Fluent UI v9), checked against a live DOM dump.
-    # Leaf treeitems = individual chats. Group headers ("Ulubione", etc.) are
+    # Leaf treeitems = individual chats. Group headers ("Favorites", etc.) are
     # also treeitems but contain nested treeitems; :not(:has(...)) filters them.
     'div[role="treeitem"].fui-TreeItem:not(:has(div[role="treeitem"]))',
     'div[role="treeitem"]:not(:has(div[role="treeitem"]))',
@@ -41,9 +41,18 @@ CHAT_LIST_SELECTORS = [
 ]
 
 # Section labels we always want to skip even when they happen to look like
-# leaf treeitems. ASCII-only — Teams uses these literally in Polish locale.
+# leaf treeitems. ASCII-only. English-locale labels first; the Polish-locale
+# labels stay as aliases for a Teams client running in Polish.
 _CHAT_NON_ITEM_LABELS = {
     'Copilot',
+    'Quick view',
+    'Drafts',
+    'Unread',
+    'Mentions',
+    'Meetings',
+    'Favorites',
+    'Chats',
+    'Meeting chats',
     'Szybki podglad',
     'Wersje robocze',
     'Nieprzeczytane',
@@ -54,7 +63,7 @@ _CHAT_NON_ITEM_LABELS = {
     'Czaty spotkan',
 }
 
-# Matches HH:MM (time) and DD.MM (Polish short date) — Teams shows exactly one
+# Matches HH:MM (time) and DD.MM (European short date) — Teams shows exactly one
 # such marker per chat row. Group headers contain zero (Copilot) or many
 # (concatenated group text). Real chats have exactly one.
 _TIME_DATE_PATTERN = re.compile(r'\b\d{1,2}[:.]\d{2}\b')
@@ -86,7 +95,7 @@ MESSAGE_ITEM_SELECTORS = [
 REPLY_INPUT_SELECTORS = [
     '[data-tid="ckeditor"]',
     'div[contenteditable="true"][aria-label*="reply" i]',
-    'div[contenteditable="true"][aria-label*="odpowiedz" i]',
+    'div[contenteditable="true"][aria-label*="odpowiedz" i]',   # Polish-locale label
     'div[contenteditable="true"][class*="ql-editor"]',
     'div[contenteditable="true"][role="textbox"]',
     'div[contenteditable="true"]',
@@ -95,17 +104,17 @@ REPLY_INPUT_SELECTORS = [
 SEND_BUTTON_SELECTORS = [
     '[data-tid="send-message-button"]',
     'button[aria-label*="Send" i]',
-    'button[aria-label*="Wyslij" i]',
+    'button[aria-label*="Wyslij" i]',   # Polish-locale label
     'button[title*="Send" i]',
     'button[class*="sendButton"]',
     'button[class*="send-button"]',
 ]
 
-# Toolbar that appears on message hover — "Reply/Odpowiedz" action button.
+# Toolbar that appears on message hover — "Reply" action button (Polish locale: "Odpowiedz").
 REPLY_ACTION_SELECTORS = [
     '[data-tid="reply-button"]',
     'button[aria-label*="Reply" i]',
-    'button[aria-label*="Odpowiedz" i]',
+    'button[aria-label*="Odpowiedz" i]',   # Polish-locale label
     'button[title*="Reply" i]',
     '[class*="replyButton"]',
     '[class*="reply-button"]',
@@ -162,9 +171,9 @@ def _debug_screenshot(page, name: str) -> None:
     path = str(_SCRIPT_DIR / f"teams-{name}-miss.png")
     try:
         page.screenshot(path=path)
-        _log(f"Screenshot zapisany: teams-{name}-miss.png")
+        _log(f"Screenshot saved: teams-{name}-miss.png")
     except Exception as exc:
-        _log(f"Nie udalo sie zapisac screenshota: {exc}")
+        _log(f"Could not save screenshot: {exc}")
 
 
 def _diag_page(page, label: str) -> None:
@@ -174,14 +183,14 @@ def _diag_page(page, label: str) -> None:
     """
     try:
         frames = page.frames
-        _log(f"diagnostyka [{label}]: URL={page.url[:100]} ramek={len(frames)}")
+        _log(f"diagnostics [{label}]: URL={page.url[:100]} frames={len(frames)}")
         for i, f in enumerate(frames):
             try:
-                _log_debug(f"  ramka[{i}] url={f.url[:120]}")
+                _log_debug(f"  frame[{i}] url={f.url[:120]}")
             except Exception:
-                _log_debug(f"  ramka[{i}] url=<blad odczytu>")
+                _log_debug(f"  frame[{i}] url=<read error>")
     except Exception as exc:
-        _log(f"diagnostyka [{label}] blad: {exc}")
+        _log(f"diagnostics [{label}] error: {exc}")
 
 
 _CANDIDATE_JS = r"""() => {
@@ -191,8 +200,8 @@ _CANDIDATE_JS = r"""() => {
     ['role=option',    () => document.querySelectorAll('[role="option"]')],
     ['role=row',       () => document.querySelectorAll('[role="row"]')],
     ['data-tid*=chat', () => document.querySelectorAll('[data-tid*="chat" i]')],
-    ['aria czat/chat', () => Array.from(document.querySelectorAll('*[aria-label]'))
-                                .filter(e => /czat|chat/i.test(e.getAttribute('aria-label') || ''))],
+    ['aria chat',      () => Array.from(document.querySelectorAll('*[aria-label]'))
+                                .filter(e => /chat|czat/i.test(e.getAttribute('aria-label') || ''))],
     ['nav/aside',      () => document.querySelectorAll('nav, aside')],
   ];
   const out = [];
@@ -228,10 +237,10 @@ def _dump_candidates(page, label: str) -> None:
     try:
         candidates = page.evaluate(_CANDIDATE_JS)
     except Exception as exc:
-        _log(f"diagnostyka [{label}]: blad evaluate: {exc}")
+        _log(f"diagnostics [{label}]: evaluate error: {exc}")
         return
     if not candidates:
-        _log(f"diagnostyka [{label}]: strona nie zawiera zadnych typowych elementow Teams")
+        _log(f"diagnostics [{label}]: the page has none of the usual Teams elements")
         return
 
     lines = [f"URL: {page.url}", ""]
@@ -251,10 +260,10 @@ def _dump_candidates(page, label: str) -> None:
         path.write_text("\n".join(lines), encoding="utf-8")
         where = path.name
     except Exception as exc:
-        where = f"<zapis nieudany: {exc}>"
+        where = f"<write failed: {exc}>"
 
     summary = ", ".join(f"{c['total']}x {c['probe']}" for c in candidates)
-    _log(f"diagnostyka [{label}]: w DOM widoczne m.in. {summary} — pelny zrzut: {where}")
+    _log(f"diagnostics [{label}]: visible in the DOM, among others: {summary} — full dump: {where}")
     for line in lines:
         _log_debug(f"  {line}")
 
@@ -264,14 +273,14 @@ def _dump_body_html(page, label: str) -> None:
     try:
         html = page.evaluate("() => document.body ? document.body.outerHTML : ''")
     except Exception as exc:
-        _log(f"DUMP HTML blad: {exc}")
+        _log(f"DUMP HTML error: {exc}")
         return
     path = _SCRIPT_DIR / f"teams-{label}-body.html"
     try:
         path.write_text(html, encoding='utf-8')
-        _log(f"HTML zapisany: {path.name} ({len(html) // 1024} KB)")
+        _log(f"HTML saved: {path.name} ({len(html) // 1024} KB)")
     except Exception as exc:
-        _log(f"DUMP HTML zapis blad: {exc}")
+        _log(f"DUMP HTML write error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +303,7 @@ def list_chats(page) -> list[dict]:
         attempt += 1
         frames = page.frames
         frame_urls = [_safe_url(f) for f in frames]
-        _log_debug(f"list_chats proba {attempt}: {len(frames)} ramek. URLs: {frame_urls}")
+        _log_debug(f"list_chats attempt {attempt}: {len(frames)} frames. URLs: {frame_urls}")
         result = _find_with_frame_fallback(page, CHAT_LIST_SELECTORS, timeout_ms=300)
         if result is not None:
             break
@@ -308,15 +317,15 @@ def list_chats(page) -> list[dict]:
             stable_count = 0
             last_url = cur_url
         if stable_count >= 3 and "teams.microsoft.com" in cur_url:
-            _log(f"URL stabilny od {stable_count + 1} prob — Teams zaladowany ale "
-                 f"CHAT_LIST_SELECTORS nie pasuja do biezacego DOM. Przerywam polling.")
+            _log(f"URL stable for {stable_count + 1} attempts — Teams loaded but "
+                 f"CHAT_LIST_SELECTORS do not match the current DOM. Stopping polling.")
             break
 
         page.wait_for_timeout(500)
 
     if result is None:
         elapsed = 30 - max(0.0, deadline - _time_mod.time())
-        _log(f"BLAD: Nie znaleziono listy czatow ({elapsed:.1f}s, {attempt} prob)")
+        _log(f"ERROR: chat list not found ({elapsed:.1f}s, {attempt} attempts)")
         _diag_page(page, "list_chats")
         _dump_candidates(page, "list_chats")
         _dump_body_html(page, "list_chats")
@@ -353,15 +362,15 @@ def list_chats(page) -> list[dict]:
         except Exception as exc:
             _log(f"list_chats item {i} error: {exc}")
 
-    _log(f"list_chats: znaleziono {len(chats)} czatow ({skipped} naglowkow/grup pominieto)")
+    _log(f"list_chats: found {len(chats)} chats ({skipped} headers/groups skipped)")
     return chats
 
 
 def _is_chat_item_text(text: str) -> bool:
     """Heuristic: a real chat row has exactly one HH:MM or DD.MM marker.
 
-    Headers (Copilot, Szybki podglad, ...) contain none. Group treeitems
-    (Ulubione + nested chats) contain many. Real chat rows contain exactly one.
+    Headers (Copilot, Quick view, ...) contain none. Group treeitems
+    (Favorites + nested chats) contain many. Real chat rows contain exactly one.
     """
     if not text:
         return False
@@ -390,9 +399,9 @@ _PL_TRANS = str.maketrans(
 
 
 def _strip_accents(s: str) -> str:
-    """Remove diacritical marks, including non-decomposable Polish letters.
+    """Remove diacritical marks, including letters NFKD cannot decompose.
 
-    'Paweł' → 'Pawel', 'Ziółkowski' → 'Ziolkowski', 'Rafał' → 'Rafal'.
+    'Zoë' → 'Zoe', 'Łukasz' → 'Lukasz'.
     ł/Ł are handled explicitly because they have no NFKD ASCII decomposition.
     """
     return unicodedata.normalize('NFKD', s.translate(_PL_TRANS)).encode('ascii', 'ignore').decode()
@@ -403,11 +412,11 @@ def _name_tokens_match(target: str, candidate: str) -> bool:
 
     Every whitespace-split token of `target` must appear as a substring in
     `candidate` (both already lowercased).  Diacritics are stripped before
-    comparison so 'Paweł' matches 'Pawel' and vice-versa.
+    comparison so 'Zoë' matches 'Zoe' and vice-versa.
 
     Handles Teams' display format: reversed names ("Surname Firstname"),
-    dept-prefix ("EXT Ewa Nowak"), and missing
-    Polish diacritics in Teams' user directory.
+    dept-prefix ("EXT Ewa Nowak"), and diacritics
+    missing from Teams' user directory.
     """
     t_norm = _strip_accents(target)
     c_norm = _strip_accents(candidate)
@@ -455,8 +464,8 @@ def switch_to_chat_by_name(page, name: str, timeout_s: int = 60) -> bool:
         if title:
             last_title_seen = title
             if _name_tokens_match(target_lower, title.lower()):
-                _log(f"switch_to_chat_by_name: juz na chacie {title!r} "
-                     f"(fast path, {attempts} prob)")
+                _log(f"switch_to_chat_by_name: already on chat {title!r} "
+                     f"(fast path, {attempts} attempts)")
                 return True
 
         # --- Path B: chat in the left rail? ---
@@ -471,7 +480,7 @@ def switch_to_chat_by_name(page, name: str, timeout_s: int = 60) -> bool:
                 page.wait_for_timeout(800)
                 new_title = _current_chat_title(page, timeout_ms=800)
                 _log(f"switch_to_chat_by_name: JS click {js_result['chatName']!r} "
-                     f"title={new_title!r} ({attempts} prob)")
+                     f"title={new_title!r} ({attempts} attempts)")
                 return True
         except Exception:
             pass
@@ -510,21 +519,21 @@ def switch_to_chat_by_name(page, name: str, timeout_s: int = 60) -> bool:
                             pass
                         item.dispatch_event("click")
                         page.wait_for_timeout(800)
-                        _log(f"switch_to_chat_by_name: kliknieto {chat_name!r} "
-                             f"(index {i}, rail path, {attempts} prob)")
+                        _log(f"switch_to_chat_by_name: clicked {chat_name!r} "
+                             f"(index {i}, rail path, {attempts} attempts)")
                         return True
                 except Exception as exc:
                     _log(f"switch_to_chat_by_name item {i} error: {exc}")
 
         if attempts in (1, 5, 15, 30):  # heartbeat — not every tick
-            _log(f"szukam czatu {name!r}... (~{attempts // 2}s; aktualnie otwarty: "
-                 f"{last_title_seen or 'brak'})")
+            _log(f"looking for chat {name!r}... (~{attempts // 2}s; currently open: "
+                 f"{last_title_seen or 'none'})")
 
         page.wait_for_timeout(500)
 
     elapsed = timeout_s - max(0.0, deadline - _time_mod.time())
-    _log(f"NIE ZNALEZIONO czatu {name!r} po {elapsed:.0f}s "
-         f"— otwarty pozostal: {last_title_seen or 'brak'}")
+    _log(f"chat {name!r} NOT FOUND after {elapsed:.0f}s "
+         f"— still open: {last_title_seen or 'none'}")
     _dump_candidates(page, "switch_to_chat_by_name")
     return False
 
@@ -569,7 +578,7 @@ def click_any_other_chat(page) -> str | None:
         result = page.evaluate(_CLICK_ANY_OTHER_CHAT_JS)
         if result.get("found"):
             name = result.get("chatName", "?")
-            _log(f"click_any_other_chat: kliknieto {name!r}")
+            _log(f"click_any_other_chat: clicked {name!r}")
             return name
     except Exception as exc:
         _log(f"click_any_other_chat error: {exc}")
@@ -664,7 +673,7 @@ def switch_to_chat_by_conv_id(page, conv_id: str, timeout_s: int = 45) -> bool:
     Falls back to nothing — does NOT attempt the Teams deep link which
     redirects to launcher.html in headless Chromium.
     """
-    _log(f"switch_to_chat_by_conv_id: szukam {conv_id!r} w railu")
+    _log(f"switch_to_chat_by_conv_id: looking for {conv_id!r} in the rail")
     deadline = _time_mod.time() + timeout_s
     attempts = 0
 
@@ -678,22 +687,22 @@ def switch_to_chat_by_conv_id(page, conv_id: str, timeout_s: int = 45) -> bool:
         try:
             clicked = page.evaluate(_CLICK_BY_CONV_ID_JS, conv_id)
         except Exception as exc:
-            _log(f"switch_to_chat_by_conv_id evaluate blad: {exc}")
+            _log(f"switch_to_chat_by_conv_id evaluate error: {exc}")
             clicked = False
 
         if clicked:
             page.wait_for_timeout(800)
             new_title = _current_chat_title(page, timeout_ms=1500)
             if new_title:
-                _log(f"switch_to_chat_by_conv_id: OK title={new_title!r} ({attempts} prob)")
+                _log(f"switch_to_chat_by_conv_id: OK title={new_title!r} ({attempts} attempts)")
                 return True
 
         if attempts in (1, 5, 15, 30):
-            _log(f"switch_to_chat_by_conv_id: czekam... proba {attempts}")
+            _log(f"switch_to_chat_by_conv_id: waiting... attempt {attempts}")
 
         page.wait_for_timeout(500)
 
-    _log(f"switch_to_chat_by_conv_id: TIMEOUT po {timeout_s}s ({attempts} prob)")
+    _log(f"switch_to_chat_by_conv_id: TIMEOUT after {timeout_s}s ({attempts} attempts)")
     return False
 
 
@@ -710,13 +719,13 @@ def switch_to_chat(page, chat_id: str) -> bool:
         attempt += 1
         frames = page.frames
         frame_urls = [_safe_url(f) for f in frames]
-        _log_debug(f"switch_to_chat proba {attempt}: {len(frames)} ramek. URLs: {frame_urls}")
+        _log_debug(f"switch_to_chat attempt {attempt}: {len(frames)} frames. URLs: {frame_urls}")
         result = _find_with_frame_fallback(page, CHAT_LIST_SELECTORS, timeout_ms=300)
         if result is None:
             page.wait_for_timeout(500)
 
     if result is None:
-        _log("BLAD: Nie znaleziono listy czatow (switch_to_chat) po 30s")
+        _log("ERROR: chat list not found (switch_to_chat) after 30s")
         _diag_page(page, "switch_to_chat")
         _dump_candidates(page, "switch_to_chat")
         _debug_screenshot(page, "switch_to_chat")
@@ -726,7 +735,7 @@ def switch_to_chat(page, chat_id: str) -> bool:
     try:
         idx = int(chat_id)
     except (ValueError, TypeError):
-        _log(f"switch_to_chat: nieprawidlowe chat_id={chat_id!r}")
+        _log(f"switch_to_chat: invalid chat_id={chat_id!r}")
         return False
 
     items = None
@@ -737,16 +746,16 @@ def switch_to_chat(page, chat_id: str) -> bool:
             break
 
     if not items or idx >= len(items):
-        _log(f"switch_to_chat: chat_id {idx} poza zakresem ({len(items or [])} czatow)")
+        _log(f"switch_to_chat: chat_id {idx} out of range ({len(items or [])} chats)")
         return False
 
     try:
         items[idx].dispatch_event("click")
         page.wait_for_timeout(800)
-        _log(f"switch_to_chat: przelaczono na chat {idx}")
+        _log(f"switch_to_chat: switched to chat {idx}")
         return True
     except Exception as exc:
-        _log(f"switch_to_chat: blad klikniecia: {exc}")
+        _log(f"switch_to_chat: click error: {exc}")
         _debug_screenshot(page, "switch_to_chat")
         return False
 
@@ -765,13 +774,13 @@ def read_messages(page, max_messages: int = 20) -> list[dict]:
         attempt += 1
         frames = page.frames
         frame_urls = [_safe_url(f) for f in frames]
-        _log_debug(f"read_messages proba {attempt}: {len(frames)} ramek. URLs: {frame_urls}")
+        _log_debug(f"read_messages attempt {attempt}: {len(frames)} frames. URLs: {frame_urls}")
         result = _find_with_frame_fallback(page, MESSAGE_THREAD_SELECTORS, timeout_ms=300)
         if result is None:
             page.wait_for_timeout(500)
 
     if result is None:
-        _log("BLAD: Nie znaleziono watku wiadomosci po 30s")
+        _log("ERROR: message thread not found after 30s")
         _diag_page(page, "read_messages")
         _dump_candidates(page, "read_messages")
         _debug_screenshot(page, "read_messages")
@@ -786,7 +795,7 @@ def read_messages(page, max_messages: int = 20) -> list[dict]:
             break
 
     if not items:
-        _log("read_messages: brak elementow wiadomosci w watku")
+        _log("read_messages: no message elements in the thread")
         return []
 
     items = items[-max_messages:]
@@ -817,7 +826,7 @@ def read_messages(page, max_messages: int = 20) -> list[dict]:
             pass
         messages.append({"sender": "", "text": raw, "mid": mid})
 
-    _log(f"read_messages: przeczytano {len(messages)} wiadomosci")
+    _log(f"read_messages: read {len(messages)} messages")
     return messages
 
 
@@ -838,7 +847,7 @@ def _fill_and_send(page, text: str, label: str = "send_message") -> bool:
 
     if result is None:
         _diag_page(page, label)
-        _log(f"BLAD: Nie znaleziono pola odpowiedzi po 30s ({label})")
+        _log(f"ERROR: reply box not found after 30s ({label})")
         _debug_screenshot(page, label)
         return False
 
@@ -848,21 +857,21 @@ def _fill_and_send(page, text: str, label: str = "send_message") -> bool:
         input_loc.fill(text)
         page.wait_for_timeout(300)
     except Exception as exc:
-        _log(f"{label}: blad wypelniania pola: {exc}")
+        _log(f"{label}: error filling the box: {exc}")
         _debug_screenshot(page, f"{label}-fill")
         return False
 
     try:
         input_loc.press("Enter")
         page.wait_for_timeout(800)
-        _log(f"{label}: wiadomosc wyslana (Enter)")
+        _log(f"{label}: message sent (Enter)")
         return True
     except Exception as exc:
-        _log(f"{label}: Enter nie zadzialal ({exc}), fallback do przycisku Wyslij")
+        _log(f"{label}: Enter did not work ({exc}), falling back to the Send button")
 
     send_result = _find_with_frame_fallback(page, SEND_BUTTON_SELECTORS, timeout_ms=3000)
     if send_result is None:
-        _log(f"BLAD: Nie znaleziono przycisku Wyslij (fallback) i Enter nie zadzialal ({label})")
+        _log(f"ERROR: Send button not found (fallback) and Enter did not work ({label})")
         _debug_screenshot(page, f"{label}-send")
         return False
 
@@ -870,10 +879,10 @@ def _fill_and_send(page, text: str, label: str = "send_message") -> bool:
     try:
         send_loc.dispatch_event("click")
         page.wait_for_timeout(800)
-        _log(f"{label}: wiadomosc wyslana (fallback przycisk)")
+        _log(f"{label}: message sent (fallback button)")
         return True
     except Exception as exc:
-        _log(f"{label}: blad klikniecia Wyslij: {exc}")
+        _log(f"{label}: Send click error: {exc}")
         _debug_screenshot(page, f"{label}-click")
         return False
 
@@ -884,7 +893,7 @@ def send_message(page, text: str) -> bool:
     Returns True on success, False when the input or send button is not found.
     """
     if not text or not text.strip():
-        _log("send_message: pusta wiadomosc — pomijam")
+        _log("send_message: empty message — skipping")
         return False
     return _fill_and_send(page, text, label="send_message")
 
@@ -943,7 +952,7 @@ def reply_to_message(page, source_text: str, reply_text: str) -> bool:
       5. Fallback to send_message (no quote) if any step fails.
     """
     if not reply_text or not reply_text.strip():
-        _log("reply_to_message: pusta odpowiedz — pomijam")
+        _log("reply_to_message: empty reply — skipping")
         return False
 
     source_stripped = source_text.strip()
@@ -967,7 +976,7 @@ def reply_to_message(page, source_text: str, reply_text: str) -> bool:
             break
 
     if target_item is None:
-        _log("reply_to_message: nie znaleziono wiadomosci — fallback send")
+        _log("reply_to_message: message not found — fallback send")
         return send_message(page, reply_text)
 
     # --- Step 2: JS — direct click or hover-event dispatch. ---
@@ -975,13 +984,13 @@ def reply_to_message(page, source_text: str, reply_text: str) -> bool:
         outcome = target_item.evaluate(_REPLY_BTN_JS)
         _log(f"reply_to_message: JS outcome={outcome!r}")
     except Exception as exc:
-        _log(f"reply_to_message: JS evaluate blad: {exc} — fallback send")
+        _log(f"reply_to_message: JS evaluate error: {exc} — fallback send")
         return send_message(page, reply_text)
 
     if outcome == 'direct':
         # Button was clicked directly — composer should open immediately.
         page.wait_for_timeout(400)
-        _log("reply_to_message: bezposrednie klikniecie Reply OK")
+        _log("reply_to_message: direct Reply click OK")
     else:
         # Hover events dispatched — poll for the now-visible Reply button.
         page.wait_for_timeout(600)
@@ -992,12 +1001,12 @@ def reply_to_message(page, source_text: str, reply_text: str) -> bool:
                 loc.wait_for(state="visible", timeout=1500)
                 loc.click()
                 clicked = True
-                _log(f"reply_to_message: kliknieto Reply przez selektor {sel!r}")
+                _log(f"reply_to_message: clicked Reply via selector {sel!r}")
                 break
             except Exception:
                 continue
         if not clicked:
-            _log("reply_to_message: przycisk Reply niewidoczny po hover-dispatch — fallback send")
+            _log("reply_to_message: Reply button not visible after hover-dispatch — fallback send")
             return send_message(page, reply_text)
         page.wait_for_timeout(400)
 

@@ -1,1 +1,1 @@
-- MASZ dostęp do internetu — WebSearch i WebFetch — możesz sprawdzić aktualne informacje, artykuły, ceny, fakty. Używaj gdy pytanie wymaga świeżych danych.
+- You DO have internet access — WebSearch and WebFetch — you can check current information, articles, prices, facts. Use it when the question needs fresh data.

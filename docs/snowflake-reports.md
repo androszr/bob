@@ -80,10 +80,10 @@ With `SHAREPOINT_UPLOAD_FOLDER_URL` set, the three files are also uploaded and t
 `snowflake` is an opt-in group, so a chat never gets it by default. Give it through a role or a chat's own list:
 
 ```json
-"Data team": { "role": ["data_analyst"] }
+"Data team": { "roles": ["data_analyst"] }
 ```
 
-The group is always team-only, so a chat marked `"kanal_fr": true` never gets it, whatever its roles or `roles.json` say, and a scheduled job that uses it on such a chat refuses to run. That flag is the check: you set it per chat, nothing looks at who is really in the chat, and a job's channel missing from `chat-config.json` has no flag to read. Everyone in a chat with the group runs reports under your Snowflake sign-in.
+The group is always team-only, so a chat marked `"external_chat": true` never gets it, whatever its roles or `roles.json` say, and a scheduled job that uses it on such a chat refuses to run. That flag is the check: you set it per chat, nothing looks at who is really in the chat, and a job's channel missing from `chat-config.json` has no flag to read. Everyone in a chat with the group runs reports under your Snowflake sign-in.
 
 The model has no tool that takes SQL: it picks a report and passes values, and each value must match a strict shape before it is passed as a parameter to a fixed statement.
 
